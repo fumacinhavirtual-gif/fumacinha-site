@@ -1,0 +1,11 @@
+{
+  "name": "fumacinha",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/write-supabase-config.js",
+    "verify:supabase": "node scripts/verify-supabase.js",
+    "dev": "node scripts/write-supabase-config.js && node scripts/serve.js",
+    "start": "node scripts/serve.js"
+  }
+}

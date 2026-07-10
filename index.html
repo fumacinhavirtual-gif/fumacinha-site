@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fumacinha | Cadeiras e móveis para escritório, casa e lazer</title>
+    <meta
+      name="description"
+      content="Loja Fumacinha: móveis e cadeiras para escritório com pedido rápido pelo WhatsApp em Anápolis - GO."
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./supabase-config.js"></script>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#inicio" data-home-link aria-label="Fumacinha">
+        <span class="brand-logo">
+          <img src="./assets/fumacinha-logo.png" alt="Fumacinha" />
+        </span>
+        <span class="brand-text">
+          <strong>Fumacinha</strong>
+          <small>Loja Fumacinha com produtos separados, estoque proprio e atendimento pelo WhatsApp.</small>
+        </span>
+      </a>
+
+      <button class="cart-trigger" type="button" data-open-cart aria-label="Abrir carrinho">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6 6h15l-1.6 8.2a2 2 0 0 1-2 1.6H9.1a2 2 0 0 1-2-1.6L5.5 3.8H2.7" />
+          <circle cx="9.8" cy="20" r="1.35" />
+          <circle cx="17.3" cy="20" r="1.35" />
+        </svg>
+        <span data-cart-count>0</span>
+      </button>
+    </header>
+
+    <main>
+      <section class="home-search" id="inicio" data-view="home">
+        <form class="search-form" role="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m16.5 16.5 4 4" />
+          </svg>
+          <input data-search type="search" placeholder="Buscar produto..." aria-label="Buscar produto" />
+          <button type="submit">Buscar</button>
+        </form>
+      </section>
+
+      <section class="home-banner-carousel hidden" data-home-banner-carousel data-view="home" aria-label="Banners Fumacinha">
+        <button class="home-banner-arrow prev" type="button" data-banner-prev aria-label="Banner anterior">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div class="home-banner-viewport">
+          <div class="home-banner-track" data-banner-track></div>
+        </div>
+        <button class="home-banner-arrow next" type="button" data-banner-next aria-label="Próximo banner">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        </button>
+        <div class="home-banner-dots" data-banner-dots></div>
+      </section>
+
+      <section class="config-banner hidden" data-config-banner data-view="home">
+        <img data-config-banner-image src="" alt="Banner Fumacinha" />
+        <p data-home-text></p>
+      </section>
+
+      <section class="benefit-carousel" data-view="home" aria-label="Benefícios">
+        <button class="benefit-arrow prev" type="button" data-benefit-prev aria-label="Benefício anterior">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
+        </button>
+        <div class="benefit-viewport">
+          <div class="benefit-track" data-benefit-track>
+            <article class="benefit-card">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v9H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></svg>
+              <div><strong>Entregamos</strong><span>Para todo o Brasil</span></div>
+            </article>
+          </div>
+        </div>
+        <button class="benefit-arrow next" type="button" data-benefit-next aria-label="Próximo benefício">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        </button>
+      </section>
+
+      <section class="category-section" data-view="home" aria-label="Categorias">
+        <p class="category-title">Compre por categoria</p>
+        <div class="category-rail" data-category-rail></div>
+      </section>
+
+      <section class="section products-section" id="produtos" data-view="home">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Produtos</p>
+            <h2>Mais procurados da Fumacinha</h2>
+          </div>
+        </div>
+        <div class="category-product-list" data-products></div>
+      </section>
+      <section class="product-page hidden" data-product-page></section>
+    </main>
+
+    <aside class="cart-drawer" data-cart-drawer aria-hidden="true">
+      <div class="cart-panel">
+        <div class="cart-head">
+          <div>
+            <p class="eyebrow">Seu pedido</p>
+            <h2>Carrinho</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-cart aria-label="Fechar carrinho">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
+          </button>
+        </div>
+
+        <div class="cart-items" data-cart-items></div>
+        <div class="cart-empty" data-cart-empty>
+          <h3>Seu carrinho está vazio.</h3>
+          <p>Adicione um produto para finalizar o pedido pelo WhatsApp.</p>
+        </div>
+
+        <div class="cart-footer" data-cart-footer>
+          <p class="unit-summary" data-cart-units>0 Unidades</p>
+          <div class="summary-divider"></div>
+          <div class="summary-row total-delivery-row">
+            <span><strong>Total:</strong> <strong data-cart-normal-total>R$ 0,00</strong></span>
+            <span>Taxa de entrega: A combinar</span>
+          </div>
+          <button class="btn whatsapp checkout disabled" data-checkout type="button" aria-disabled="true">Confirmar Pedido</button>
+        </div>
+      </div>
+    </aside>
+
+    <section class="order-confirmation hidden" data-order-confirmation aria-hidden="true">
+      <div class="order-confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="order-confirmation-title">
+        <button class="policy-close" type="button" data-close-order-confirmation aria-label="Fechar">×</button>
+        <p class="eyebrow">Pedido Fumacinha</p>
+        <h2 id="order-confirmation-title">Confirmar Dados do Pedido</h2>
+        <form class="order-confirmation-form" data-order-confirmation-form novalidate>
+          <div class="order-fields">
+            <label>
+              Nome <span>*</span>
+              <input type="text" name="nome" autocomplete="name" required />
+              <small>Campo obrigatório</small>
+            </label>
+            <label>
+              Bairro <span>*</span>
+              <input type="text" name="bairro" autocomplete="address-level3" required />
+              <small>Campo obrigatorio</small>
+            </label>
+          </div>
+          <p class="order-form-error" data-order-error></p>
+          <div class="order-summary-box" data-order-summary></div>
+          <button class="btn whatsapp checkout" type="submit">
+            <svg class="whatsapp-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.999-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.946L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+            </svg>
+            Finalizar pedido no WhatsApp
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <a class="whatsapp-float" data-whatsapp-direct href="#" target="_blank" rel="noreferrer" aria-label="Falar no WhatsApp">
+      <svg class="whatsapp-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.999-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.946L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+      </svg>
+    </a>
+
+    <footer class="site-footer" id="contato">
+      <div>
+        <strong data-footer-brand>Fumacinha</strong>
+        <p>Loja Fumacinha com produtos separados, estoque proprio e atendimento pelo WhatsApp.</p>
+      </div>
+      <div>
+        <span>WhatsApp: (62) 99187-7597</span>
+        <span>Instagram: @fumacinhawh</span>
+        <span>Anápolis - GO</span>
+        <span>Segunda a sexta, 8h às 18h</span>
+        <span>Sábado, 8h às 12h</span>
+      </div>
+      <small>© 2026 Fumacinha. Todos os direitos reservados.</small>
+      <nav class="footer-links" aria-label="Informações da loja">
+        <strong>Informações</strong>
+        <button type="button" data-policy-open="entrega">Entrega</button>
+        <button type="button" data-policy-open="trocas">Trocas e Devolução</button>
+        <button type="button" data-policy-open="termos">Termos e Condições</button>
+      </nav>
+    </footer>
+
+    <section class="policy-modal hidden" data-policy-modal aria-hidden="true">
+      <div class="policy-dialog" role="dialog" aria-modal="true" aria-labelledby="policy-title">
+        <button class="policy-close" type="button" data-policy-close aria-label="Fechar">×</button>
+        <p class="eyebrow">Fumacinha</p>
+        <h2 id="policy-title" data-policy-title>Entrega</h2>
+        <div class="policy-content" data-policy-content></div>
+      </div>
+    </section>
+
+    <div class="toast-region" data-toast-region aria-live="polite" aria-atomic="true"></div>
+
+    <section class="edit-login hidden" data-edit-login aria-hidden="true">
+      <div class="edit-modal small" role="dialog" aria-modal="true" aria-labelledby="edit-login-title">
+        <button class="edit-close" type="button" data-close-edit-login aria-label="Fechar login">×</button>
+        <p class="eyebrow">Modo edição</p>
+        <h2 id="edit-login-title">Entrar na Fumacinha</h2>
+        <form class="edit-form" data-edit-login-form>
+          <label>
+            E-mail
+            <input type="email" name="email" autocomplete="username" required />
+          </label>
+          <label>
+            Senha
+            <input type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <p class="edit-error" data-edit-login-error></p>
+          <button class="btn primary" type="submit">Entrar</button>
+        </form>
+      </div>
+    </section>
+
+    <div class="edit-toolbar hidden" data-edit-toolbar>
+      <strong>Modo edição ativo</strong>
+      <button type="button" data-new-product>Novo produto</button>
+      <button type="button" data-open-category-editor>Editar categorias</button>
+      <button type="button" data-open-banner-editor>Carrossel de Banners</button>
+      <button type="button" data-open-site-editor>Editar textos e banner</button>
+      <button type="button" data-edit-logout>Sair</button>
+    </div>
+
+    <section class="edit-login hidden" data-product-editor aria-hidden="true">
+      <div class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="product-editor-title">
+        <button class="edit-close" type="button" data-close-product-editor aria-label="Fechar editor">×</button>
+        <p class="eyebrow">Produto</p>
+        <h2 id="product-editor-title" data-product-editor-title>Editar produto</h2>
+        <form class="edit-form two-columns" data-product-editor-form>
+          <input type="hidden" name="id" />
+          <label>
+            Nome
+            <input type="text" name="nome" required />
+          </label>
+          <label>
+            Categoria
+            <input type="text" name="categoria" required />
+          </label>
+          <label>
+            Estoque
+            <input type="number" name="estoque" step="1" min="0" required />
+          </label>
+          <label class="edit-check">
+            <input type="checkbox" name="ativo" />
+            Produto visivel no site
+          </label>
+          <label class="edit-check">
+            <input type="checkbox" name="destaque_home" />
+            Mostrar em Mais Procurados
+          </label>
+          <label class="edit-check">
+            <input type="checkbox" name="ocultar_home" />
+            Ocultar da pagina inicial
+          </label>
+          <label class="wide">
+            Imagem do produto (URL)
+            <input type="url" name="imagem" placeholder="https://..." />
+          </label>
+          <p class="edit-error wide" data-product-editor-error></p>
+          <div class="edit-actions wide">
+            <button class="btn primary" type="submit">Salvar produto</button>
+            <button class="btn ghost" type="button" data-delete-product>Excluir</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="edit-login hidden" data-category-editor aria-hidden="true">
+      <div class="edit-modal category-editor-modal" role="dialog" aria-modal="true" aria-labelledby="category-editor-title">
+        <button class="edit-close" type="button" data-close-category-editor aria-label="Fechar editor">×</button>
+        <p class="eyebrow">Categorias</p>
+        <h2 id="category-editor-title">Editar categorias</h2>
+        <form class="edit-form" data-category-editor-form>
+          <div class="category-editor-list" data-category-editor-list></div>
+          <p class="edit-error" data-category-editor-error></p>
+          <button class="btn primary" type="submit">Salvar categorias</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="edit-login hidden" data-banner-editor aria-hidden="true">
+      <div class="edit-modal banner-editor-modal" role="dialog" aria-modal="true" aria-labelledby="banner-editor-title">
+        <button class="edit-close" type="button" data-close-banner-editor aria-label="Fechar editor">×</button>
+        <p class="eyebrow">Home</p>
+        <h2 id="banner-editor-title">Carrossel de Banners</h2>
+        <form class="edit-form" data-banner-editor-form>
+          <label class="edit-check">
+            <input type="checkbox" name="enabled" />
+            Ativar carrossel na Home
+          </label>
+          <label>
+            Tempo de troca automática (segundos)
+            <input type="number" name="interval" min="2" step="1" value="5" />
+          </label>
+          <div class="banner-editor-list" data-banner-editor-list></div>
+          <button class="btn ghost" type="button" data-add-banner>Adicionar banner</button>
+          <p class="edit-error" data-banner-editor-error></p>
+          <button class="btn primary" type="submit">Salvar carrossel</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="edit-login hidden" data-site-editor aria-hidden="true">
+      <div class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="site-editor-title">
+        <button class="edit-close" type="button" data-close-site-editor aria-label="Fechar editor">×</button>
+        <p class="eyebrow">Site</p>
+        <h2 id="site-editor-title">Editar textos e banner</h2>
+        <form class="edit-form" data-site-editor-form>
+          <label>
+            Nome da loja
+            <input type="text" name="brandTitle" required />
+          </label>
+          <label>
+            Texto do topo e rodapé
+            <textarea name="brandSubtitle" rows="3" required></textarea>
+          </label>
+          <label>
+            Banner (URL da imagem)
+            <input type="url" name="bannerImage" placeholder="https://..." />
+          </label>
+          <label>
+            Texto da pagina inicial
+            <textarea name="homeText" rows="3"></textarea>
+          </label>
+          <label>
+            WhatsApp
+            <input type="tel" name="whatsapp" placeholder="62991877597" />
+          </label>
+          <label>
+            Entrega
+            <input type="text" name="deliveryInfo" placeholder="Entregamos para todo o Brasil" />
+          </label>
+          <p class="edit-error" data-site-editor-error></p>
+          <button class="btn primary" type="submit">Salvar textos</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="edit-login hidden" data-sales-login aria-hidden="true">
+      <div class="edit-modal small" role="dialog" aria-modal="true" aria-labelledby="sales-login-title">
+        <button class="edit-close" type="button" data-close-sales-login aria-label="Fechar vendas">×</button>
+        <p class="eyebrow">Vendas e estoque</p>
+        <h2 id="sales-login-title">Entrar na area de vendas</h2>
+        <form class="edit-form" data-sales-login-form>
+          <label>
+            E-mail
+            <input type="email" name="email" autocomplete="username" required />
+          </label>
+          <label>
+            Senha
+            <input type="password" name="password" autocomplete="current-password" required />
+          </label>
+          <p class="edit-error" data-sales-login-error></p>
+          <button class="btn primary" type="submit">Entrar</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="edit-login hidden" data-sales-panel aria-hidden="true">
+      <div class="edit-modal sales-modal" role="dialog" aria-modal="true" aria-labelledby="sales-panel-title">
+        <button class="edit-close" type="button" data-close-sales-panel aria-label="Fechar vendas">×</button>
+        <p class="eyebrow">Financeiro interno</p>
+        <h2 id="sales-panel-title">Vendas e estoque</h2>
+        <p class="sales-status" data-sales-status aria-live="polite"></p>
+
+        <div class="sales-summary">
+          <article>
+            <span>Vendido hoje</span>
+            <strong data-sales-day-total>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Vendido na semana</span>
+            <strong data-sales-week-total>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Vendido no mês</span>
+            <strong data-sales-month-total>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Vendido no ano</span>
+            <strong data-sales-year-total>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Ticket médio do dia</span>
+            <strong data-ticket-day>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Ticket médio da semana</span>
+            <strong data-ticket-week>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Ticket médio do mês</span>
+            <strong data-ticket-month>R$ 0,00</strong>
+          </article>
+          <article>
+            <span>Ticket médio do ano</span>
+            <strong data-ticket-year>R$ 0,00</strong>
+          </article>
+        </div>
+
+        <div class="finance-filters">
+          <button type="button" data-finance-filter="today">Hoje</button>
+          <button type="button" data-finance-filter="yesterday">Ontem</button>
+          <button type="button" data-finance-filter="this-week">Esta semana</button>
+          <button type="button" data-finance-filter="last-week">Semana passada</button>
+          <button type="button" data-finance-filter="this-month">Este mês</button>
+          <button type="button" data-finance-filter="last-month">Mês passado</button>
+          <button type="button" data-finance-filter="this-year">Este ano</button>
+          <button type="button" data-finance-filter="custom">Período personalizado</button>
+        </div>
+
+        <div class="custom-period hidden" data-custom-period>
+          <label>
+            Início
+            <input type="date" data-finance-start />
+          </label>
+          <label>
+            Fim
+            <input type="date" data-finance-end />
+          </label>
+        </div>
+
+        <div class="finance-kpis">
+          <article><span>Valor vendido</span><strong data-filter-total>R$ 0,00</strong></article>
+          <article><span>Quantidade de vendas</span><strong data-filter-count>0</strong></article>
+          <article><span>Ticket médio</span><strong data-filter-ticket>R$ 0,00</strong></article>
+          <article><span>Lucro</span><strong data-filter-profit>R$ 0,00</strong></article>
+          <article><span>Produtos vendidos</span><strong data-filter-products>0</strong></article>
+        </div>
+
+        <form class="edit-form two-columns sales-form" data-sale-form>
+          <label class="wide">
+            Produto vendido
+            <select name="produto_id" required data-sale-product-select></select>
+          </label>
+          <label>
+            Quantidade
+            <input type="number" name="quantidade" min="1" step="1" value="1" required />
+          </label>
+          <label>
+            Valor unitario vendido
+            <input type="number" name="valor_unitario" min="0" step="0.01" required />
+          </label>
+          <label>
+            Custo unitário
+            <input type="number" name="custo_unitario" min="0" step="0.01" value="0" />
+          </label>
+          <p class="edit-error wide" data-sale-error></p>
+          <button class="btn primary wide" type="submit">Registrar venda</button>
+        </form>
+
+        <div class="finance-charts">
+          <section><h3>Vendas por dia</h3><div class="finance-chart" data-chart-day></div></section>
+          <section><h3>Vendas por semana</h3><div class="finance-chart" data-chart-week></div></section>
+          <section><h3>Vendas por mês</h3><div class="finance-chart" data-chart-month></div></section>
+        </div>
+
+        <div class="history-controls">
+          <button type="button" data-history-group="day">Agrupar por dia</button>
+          <button type="button" data-history-group="week">Agrupar por semana</button>
+          <button type="button" data-history-group="month">Agrupar por mês</button>
+          <button type="button" data-history-group="year">Agrupar por ano</button>
+        </div>
+
+        <div class="finance-ranking">
+          <section><h3>Mais vendidos do dia</h3><div data-ranking-day></div></section>
+          <section><h3>Mais vendidos da semana</h3><div data-ranking-week></div></section>
+          <section><h3>Mais vendidos do mês</h3><div data-ranking-month></div></section>
+          <section><h3>Mais vendidos do ano</h3><div data-ranking-year></div></section>
+        </div>
+
+        <div class="sales-grid">
+          <section>
+            <h3>Estoque dos produtos</h3>
+            <div class="stock-list" data-stock-list></div>
+          </section>
+          <section>
+            <h3>Historico de vendas</h3>
+            <div class="sales-history" data-sales-history></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <script src="./script.js"></script>
+  </body>
+</html>

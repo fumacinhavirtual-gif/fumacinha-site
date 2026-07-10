@@ -1,0 +1,2112 @@
+const TABLE_NAME = "PRODUTOS";
+const CONFIG_TABLE_NAME = "SITE_CONFIG";
+const CATEGORY_TABLE_NAME = "CATEGORIAS";
+const SALES_TABLE_NAME = "VENDAS";
+const BANNER_TABLE_NAME = "BANNERS_HOME";
+
+const settings = {
+  brandTitle: "Fumacinha",
+  brandSubtitle: "Loja Fumacinha com produtos separados, estoque proprio e atendimento pelo WhatsApp.",
+  bannerImage: "",
+  homeText: "",
+  whatsapp: "62991877597",
+  deliveryInfo: "Para todo o Brasil",
+};
+
+const state = {
+  products: [],
+  categories: [],
+  cart: new Map(),
+  productQuantity: 1,
+  search: "",
+  editMode: false,
+  salesMode: false,
+  sales: [],
+  categoryConfigs: [],
+  activeCategory: "",
+  financeFilter: "today",
+  historyGroup: "day",
+  bannerCarousel: { enabled: false, interval: 5, banners: [] },
+  bannerIndex: 0,
+  bannerTimer: null,
+};
+
+const currency = new Intl.NumberFormat("pt-BR", {
+  style: "currency",
+  currency: "BRL",
+});
+
+const productRoot = document.querySelector("[data-products]");
+const productPage = document.querySelector("[data-product-page]");
+const categoryRail = document.querySelector("[data-category-rail]");
+const cartDrawer = document.querySelector("[data-cart-drawer]");
+const cartItems = document.querySelector("[data-cart-items]");
+const cartEmpty = document.querySelector("[data-cart-empty]");
+const cartCount = document.querySelector("[data-cart-count]");
+const cartTrigger = document.querySelector("[data-open-cart]");
+const cartUnits = document.querySelector("[data-cart-units]");
+const cartNormalTotal = document.querySelector("[data-cart-normal-total]");
+const cartFooter = document.querySelector("[data-cart-footer]");
+const checkout = document.querySelector("[data-checkout]");
+const orderConfirmation = document.querySelector("[data-order-confirmation]");
+const orderConfirmationForm = document.querySelector("[data-order-confirmation-form]");
+const orderSummary = document.querySelector("[data-order-summary]");
+const orderError = document.querySelector("[data-order-error]");
+const toastRegion = document.querySelector("[data-toast-region]");
+const searchInput = document.querySelector("[data-search]");
+const searchForm = document.querySelector(".search-form");
+const benefitTrack = document.querySelector("[data-benefit-track]");
+const benefitPrev = document.querySelector("[data-benefit-prev]");
+const benefitNext = document.querySelector("[data-benefit-next]");
+const homeBannerCarousel = document.querySelector("[data-home-banner-carousel]");
+const bannerTrack = document.querySelector("[data-banner-track]");
+const bannerDots = document.querySelector("[data-banner-dots]");
+const bannerPrev = document.querySelector("[data-banner-prev]");
+const bannerNext = document.querySelector("[data-banner-next]");
+const configBanner = document.querySelector("[data-config-banner]");
+const configBannerImage = document.querySelector("[data-config-banner-image]");
+const homeText = document.querySelector("[data-home-text]");
+const editLogin = document.querySelector("[data-edit-login]");
+const editLoginForm = document.querySelector("[data-edit-login-form]");
+const editLoginError = document.querySelector("[data-edit-login-error]");
+const editToolbar = document.querySelector("[data-edit-toolbar]");
+const productEditor = document.querySelector("[data-product-editor]");
+const productEditorForm = document.querySelector("[data-product-editor-form]");
+const productEditorTitle = document.querySelector("[data-product-editor-title]");
+const productEditorError = document.querySelector("[data-product-editor-error]");
+const categoryEditor = document.querySelector("[data-category-editor]");
+const categoryEditorForm = document.querySelector("[data-category-editor-form]");
+const categoryEditorList = document.querySelector("[data-category-editor-list]");
+const categoryEditorError = document.querySelector("[data-category-editor-error]");
+const bannerEditor = document.querySelector("[data-banner-editor]");
+const bannerEditorForm = document.querySelector("[data-banner-editor-form]");
+const bannerEditorList = document.querySelector("[data-banner-editor-list]");
+const bannerEditorError = document.querySelector("[data-banner-editor-error]");
+const siteEditor = document.querySelector("[data-site-editor]");
+const siteEditorForm = document.querySelector("[data-site-editor-form]");
+const siteEditorError = document.querySelector("[data-site-editor-error]");
+const salesLogin = document.querySelector("[data-sales-login]");
+const salesLoginForm = document.querySelector("[data-sales-login-form]");
+const salesLoginError = document.querySelector("[data-sales-login-error]");
+const salesPanel = document.querySelector("[data-sales-panel]");
+const stockList = document.querySelector("[data-stock-list]");
+const salesHistory = document.querySelector("[data-sales-history]");
+const salesDayTotal = document.querySelector("[data-sales-day-total]");
+const salesWeekTotal = document.querySelector("[data-sales-week-total]");
+const salesMonthTotal = document.querySelector("[data-sales-month-total]");
+const salesYearTotal = document.querySelector("[data-sales-year-total]");
+const ticketDay = document.querySelector("[data-ticket-day]");
+const ticketWeek = document.querySelector("[data-ticket-week]");
+const ticketMonth = document.querySelector("[data-ticket-month]");
+const ticketYear = document.querySelector("[data-ticket-year]");
+const saleForm = document.querySelector("[data-sale-form]");
+const saleProductSelect = document.querySelector("[data-sale-product-select]");
+const saleError = document.querySelector("[data-sale-error]");
+const salesStatus = document.querySelector("[data-sales-status]");
+const customPeriod = document.querySelector("[data-custom-period]");
+const financeStart = document.querySelector("[data-finance-start]");
+const financeEnd = document.querySelector("[data-finance-end]");
+const filterTotal = document.querySelector("[data-filter-total]");
+const filterCount = document.querySelector("[data-filter-count]");
+const filterTicket = document.querySelector("[data-filter-ticket]");
+const filterProfit = document.querySelector("[data-filter-profit]");
+const filterProducts = document.querySelector("[data-filter-products]");
+const chartDay = document.querySelector("[data-chart-day]");
+const chartWeek = document.querySelector("[data-chart-week]");
+const chartMonth = document.querySelector("[data-chart-month]");
+const rankingDay = document.querySelector("[data-ranking-day]");
+const rankingWeek = document.querySelector("[data-ranking-week]");
+const rankingMonth = document.querySelector("[data-ranking-month]");
+const rankingYear = document.querySelector("[data-ranking-year]");
+const policyModal = document.querySelector("[data-policy-modal]");
+const policyTitle = document.querySelector("[data-policy-title]");
+const policyContent = document.querySelector("[data-policy-content]");
+
+const policies = {
+  entrega: {
+    title: "Entrega",
+    html: `
+      <h3>Política de entrega</h3>
+      <ul>
+        <li>O prazo de entrega passa a contar após a confirmação do pagamento.</li>
+        <li>São realizadas até 3 tentativas de entrega no endereço informado.</li>
+        <li>Confira as medidas do produto antes da compra para garantir passagem por portas, elevadores e corredores.</li>
+        <li>Podem ocorrer atrasos por fatores externos, como clima, transporte, disponibilidade logística ou restrições de acesso.</li>
+        <li>No recebimento, recuse produtos avariados, violados ou divergentes do pedido.</li>
+      </ul>
+    `,
+  },
+  trocas: {
+    title: "Trocas e Devolução",
+    html: `
+      <h3>Política de trocas e devolução</h3>
+      <ul>
+        <li>O prazo para arrependimento da compra é de 7 dias corridos, conforme o Código de Defesa do Consumidor.</li>
+        <li>O produto deve retornar com todos os acessórios, embalagem quando aplicável e nota fiscal.</li>
+        <li>Trocas por defeito seguem as regras do CDC e dependem de avaliação técnica do produto.</li>
+        <li>O reembolso pode ser realizado conforme o meio de pagamento utilizado pela loja.</li>
+        <li>A análise de troca, devolução ou defeito pode levar até 30 dias.</li>
+      </ul>
+    `,
+  },
+  termos: {
+    title: "Termos e Condições",
+    html: `
+      <h3>Termos de uso da FUMACINHA</h3>
+      <ul>
+        <li>Ao comprar ou solicitar atendimento pelo site da FUMACINHA, o cliente declara estar de acordo com estes termos.</li>
+        <li>As imagens dos produtos são ilustrativas e podem apresentar pequenas variações de cor, acabamento ou proporção conforme tela, lote ou fornecedor.</li>
+        <li>Preços, disponibilidade, estoque e condições comerciais podem ser alterados sem aviso prévio.</li>
+        <li>Pedidos enviados pelo WhatsApp passam por confirmação de disponibilidade, pagamento, entrega e dados do cliente.</li>
+        <li>A FUMACINHA pode solicitar informações adicionais para concluir o atendimento, emitir nota fiscal ou combinar entrega.</li>
+        <li>O cliente é responsável por conferir medidas, local de entrega, acesso ao imóvel e compatibilidade do produto com o ambiente.</li>
+        <li>Garantias, trocas e devoluções seguem as regras informadas pela loja e a legislação brasileira aplicável.</li>
+        <li>O uso indevido do site, tentativa de fraude ou envio de informações falsas pode levar ao cancelamento do atendimento.</li>
+      </ul>
+    `,
+  },
+};
+
+const supabaseClient = createSupabaseClient();
+
+function createSupabaseClient() {
+  const url = window.FUMACINHA_SUPABASE_URL;
+  const key = window.FUMACINHA_SUPABASE_PUBLISHABLE_KEY;
+  const isConfigured = url && key && !url.includes("COLE_AQUI") && !key.includes("COLE_AQUI");
+
+  if (!isConfigured || !window.supabase) return null;
+  return window.supabase.createClient(url, key);
+}
+
+function slugify(value) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+}
+
+function getProductDescription(product) {
+  return `Produto da categoria ${product.categoria}, disponível na Fumacinha para confirmar cores, estoque e entrega pelo WhatsApp.`;
+}
+
+function getVisibleProducts() {
+  const term = state.search.trim().toLowerCase();
+  const publicProducts = state.products.filter((product) => product.ativo && product.estoque > 0);
+  if (term) {
+    return publicProducts.filter((product) => {
+      return `${product.nome} ${product.categoria}`.toLowerCase().includes(term);
+    });
+  }
+  if (state.activeCategory) {
+    return publicProducts.filter((product) => product.categoryId === state.activeCategory);
+  }
+  return publicProducts.filter((product) => !product.ocultar_home);
+}
+
+function getFeaturedProducts() {
+  if (state.search.trim() || state.activeCategory) return [];
+  return state.products.filter((product) => {
+    return product.ativo && product.estoque > 0 && product.destaque_home && !product.ocultar_home;
+  });
+}
+
+function getHomeCategories() {
+  if (state.search.trim() || state.activeCategory) return state.categories;
+  return state.categories.filter((category) => category.ativo_home);
+}
+
+function getCategorySearchProducts(category) {
+  const term = state.search.trim().toLowerCase();
+  const publicProducts = state.products.filter((product) => product.ativo && product.estoque > 0);
+  return publicProducts.filter((product) => {
+    if (product.categoryId !== category.id) return false;
+    if (!term) return true;
+    return `${product.nome} ${product.categoria}`.toLowerCase().includes(term);
+  });
+}
+
+function mapProduct(row) {
+  const categoryName = row.categoria || "Produtos";
+  const price = Number(row.preco || 0);
+  const hasStockColumn = Object.prototype.hasOwnProperty.call(row, "estoque");
+  const hasActiveColumn = Object.prototype.hasOwnProperty.call(row, "ativo");
+  const hasFeaturedColumn = Object.prototype.hasOwnProperty.call(row, "destaque_home");
+  const hasHideHomeColumn = Object.prototype.hasOwnProperty.call(row, "ocultar_home");
+  return {
+    id: String(row.id),
+    nome: row.nome || "Produto Fumacinha",
+    preco: price,
+    imagem: row.imagem || "",
+    categoria: categoryName,
+    estoque: hasStockColumn ? Number(row.estoque ?? 0) : 999,
+    ativo: hasActiveColumn ? row.ativo !== false : true,
+    destaque_home: hasFeaturedColumn ? row.destaque_home === true : false,
+    ocultar_home: hasHideHomeColumn ? row.ocultar_home === true : false,
+    categoryId: slugify(categoryName),
+  };
+}
+
+function normalizeProduct(product) {
+  const categoryName = product.categoria || "Produtos";
+  const price = Number(product.preco || 0);
+  return {
+    ...product,
+    id: String(product.id),
+    nome: product.nome || "Produto Fumacinha",
+    preco: price,
+    imagem: product.imagem || "",
+    categoria: categoryName,
+    estoque: Number(product.estoque ?? 999),
+    ativo: product.ativo !== false,
+    destaque_home: product.destaque_home === true,
+    ocultar_home: product.ocultar_home === true,
+    categoryId: slugify(categoryName),
+  };
+}
+
+async function loadProducts() {
+  if (!supabaseClient) {
+    state.products = [];
+    await loadCategories();
+    renderCategories();
+    renderProductsByCategory();
+    syncCartWithProducts();
+    renderSalesPanel();
+    if (!state.products.length) showLoadMessage("Configure sua Project URL e Publishable Key em supabase-config.js para carregar os produtos.");
+    return;
+  }
+
+  productRoot.innerHTML = `<p class="load-message">Carregando produtos...</p>`;
+
+  let { data, error } = await supabaseClient
+    .from(TABLE_NAME)
+    .select("id,nome,preco,imagem,categoria,estoque,ativo,destaque_home,ocultar_home")
+    .order("categoria", { ascending: true })
+    .order("nome", { ascending: true });
+
+  if (error) {
+    const missingOptionalColumns =
+      error.message?.includes("PRODUTOS.ativo") ||
+      error.message?.includes("PRODUTOS.estoque") ||
+      error.message?.includes("PRODUTOS.destaque_home") ||
+      error.message?.includes("PRODUTOS.ocultar_home");
+    if (!missingOptionalColumns) {
+      showLoadMessage(`Erro ao carregar produtos: ${error.message}`);
+      return;
+    }
+
+    const fallback = await supabaseClient
+      .from(TABLE_NAME)
+      .select("id,nome,preco,imagem,categoria")
+      .order("categoria", { ascending: true })
+      .order("nome", { ascending: true });
+
+    data = fallback.data;
+    error = fallback.error;
+
+    if (error) {
+      showLoadMessage(`Erro ao carregar produtos: ${error.message}`);
+      return;
+    }
+  }
+
+  state.products = (data || []).map(mapProduct);
+  await loadCategories();
+
+  renderCategories();
+  renderProductsByCategory();
+  syncCartWithProducts();
+  renderSalesPanel();
+}
+
+function buildFallbackCategories() {
+  const visibleForCategories = state.products.filter((product) => product.ativo && product.estoque > 0);
+  return [...new Set(visibleForCategories.map((product) => product.categoria))].map((name, index) => ({
+    id: slugify(name),
+    dbId: "",
+    name,
+    oldName: name,
+    imagem: "",
+    ordem: index + 1,
+    ativo_home: true,
+    icon: iconForCategory(name),
+  }));
+}
+
+function mapCategoryConfig(row, index = 0) {
+  const name = row.nome || "Categoria";
+  return {
+    id: slugify(name),
+    dbId: row.id || "",
+    name,
+    oldName: name,
+    imagem: row.imagem || "",
+    ordem: Number(row.ordem || index + 1),
+    ativo_home: row.ativo_home !== false,
+    icon: iconForCategory(name),
+  };
+}
+
+function mergeCategoryConfigs(baseCategories, configuredCategories = []) {
+  const categoriesByName = new Map(baseCategories.map((category) => [category.name, category]));
+
+  configuredCategories.forEach((configuredCategory, index) => {
+    const name = (configuredCategory.name || configuredCategory.nome || "").trim();
+    if (!name) return;
+
+    const oldName = configuredCategory.oldName || name;
+    const baseCategory = categoriesByName.get(oldName) || categoriesByName.get(name) || {};
+    categoriesByName.delete(oldName);
+    categoriesByName.set(name, {
+      ...baseCategory,
+      id: slugify(name),
+      dbId: configuredCategory.dbId || baseCategory.dbId || "",
+      name,
+      oldName: name,
+      imagem: configuredCategory.imagem || "",
+      ordem: Number(configuredCategory.ordem || index + 1),
+      ativo_home: configuredCategory.ativo_home !== false,
+      icon: iconForCategory(name),
+    });
+  });
+
+  return [...categoriesByName.values()].sort((a, b) => a.ordem - b.ordem || a.name.localeCompare(b.name));
+}
+
+async function loadCategories() {
+  const fallback = buildFallbackCategories();
+  state.categories = fallback;
+
+  if (!supabaseClient) return;
+
+  const { data, error } = await supabaseClient.from(CATEGORY_TABLE_NAME).select("id,nome,imagem,ordem,ativo_home").order("ordem", { ascending: true });
+
+  if (error) {
+    console.warn(`Configure a tabela ${CATEGORY_TABLE_NAME} no Supabase para editar categorias.`, error.message);
+    state.categories = fallback;
+    return;
+  }
+
+  if (!data?.length) {
+    state.categories = fallback;
+    return;
+  }
+
+  const productCategoryNames = new Set(state.products.map((product) => product.categoria));
+  const configured = data.map(mapCategoryConfig).filter((category) => productCategoryNames.has(category.name));
+  const configuredNames = new Set(configured.map((category) => category.name));
+  const missing = fallback.filter((category) => !configuredNames.has(category.name));
+  state.categories = mergeCategoryConfigs(missing, configured);
+}
+
+function iconForCategory(name) {
+  const text = name.toLowerCase();
+  if (text.includes("mesa")) return '<path d="M4 8h16v4H4z" /><path d="M7 12v8M17 12v8M6 20h12" />';
+  if (text.includes("rece")) return '<path d="M6 11h12v5H6z" /><path d="M8 6h8v5H8z" /><path d="M7 16v4M17 16v4" />';
+  if (text.includes("pl")) return '<path d="M8 5h8v8H8z" /><path d="M7 13h10" /><path d="M9 13v7M15 13v7" />';
+  return '<path d="M7 4h10v9H7z" /><path d="M12 13v5M8 20h8" /><path d="M5 20h14" />';
+}
+
+function showLoadMessage(message) {
+  productRoot.innerHTML = `<p class="load-message">${message}</p>`;
+}
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function cleanFumacinhaContent(value) {
+  return String(value || "").replace("Produtos separados da Confortti, com estoque proprio.", "Produtos selecionados, com estoque proprio.");
+}
+
+async function loadBannerConfig() {
+  if (!supabaseClient) {
+    renderHomeBannerCarousel();
+    return;
+  }
+
+  const [{ data: config }, { data: banners, error }] = await Promise.all([
+    supabaseClient.from(CONFIG_TABLE_NAME).select("carrossel_ativo,carrossel_intervalo").eq("id", 1).maybeSingle(),
+    supabaseClient.from(BANNER_TABLE_NAME).select("id,imagem,titulo,subtitulo,link,ordem,ativo").order("ordem", { ascending: true }),
+  ]);
+
+  if (error) {
+    console.warn(`Configure a tabela ${BANNER_TABLE_NAME} no Supabase para carregar banners.`, error.message);
+    renderHomeBannerCarousel();
+    return;
+  }
+
+  state.bannerCarousel = {
+    enabled: Boolean(config?.carrossel_ativo),
+    interval: Number(config?.carrossel_intervalo || 5),
+    banners: (banners || []).map((banner) => ({
+      id: banner.id,
+      imagem: banner.imagem || "",
+      titulo: cleanFumacinhaContent(banner.titulo || ""),
+      subtitulo: cleanFumacinhaContent(banner.subtitulo || ""),
+      link: banner.link || "",
+      ordem: Number(banner.ordem || 1),
+      ativo: banner.ativo !== false,
+    })),
+  };
+  renderHomeBannerCarousel();
+}
+
+function activeBanners() {
+  return state.bannerCarousel.banners
+    .filter((banner) => banner.imagem && banner.ativo !== false)
+    .sort((a, b) => Number(a.ordem || 1) - Number(b.ordem || 1));
+}
+
+function moveHomeBanner(direction) {
+  const banners = activeBanners();
+  if (!banners.length) return;
+  state.bannerIndex = (state.bannerIndex + direction + banners.length) % banners.length;
+  updateHomeBannerPosition();
+}
+
+function updateHomeBannerPosition() {
+  if (!bannerTrack) return;
+  bannerTrack.style.transform = `translateX(-${state.bannerIndex * 100}%)`;
+  bannerDots?.querySelectorAll("button").forEach((button, index) => {
+    button.classList.toggle("active", index === state.bannerIndex);
+  });
+}
+
+function startBannerAutoplay() {
+  window.clearInterval(state.bannerTimer);
+  const banners = activeBanners();
+  if (!state.bannerCarousel.enabled || banners.length <= 1) return;
+  state.bannerTimer = window.setInterval(() => moveHomeBanner(1), Math.max(2, Number(state.bannerCarousel.interval || 5)) * 1000);
+}
+
+function renderHomeBannerCarousel() {
+  const banners = activeBanners();
+  const shouldShow = state.bannerCarousel.enabled && banners.length > 0;
+  homeBannerCarousel?.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow || !bannerTrack || !bannerDots) {
+    window.clearInterval(state.bannerTimer);
+    return;
+  }
+
+  state.bannerIndex = Math.min(state.bannerIndex, banners.length - 1);
+  bannerTrack.innerHTML = banners
+    .map(
+      (banner) => `
+        <article class="home-banner-slide">
+          ${banner.link ? `<a href="${escapeHtml(banner.link)}" target="_blank" rel="noreferrer">` : ""}
+          <img src="${escapeHtml(banner.imagem)}" alt="${escapeHtml(banner.titulo || "Banner Fumacinha")}" />
+          ${(banner.titulo || banner.subtitulo) ? `<div><strong>${escapeHtml(banner.titulo)}</strong><span>${escapeHtml(banner.subtitulo)}</span></div>` : ""}
+          ${banner.link ? "</a>" : ""}
+        </article>
+      `
+    )
+    .join("");
+  bannerDots.innerHTML = banners.map((_, index) => `<button type="button" data-banner-dot="${index}" aria-label="Ir para banner ${index + 1}"></button>`).join("");
+  updateHomeBannerPosition();
+  startBannerAutoplay();
+}
+
+function bannerEditorRow(banner = {}, index = 0) {
+  return `
+    <article class="banner-editor-row">
+      <label>
+        Imagem do banner
+        <input type="url" name="imagem" value="${escapeHtml(banner.imagem)}" placeholder="https://..." />
+      </label>
+      <label>
+        Título
+        <input type="text" name="titulo" value="${escapeHtml(banner.titulo)}" />
+      </label>
+      <label>
+        Subtítulo
+        <input type="text" name="subtitulo" value="${escapeHtml(banner.subtitulo)}" />
+      </label>
+      <label>
+        Link opcional
+        <input type="url" name="link" value="${escapeHtml(banner.link)}" placeholder="https://..." />
+      </label>
+      <label>
+        Ordem
+        <input type="number" name="ordem" min="1" step="1" value="${Number(banner.ordem || index + 1)}" />
+      </label>
+      <button class="remove-banner-button" type="button" data-remove-banner>Excluir</button>
+    </article>
+  `;
+}
+
+function openBannerEditor() {
+  if (!state.editMode || !bannerEditorForm || !bannerEditorList) return;
+  if (bannerEditorError) bannerEditorError.textContent = "";
+  bannerEditorForm.elements.enabled.checked = state.bannerCarousel.enabled;
+  bannerEditorForm.elements.interval.value = state.bannerCarousel.interval || 5;
+  bannerEditorList.innerHTML = state.bannerCarousel.banners.length
+    ? state.bannerCarousel.banners.map(bannerEditorRow).join("")
+    : bannerEditorRow({}, 0);
+  openEditorModal(bannerEditor);
+}
+
+async function saveBanners(event) {
+  event.preventDefault();
+  if (!state.editMode) return;
+
+  if (!supabaseClient) {
+    if (bannerEditorError) bannerEditorError.textContent = "Configure o Supabase para salvar banners.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(bannerEditorError, "Faça login para editar banners."))) return;
+
+  const rows = [...bannerEditorList.querySelectorAll(".banner-editor-row")];
+  state.bannerCarousel = {
+    enabled: bannerEditorForm.elements.enabled.checked,
+    interval: Math.max(2, Number(bannerEditorForm.elements.interval.value || 5)),
+    banners: rows
+      .map((row, index) => ({
+        imagem: row.querySelector('[name="imagem"]').value.trim(),
+        titulo: row.querySelector('[name="titulo"]').value.trim(),
+        subtitulo: row.querySelector('[name="subtitulo"]').value.trim(),
+        link: row.querySelector('[name="link"]').value.trim(),
+        ordem: Number(row.querySelector('[name="ordem"]').value || index + 1),
+      }))
+      .filter((banner) => banner.imagem || banner.titulo || banner.subtitulo),
+  };
+
+  const { error: configError } = await supabaseClient
+    .from(CONFIG_TABLE_NAME)
+    .upsert({ id: 1, carrossel_ativo: state.bannerCarousel.enabled, carrossel_intervalo: state.bannerCarousel.interval }, { onConflict: "id" });
+
+  if (configError) {
+    if (bannerEditorError) bannerEditorError.textContent = configError.message;
+    return;
+  }
+
+  const { error: deleteError } = await supabaseClient.from(BANNER_TABLE_NAME).delete().neq("id", 0);
+  if (deleteError) {
+    if (bannerEditorError) bannerEditorError.textContent = deleteError.message;
+    return;
+  }
+
+  if (state.bannerCarousel.banners.length) {
+    const { error: insertError } = await supabaseClient.from(BANNER_TABLE_NAME).insert(
+      state.bannerCarousel.banners.map((banner) => ({
+        imagem: banner.imagem,
+        titulo: banner.titulo,
+        subtitulo: banner.subtitulo,
+        link: banner.link,
+        ordem: banner.ordem,
+        ativo: true,
+      }))
+    );
+
+    if (insertError) {
+      if (bannerEditorError) bannerEditorError.textContent = insertError.message;
+      return;
+    }
+  }
+
+  await loadBannerConfig();
+  renderHomeBannerCarousel();
+  closeEditorModal(bannerEditor);
+  showToast("Carrossel de banners salvo");
+}
+
+function productImage(product, large = false) {
+  if (product.imagem) {
+    return `<img class="product-image" src="${product.imagem}" alt="${product.nome}" />`;
+  }
+
+  const color = product.categoryId.includes("mesa") ? "#111111" : "#2d7d46";
+  const accent = "#111111";
+  if (product.categoryId.includes("mesa")) {
+    return `
+      <svg class="product-visual" viewBox="0 0 260 220" aria-hidden="true">
+        <path d="M34 82h192c10 0 18 8 18 18v18H16v-18c0-10 8-18 18-18Z" fill="${color}" />
+        <path d="M44 118h24v78H44zM192 118h24v78h-24z" fill="#2d7d46" />
+        <ellipse cx="130" cy="202" rx="${large ? 86 : 72}" ry="10" fill="rgba(0,0,0,.08)" />
+      </svg>
+    `;
+  }
+
+  return `
+    <svg class="product-visual" viewBox="0 0 260 220" aria-hidden="true">
+      <path d="M88 26h84c22 0 38 19 34 41l-13 80H67L54 67c-4-22 12-41 34-41Z" fill="${color}" />
+      <path d="M66 145h128c10 0 18 8 18 18v10H48v-10c0-10 8-18 18-18Z" fill="${color}" />
+      <path d="M102 172h56v18h-56z" fill="${accent}" opacity=".8" />
+      <path d="M130 190v18M94 210h72M75 210h110" stroke="${accent}" stroke-width="11" stroke-linecap="round" />
+      <ellipse cx="130" cy="214" rx="${large ? 70 : 56}" ry="8" fill="rgba(0,0,0,.08)" />
+    </svg>
+  `;
+}
+
+function productCard(product) {
+  return `
+    <article class="product-card">
+      ${
+        state.editMode
+          ? `<button class="edit-card-button" type="button" data-edit-product="${product.id}" aria-label="Editar ${escapeHtml(product.nome)}">Editar</button>`
+          : ""
+      }
+      <div class="product-photo">${productImage(product)}</div>
+      <span class="category">${escapeHtml(product.categoria)}</span>
+      <h3>${escapeHtml(product.nome)}</h3>
+      <div class="price-block">
+        <strong class="normal-price">${currency.format(product.preco)}</strong>
+      </div>
+      <button class="btn primary view-button" type="button" data-view-product="${product.id}">Ver Produto</button>
+    </article>
+  `;
+}
+
+function renderSettings() {
+  document.querySelectorAll(".brand-text strong, [data-footer-brand]").forEach((item) => {
+    item.textContent = settings.brandTitle;
+  });
+
+  document.querySelectorAll(".brand-text small, .site-footer p").forEach((item) => {
+    item.textContent = settings.brandSubtitle;
+  });
+
+  const benefitCards = document.querySelectorAll(".benefit-card");
+  benefitCards[0]?.querySelector("span") && (benefitCards[0].querySelector("span").textContent = settings.deliveryInfo);
+
+  if (configBanner && configBannerImage && homeText) {
+    const hasBanner = Boolean(settings.bannerImage);
+    const hasHomeText = Boolean(settings.homeText);
+    configBanner.classList.toggle("hidden", !hasBanner && !hasHomeText);
+    configBannerImage.classList.toggle("hidden", !hasBanner);
+    configBannerImage.src = hasBanner ? settings.bannerImage : "";
+    homeText.classList.toggle("hidden", !hasHomeText);
+    homeText.textContent = settings.homeText;
+  }
+
+  setupWhatsAppDirectLinks();
+}
+
+function mapSiteConfig(row) {
+  if (!row) return;
+  Object.assign(settings, {
+    brandTitle: row.titulo_principal || settings.brandTitle,
+    brandSubtitle: row.subtitulo || settings.brandSubtitle,
+    bannerImage: row.banners || "",
+    homeText: row.textos_pagina_inicial || "",
+    whatsapp: row.whatsapp || settings.whatsapp,
+    deliveryInfo: row.entrega || settings.deliveryInfo,
+  });
+  state.bannerCarousel.enabled = Boolean(row.carrossel_ativo);
+  state.bannerCarousel.interval = Number(row.carrossel_intervalo || state.bannerCarousel.interval || 5);
+}
+
+function getSiteConfigPayload() {
+  return {
+    id: 1,
+    titulo_principal: settings.brandTitle,
+    subtitulo: settings.brandSubtitle,
+    banners: settings.bannerImage,
+    textos_pagina_inicial: settings.homeText,
+    whatsapp: settings.whatsapp,
+    entrega: settings.deliveryInfo,
+    carrossel_ativo: state.bannerCarousel.enabled,
+    carrossel_intervalo: state.bannerCarousel.interval,
+  };
+}
+
+async function loadSiteConfig() {
+  if (!supabaseClient) {
+    renderSettings();
+    return;
+  }
+
+  const { data, error } = await supabaseClient.from(CONFIG_TABLE_NAME).select("*").eq("id", 1).maybeSingle();
+
+  if (error) {
+    console.warn(`Configure a tabela ${CONFIG_TABLE_NAME} no Supabase para salvar textos do site.`, error.message);
+    renderSettings();
+    return;
+  }
+
+  mapSiteConfig(data);
+  renderSettings();
+  renderHomeBannerCarousel();
+}
+
+function renderCategories() {
+  const categories = state.categories.filter((category) => category.ativo_home);
+  categoryRail.innerHTML = categories
+    .map(
+      (category) => `
+        <a class="category-button" href="#cat-${category.id}" data-category-scroll="${category.id}">
+          <span class="category-circle">
+            ${
+              category.imagem
+                ? `<img class="category-image" src="${category.imagem}" alt="${escapeHtml(category.name)}" />`
+                : `<svg viewBox="0 0 24 24" aria-hidden="true">${category.icon}</svg>`
+            }
+          </span>
+          <span>${escapeHtml(category.name)}</span>
+        </a>
+      `
+    )
+    .join("");
+}
+
+function renderProductsByCategory() {
+  const visibleProducts = getVisibleProducts();
+  const featuredProducts = getFeaturedProducts();
+  const visibleCategories = state.activeCategory
+    ? state.categories.filter((category) => category.id === state.activeCategory)
+    : state.search.trim()
+      ? state.categories
+      : getHomeCategories();
+
+  if (!visibleProducts.length && !featuredProducts.length) {
+    showLoadMessage(state.products.length ? "Nenhum produto encontrado para essa busca." : "Nenhum produto cadastrado no Supabase ainda.");
+    return;
+  }
+
+  const featuredSection = featuredProducts.length
+    ? `
+        <section class="product-category featured-products" id="mais-procurados">
+          <div class="product-category-heading">
+            <p class="eyebrow">Destaques</p>
+            <h3>Mais Procurados da Fumacinha</h3>
+          </div>
+          <div class="products-grid">${featuredProducts.map(productCard).join("")}</div>
+        </section>
+      `
+    : "";
+
+  const categorySections = visibleCategories
+    .map((category) => {
+      const categoryProducts = state.search.trim() ? getCategorySearchProducts(category) : visibleProducts.filter((product) => product.categoryId === category.id);
+      if (!categoryProducts.length) return "";
+      return `
+        <section class="product-category" id="cat-${category.id}">
+          <div class="product-category-heading">
+            <p class="eyebrow">${escapeHtml(category.name)}</p>
+            <h3>${escapeHtml(category.name)}</h3>
+          </div>
+          <div class="products-grid">${categoryProducts.map(productCard).join("")}</div>
+        </section>
+      `;
+    })
+    .join("");
+
+  productRoot.innerHTML = `${featuredSection}${categorySections}`;
+}
+
+function showHome(scroll = true) {
+  state.activeCategory = "";
+  document.body.classList.remove("product-view");
+  document.querySelectorAll("[data-view='home']").forEach((item) => item.classList.remove("hidden"));
+  productPage.classList.add("hidden");
+  renderProductsByCategory();
+  if (scroll) document.querySelector("#inicio").scrollIntoView({ behavior: "smooth" });
+}
+
+function showProduct(productId) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) return;
+
+  state.productQuantity = 1;
+  document.body.classList.add("product-view");
+  document.querySelectorAll("[data-view='home']").forEach((item) => item.classList.add("hidden"));
+  productPage.classList.remove("hidden");
+
+  const related = state.products
+    .filter((item) => item.id !== product.id && item.categoryId === product.categoryId && item.ativo && item.estoque > 0)
+    .slice(0, 3);
+
+  productPage.innerHTML = `
+    <button class="btn back-link" type="button" data-home-link>Voltar para a página inicial</button>
+    <section class="product-detail">
+      <div class="detail-photo">${productImage(product, true)}</div>
+      <div class="product-info">
+        <span class="category">${product.categoria}</span>
+        <h1>${product.nome}</h1>
+        <span class="availability">Disponivel</span>
+        <div class="price-block detail-prices">
+          <strong class="normal-price large">${currency.format(product.preco)}</strong>
+        </div>
+        <div>
+          <p class="eyebrow">Quantidade</p>
+          <div class="quantity-box">
+            <button class="qty-button" type="button" data-product-qty="-1">-</button>
+            <strong data-product-qty-value>1</strong>
+            <button class="qty-button" type="button" data-product-qty="1">+</button>
+          </div>
+        </div>
+        <button class="btn primary" type="button" data-add-product="${product.id}">Adicionar ao Carrinho</button>
+        <p class="product-description">${getProductDescription(product)}</p>
+      </div>
+    </section>
+    ${
+      related.length
+        ? `<section class="related"><h2>Produtos relacionados</h2><div class="products-grid">${related.map(productCard).join("")}</div></section>`
+        : ""
+    }
+  `;
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function setProductQuantity(change) {
+  state.productQuantity = Math.max(1, state.productQuantity + change);
+  const qty = document.querySelector("[data-product-qty-value]");
+  if (qty) qty.textContent = state.productQuantity;
+}
+
+function addToCart(productId, quantity = 1) {
+  const product = state.products.find((item) => item.id === productId);
+  if (!product) return;
+
+  const current = state.cart.get(productId);
+  state.cart.set(productId, {
+    product,
+    quantity: current ? current.quantity + quantity : quantity,
+  });
+
+  renderCart();
+  animateCartCounter(quantity);
+  showCartToast(product);
+}
+
+function updateCartQuantity(productId, change) {
+  const item = state.cart.get(productId);
+  if (!item) return;
+
+  const quantity = item.quantity + change;
+  if (quantity <= 0) state.cart.delete(productId);
+  else state.cart.set(productId, { ...item, quantity });
+
+  renderCart();
+}
+
+function removeFromCart(productId) {
+  state.cart.delete(productId);
+  renderCart();
+}
+
+function getCartSummary() {
+  const items = [...state.cart.values()];
+  const count = items.reduce((sum, item) => sum + item.quantity, 0);
+  const normalTotal = items.reduce((sum, item) => sum + item.product.preco * item.quantity, 0);
+  return { items, count, normalTotal };
+}
+
+function syncCartWithProducts() {
+  if (!state.cart.size) {
+    renderCart();
+    return;
+  }
+
+  const productsById = new Map(state.products.map((product) => [product.id, product]));
+  state.cart.forEach((item, productId) => {
+    const currentProduct = productsById.get(productId);
+    if (!currentProduct || !currentProduct.ativo || currentProduct.estoque <= 0) {
+      state.cart.delete(productId);
+      return;
+    }
+
+    item.product = currentProduct;
+    item.quantity = Math.max(1, Math.min(item.quantity, currentProduct.estoque));
+  });
+  renderCart();
+}
+
+function buildWhatsAppUrl() {
+  const { items, normalTotal } = getCartSummary();
+  const lines = [
+    "Pedido:",
+    "",
+    ...items.flatMap((item) => [
+      `- ${item.product.nome}`,
+      `- Quantidade: ${item.quantity}`,
+      `- Valor unitário: ${currency.format(item.product.preco)}`,
+      "",
+    ]),
+    `Total: ${currency.format(normalTotal)} + Taxa de entrega: A combinar`,
+  ];
+
+  return `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
+function buildConfirmedWhatsAppUrl(customer = {}) {
+  const { items, normalTotal } = getCartSummary();
+  const productLines = items.flatMap((item) => [
+    `- ${item.product.nome}`,
+    `- Quantidade: ${item.quantity}`,
+    `- Valor unitário: ${currency.format(item.product.preco)}`,
+    "",
+  ]);
+  const lines = [
+    `Nome: ${customer.nome}`,
+    `Bairro: ${customer.bairro}`,
+    "",
+    "Pedido:",
+    ...productLines,
+    `Total: ${currency.format(normalTotal)} + Taxa de entrega: A combinar`,
+  ];
+
+  return `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
+function renderCart() {
+  const { items, count, normalTotal } = getCartSummary();
+
+  cartCount.textContent = count;
+  cartUnits.textContent = `Quantidade de produtos: ${count}`;
+  cartNormalTotal.textContent = currency.format(normalTotal);
+  cartEmpty.classList.toggle("hidden", items.length > 0);
+  cartFooter.classList.toggle("hidden", items.length === 0);
+
+  cartItems.innerHTML = items
+    .map(
+      (item) => `
+        <article class="cart-row">
+          <div class="cart-thumb">${productImage(item.product)}</div>
+          <div class="cart-row-info">
+            <span class="cart-label">Nome:</span>
+            <h3>${item.product.nome}</h3>
+            <span class="cart-label">Preço unitário:</span>
+            <span>${currency.format(item.product.preco)} cada</span>
+            <div class="cart-controls">
+              <button class="qty-button" type="button" data-cart-qty="${item.product.id}" data-change="-1">-</button>
+              <strong>${item.quantity}</strong>
+              <button class="qty-button" type="button" data-cart-qty="${item.product.id}" data-change="1">+</button>
+              <button class="remove-button" type="button" data-remove="${item.product.id}">Remover</button>
+            </div>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+
+  if (items.length) {
+    checkout.classList.remove("disabled");
+    checkout.setAttribute("aria-disabled", "false");
+  } else {
+    checkout.classList.add("disabled");
+    checkout.setAttribute("aria-disabled", "true");
+  }
+}
+
+function animateCartCounter(quantity = 1) {
+  if (!cartTrigger || !cartCount) return;
+
+  cartTrigger.classList.remove("cart-bump");
+  cartCount.classList.remove("count-pop");
+  void cartTrigger.offsetWidth;
+  cartTrigger.classList.add("cart-bump");
+  cartCount.classList.add("count-pop");
+
+  const plus = document.createElement("span");
+  plus.className = "cart-plus-one";
+  plus.textContent = `+${quantity}`;
+  cartTrigger.appendChild(plus);
+
+  window.setTimeout(() => plus.remove(), 900);
+  window.setTimeout(() => {
+    cartTrigger.classList.remove("cart-bump");
+    cartCount.classList.remove("count-pop");
+  }, 700);
+}
+
+function openCart() {
+  cartDrawer.classList.add("open");
+  cartDrawer.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+}
+
+function closeCart() {
+  cartDrawer.classList.remove("open");
+  cartDrawer.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("no-scroll");
+}
+
+function renderOrderSummary() {
+  if (!orderSummary) return;
+  const { count, normalTotal } = getCartSummary();
+  orderSummary.innerHTML = `
+    <h3>Resumo do pedido</h3>
+    <div class="order-summary-line"><span>Quantidade de produtos</span><strong>${count}</strong></div>
+    <div class="order-total-delivery"><span><strong>Total:</strong> ${currency.format(normalTotal)}</span><span>Taxa de entrega: A combinar</span></div>
+  `;
+}
+
+function openOrderConfirmation() {
+  const { items } = getCartSummary();
+  if (!items.length || !orderConfirmation) return;
+  renderOrderSummary();
+  if (orderError) orderError.textContent = "";
+  closeCart();
+  orderConfirmation.classList.remove("hidden");
+  orderConfirmation.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+  orderConfirmationForm?.elements.nome?.focus();
+}
+
+function closeOrderConfirmation() {
+  orderConfirmation?.classList.add("hidden");
+  orderConfirmation?.setAttribute("aria-hidden", "true");
+  if (orderError) orderError.textContent = "";
+  orderConfirmationForm?.querySelectorAll(".field-invalid").forEach((field) => field.classList.remove("field-invalid"));
+  document.body.classList.remove("no-scroll");
+}
+
+function openPolicyModal(policyKey) {
+  const policy = policies[policyKey];
+  if (!policy || !policyModal || !policyTitle || !policyContent) return;
+
+  policyTitle.textContent = policy.title;
+  policyContent.innerHTML = policy.html;
+  policyModal.classList.remove("hidden");
+  policyModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("no-scroll");
+}
+
+function closePolicyModal() {
+  policyModal?.classList.add("hidden");
+  policyModal?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("no-scroll");
+}
+
+function showToast(message, title = "Fumacinha") {
+  const toast = document.createElement("div");
+  toast.className = "toast";
+  toast.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
+  toastRegion.appendChild(toast);
+  window.setTimeout(() => toast.classList.add("show"), 20);
+  window.setTimeout(() => {
+    toast.classList.remove("show");
+    window.setTimeout(() => toast.remove(), 250);
+  }, 2600);
+}
+
+function setSalesStatus(message = "", type = "loading") {
+  if (!salesStatus) return;
+  salesStatus.textContent = message;
+  salesStatus.classList.remove("success", "error", "loading");
+  salesStatus.classList.toggle("hidden", !message);
+  if (message) salesStatus.classList.add(type);
+}
+
+function showCartToast(product) {
+  const toast = document.createElement("div");
+  toast.className = "toast cart-toast";
+  toast.innerHTML = `
+    <div class="cart-toast-thumb">${productImage(product)}</div>
+    <div class="cart-toast-body">
+      <div class="cart-toast-status">
+        <span class="cart-toast-check" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="m6 12 4 4 8-8" /></svg>
+        </span>
+        <strong>Produto adicionado ao carrinho</strong>
+      </div>
+      <span class="cart-toast-name">${escapeHtml(product.nome)}</span>
+      <span class="cart-toast-price">${currency.format(product.preco)}</span>
+      <button class="cart-toast-button" type="button" data-toast-cart>Ver Carrinho</button>
+    </div>
+    <span class="toast-progress" aria-hidden="true"></span>
+  `;
+
+  toastRegion.appendChild(toast);
+  window.setTimeout(() => toast.classList.add("show"), 20);
+  window.setTimeout(() => {
+    toast.classList.remove("show");
+    window.setTimeout(() => toast.remove(), 260);
+  }, 2000);
+}
+
+function openLogin() {
+  editLogin?.classList.remove("hidden");
+  editLogin?.setAttribute("aria-hidden", "false");
+  editLoginForm?.elements.email?.focus();
+}
+
+function closeLogin() {
+  editLogin?.classList.add("hidden");
+  editLogin?.setAttribute("aria-hidden", "true");
+  if (editLoginError) editLoginError.textContent = "";
+}
+
+function openEditorModal(modal) {
+  modal?.classList.remove("hidden");
+  modal?.setAttribute("aria-hidden", "false");
+}
+
+function closeEditorModal(modal) {
+  modal?.classList.add("hidden");
+  modal?.setAttribute("aria-hidden", "true");
+}
+
+async function getAuthenticatedUser(errorElement, message = "Faça login para editar produtos.") {
+  if (!supabaseClient) {
+    if (errorElement) errorElement.textContent = "Configure o Supabase para salvar alterações.";
+    console.error("[Fumacinha Supabase] Cliente Supabase não configurado.");
+    return null;
+  }
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  console.log("[Fumacinha Supabase] Sessão atual:", data.session);
+  if (error) {
+    if (errorElement) errorElement.textContent = error.message;
+    console.error("[Fumacinha Supabase] Erro ao buscar sessão:", error);
+    return null;
+  }
+
+  const user = data.session?.user;
+  if (!user) {
+    if (errorElement) errorElement.textContent = message;
+    if (message.includes("estoque") || message.includes("vendas") || message.includes("financeiro")) setSalesStatus(message, "error");
+    return null;
+  }
+
+  return user;
+}
+
+function enableEditMode() {
+  state.editMode = true;
+  document.body.classList.add("edit-mode");
+  editToolbar?.classList.remove("hidden");
+  closeLogin();
+  renderProductsByCategory();
+  showToast("Modo edição habilitado");
+}
+
+function disableEditMode() {
+  state.editMode = false;
+  document.body.classList.remove("edit-mode");
+  editToolbar?.classList.add("hidden");
+  closeEditorModal(productEditor);
+  closeEditorModal(categoryEditor);
+  closeEditorModal(bannerEditor);
+  closeEditorModal(siteEditor);
+  closeLogin();
+  renderProductsByCategory();
+  supabaseClient?.auth.signOut();
+}
+
+function openSalesLogin() {
+  salesLogin?.classList.remove("hidden");
+  salesLogin?.setAttribute("aria-hidden", "false");
+  salesLoginForm?.elements.email?.focus();
+}
+
+function closeSalesLogin() {
+  salesLogin?.classList.add("hidden");
+  salesLogin?.setAttribute("aria-hidden", "true");
+  if (salesLoginError) salesLoginError.textContent = "";
+}
+
+async function enableSalesMode() {
+  if (!(await getAuthenticatedUser(salesLoginError || saleError, "Faça login para alterar estoque e registrar vendas."))) return;
+  state.salesMode = true;
+  closeSalesLogin();
+  openEditorModal(salesPanel);
+  await loadSales();
+  renderSalesPanel();
+  showToast("Área de vendas habilitada");
+}
+
+async function openSalesAccess() {
+  const user = await getAuthenticatedUser(null);
+  if (user) {
+    await enableSalesMode();
+    return;
+  }
+
+  openSalesLogin();
+}
+
+function disableSalesMode() {
+  state.salesMode = false;
+  closeEditorModal(salesPanel);
+  closeSalesLogin();
+}
+
+function openProductEditor(product = null) {
+  if (!state.editMode || !productEditorForm) return;
+  productEditorForm.reset();
+  if (productEditorError) productEditorError.textContent = "";
+  productEditorTitle.textContent = product ? "Editar produto" : "Novo produto";
+  productEditorForm.elements.id.value = product?.id || "";
+  productEditorForm.elements.nome.value = product?.nome || "";
+  productEditorForm.elements.categoria.value = product?.categoria || "";
+  productEditorForm.elements.preco.value = product?.preco || "";
+  productEditorForm.elements.estoque.value = product?.estoque ?? 0;
+  productEditorForm.elements.ativo.checked = product ? product.ativo : true;
+  productEditorForm.elements.destaque_home.checked = product ? product.destaque_home : false;
+  productEditorForm.elements.ocultar_home.checked = product ? product.ocultar_home : false;
+  productEditorForm.elements.imagem.value = product?.imagem || "";
+  document.querySelector("[data-delete-product]")?.classList.toggle("hidden", !product);
+  openEditorModal(productEditor);
+}
+
+function openSiteEditor() {
+  if (!state.editMode || !siteEditorForm) return;
+  siteEditorForm.elements.brandTitle.value = settings.brandTitle;
+  siteEditorForm.elements.brandSubtitle.value = settings.brandSubtitle;
+  siteEditorForm.elements.bannerImage.value = settings.bannerImage || "";
+  siteEditorForm.elements.homeText.value = settings.homeText || "";
+  siteEditorForm.elements.whatsapp.value = settings.whatsapp || "";
+  siteEditorForm.elements.deliveryInfo.value = settings.deliveryInfo || "";
+  if (siteEditorError) siteEditorError.textContent = "";
+  openEditorModal(siteEditor);
+}
+
+function openCategoryEditor() {
+  if (!state.editMode || !categoryEditorList) return;
+  if (categoryEditorError) categoryEditorError.textContent = "";
+  categoryEditorList.innerHTML = state.categories
+    .map(
+      (category) => `
+        <article class="category-editor-row">
+          <input type="hidden" name="dbId" value="${escapeHtml(category.dbId)}" />
+          <input type="hidden" name="oldName" value="${escapeHtml(category.oldName || category.name)}" />
+          <label>
+            Nome
+            <input type="text" name="nome" value="${escapeHtml(category.name)}" required />
+          </label>
+          <label>
+            Imagem/icone (URL)
+            <input type="url" name="imagem" value="${escapeHtml(category.imagem)}" placeholder="https://..." />
+          </label>
+          <label>
+            Ordem
+            <input type="number" name="ordem" min="1" step="1" value="${category.ordem}" />
+          </label>
+          <label class="edit-check">
+            <input type="checkbox" name="ativo_home" ${category.ativo_home ? "checked" : ""} />
+            Aparece na pagina inicial
+          </label>
+        </article>
+      `
+    )
+    .join("");
+  openEditorModal(categoryEditor);
+}
+
+function getProductPayload(form) {
+  return {
+    nome: form.elements.nome.value.trim(),
+    categoria: form.elements.categoria.value.trim(),
+    preco: Number(form.elements.preco.value || 0),
+    pix: Number(form.elements.preco.value || 0),
+    estoque: Number(form.elements.estoque.value || 0),
+    ativo: form.elements.ativo.checked && Number(form.elements.estoque.value || 0) > 0,
+    destaque_home: form.elements.destaque_home.checked,
+    ocultar_home: form.elements.ocultar_home.checked,
+    imagem: form.elements.imagem.value.trim(),
+  };
+}
+
+async function saveProduct(event) {
+  event.preventDefault();
+  if (!state.editMode) return;
+
+  const form = event.currentTarget;
+  const existingId = form.elements.id.value;
+  const payload = getProductPayload(form);
+  if (productEditorError) productEditorError.textContent = "";
+
+  if (!supabaseClient) {
+    if (productEditorError) productEditorError.textContent = "Configure o Supabase para salvar produtos.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(productEditorError, "Faça login para editar produtos."))) return;
+
+  const request = existingId
+    ? supabaseClient.from(TABLE_NAME).update(payload).eq("id", existingId)
+    : supabaseClient.from(TABLE_NAME).insert(payload);
+  const { error } = await request;
+  if (error) {
+    if (productEditorError) productEditorError.textContent = error.message;
+    return;
+  }
+
+  closeEditorModal(productEditor);
+  await loadProducts();
+  showToast(existingId ? "Produto atualizado" : "Produto cadastrado");
+}
+
+async function deleteCurrentProduct() {
+  const id = productEditorForm?.elements.id.value;
+  if (!state.editMode || !id) return;
+
+  if (!supabaseClient) {
+    if (productEditorError) productEditorError.textContent = "Configure o Supabase para excluir produtos.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(productEditorError, "Faça login para editar produtos."))) return;
+
+  const { error } = await supabaseClient.from(TABLE_NAME).delete().eq("id", id);
+  if (error) {
+    if (productEditorError) productEditorError.textContent = error.message;
+    return;
+  }
+
+  closeEditorModal(productEditor);
+  await loadProducts();
+  showToast("Produto excluído");
+}
+
+function saleDateValue(sale) {
+  return sale.data_venda || sale.created_at || new Date().toISOString();
+}
+
+function localDateKey(value, size = 10) {
+  const date = new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return size === 7 ? `${year}-${month}` : `${year}-${month}-${day}`;
+}
+
+async function loadSales() {
+  if (!state.salesMode) return;
+  if (!supabaseClient) {
+    state.sales = [];
+    if (saleError) saleError.textContent = "Configure o Supabase para carregar vendas.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(saleError, "Faça login para ver o financeiro."))) {
+    state.sales = [];
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from(SALES_TABLE_NAME)
+    .select("id,produto_id,nome_produto,quantidade,valor_unitario,valor_total,custo_unitario,custo_total,data_venda,created_at")
+    .order("data_venda", { ascending: false });
+
+  if (error) {
+    state.sales = [];
+    if (saleError) saleError.textContent = error.message;
+    console.error("[Fumacinha Vendas] Erro completo ao carregar histórico:", error);
+    return;
+  }
+
+  state.sales = data || [];
+}
+
+function startOfDay(value = new Date()) {
+  const date = new Date(value);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function endOfDay(value = new Date()) {
+  const date = startOfDay(value);
+  date.setHours(23, 59, 59, 999);
+  return date;
+}
+
+function addDays(value, days) {
+  const date = new Date(value);
+  date.setDate(date.getDate() + days);
+  return date;
+}
+
+function startOfWeek(value = new Date()) {
+  const date = startOfDay(value);
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return addDays(date, diff);
+}
+
+function startOfMonth(value = new Date()) {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
+
+function startOfYear(value = new Date()) {
+  return new Date(value.getFullYear(), 0, 1);
+}
+
+function getPeriodRange(filter = state.financeFilter) {
+  const now = new Date();
+  if (filter === "yesterday") {
+    const yesterday = addDays(now, -1);
+    return { start: startOfDay(yesterday), end: endOfDay(yesterday) };
+  }
+  if (filter === "this-week") return { start: startOfWeek(now), end: now };
+  if (filter === "last-week") {
+    const start = addDays(startOfWeek(now), -7);
+    return { start, end: endOfDay(addDays(start, 6)) };
+  }
+  if (filter === "this-month") return { start: startOfMonth(now), end: now };
+  if (filter === "last-month") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return { start, end: endOfDay(new Date(now.getFullYear(), now.getMonth(), 0)) };
+  }
+  if (filter === "this-year") return { start: startOfYear(now), end: now };
+  if (filter === "custom") {
+    const start = financeStart?.value ? startOfDay(new Date(`${financeStart.value}T00:00:00`)) : startOfDay(now);
+    const end = financeEnd?.value ? endOfDay(new Date(`${financeEnd.value}T00:00:00`)) : endOfDay(now);
+    return { start, end };
+  }
+  return { start: startOfDay(now), end: endOfDay(now) };
+}
+
+function getSalesInRange(start, end) {
+  return state.sales.filter((sale) => {
+    const date = new Date(saleDateValue(sale));
+    return date >= start && date <= end;
+  });
+}
+
+function saleProfit(sale) {
+  return Number(sale.valor_total || 0) - Number(sale.custo_total || 0);
+}
+
+function summarizeSales(sales) {
+  const total = sales.reduce((sum, sale) => sum + Number(sale.valor_total || 0), 0);
+  const products = sales.reduce((sum, sale) => sum + Number(sale.quantidade || 0), 0);
+  const profit = sales.reduce((sum, sale) => sum + saleProfit(sale), 0);
+  return {
+    total,
+    count: sales.length,
+    products,
+    profit,
+    ticket: sales.length ? total / sales.length : 0,
+  };
+}
+
+function renderFinanceCards() {
+  const now = new Date();
+  const day = summarizeSales(getSalesInRange(startOfDay(now), endOfDay(now)));
+  const week = summarizeSales(getSalesInRange(startOfWeek(now), now));
+  const month = summarizeSales(getSalesInRange(startOfMonth(now), now));
+  const year = summarizeSales(getSalesInRange(startOfYear(now), now));
+
+  if (salesDayTotal) salesDayTotal.textContent = currency.format(day.total);
+  if (salesWeekTotal) salesWeekTotal.textContent = currency.format(week.total);
+  if (salesMonthTotal) salesMonthTotal.textContent = currency.format(month.total);
+  if (salesYearTotal) salesYearTotal.textContent = currency.format(year.total);
+  if (ticketDay) ticketDay.textContent = currency.format(day.ticket);
+  if (ticketWeek) ticketWeek.textContent = currency.format(week.ticket);
+  if (ticketMonth) ticketMonth.textContent = currency.format(month.ticket);
+  if (ticketYear) ticketYear.textContent = currency.format(year.ticket);
+}
+
+function renderFilteredFinance() {
+  const { start, end } = getPeriodRange();
+  const summary = summarizeSales(getSalesInRange(start, end));
+  if (filterTotal) filterTotal.textContent = currency.format(summary.total);
+  if (filterCount) filterCount.textContent = String(summary.count);
+  if (filterTicket) filterTicket.textContent = currency.format(summary.ticket);
+  if (filterProfit) filterProfit.textContent = currency.format(summary.profit);
+  if (filterProducts) filterProducts.textContent = String(summary.products);
+}
+
+function groupKey(date, mode) {
+  if (mode === "year") return String(date.getFullYear());
+  if (mode === "month") return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  if (mode === "week") return `${date.getFullYear()}-S${String(Math.ceil(((date - startOfYear(date)) / 86400000 + startOfYear(date).getDay() + 1) / 7)).padStart(2, "0")}`;
+  return localDateKey(date);
+}
+
+function groupedSales(mode, sales = state.sales) {
+  return sales.reduce((groups, sale) => {
+    const key = groupKey(new Date(saleDateValue(sale)), mode);
+    groups[key] = groups[key] || [];
+    groups[key].push(sale);
+    return groups;
+  }, {});
+}
+
+function renderChart(root, mode) {
+  if (!root) return;
+  const entries = Object.entries(groupedSales(mode)).slice(-12);
+  const totals = entries.map(([, sales]) => summarizeSales(sales).total);
+  const max = Math.max(...totals, 1);
+  root.innerHTML = entries.length
+    ? entries
+        .map(([key, sales]) => {
+          const total = summarizeSales(sales).total;
+          return `<div class="chart-row"><span>${key}</span><div><i style="width:${Math.max(6, (total / max) * 100)}%"></i></div><strong>${currency.format(total)}</strong></div>`;
+        })
+        .join("")
+    : `<p class="edit-help">Sem vendas no período.</p>`;
+}
+
+function renderRanking(root, start, end) {
+  if (!root) return;
+  const rank = getSalesInRange(start, end).reduce((items, sale) => {
+    const key = sale.nome_produto;
+    items[key] = items[key] || { name: key, quantity: 0, total: 0 };
+    items[key].quantity += Number(sale.quantidade || 0);
+    items[key].total += Number(sale.valor_total || 0);
+    return items;
+  }, {});
+  const rows = Object.values(rank).sort((a, b) => b.quantity - a.quantity).slice(0, 5);
+  root.innerHTML = rows.length
+    ? rows.map((item) => `<article class="ranking-row"><strong>${escapeHtml(item.name)}</strong><span>${item.quantity} un - ${currency.format(item.total)}</span></article>`).join("")
+    : `<p class="edit-help">Sem vendas.</p>`;
+}
+
+function renderHistory() {
+  if (!salesHistory) return;
+  const groups = groupedSales(state.historyGroup);
+  const entries = Object.entries(groups).sort(([a], [b]) => b.localeCompare(a));
+  salesHistory.innerHTML = entries.length
+    ? entries
+        .map(([key, sales]) => {
+          const summary = summarizeSales(sales);
+          const rows = sales
+            .map((sale) => `<div class="history-sale"><span>${escapeHtml(sale.nome_produto)}</span><small>${sale.quantidade} un - ${currency.format(Number(sale.valor_total || 0))}</small><button type="button" data-cancel-sale="${sale.id}">Cancelar</button></div>`)
+            .join("");
+          return `<article class="history-group"><h4>${key}</h4><p>${summary.count} vendas - ${currency.format(summary.total)}</p>${rows}</article>`;
+        })
+        .join("")
+    : `<p class="edit-help">Nenhuma venda registrada ainda.</p>`;
+}
+
+function renderFinanceReports() {
+  renderFinanceCards();
+  renderFilteredFinance();
+  renderChart(chartDay, "day");
+  renderChart(chartWeek, "week");
+  renderChart(chartMonth, "month");
+  const now = new Date();
+  renderRanking(rankingDay, startOfDay(now), endOfDay(now));
+  renderRanking(rankingWeek, startOfWeek(now), now);
+  renderRanking(rankingMonth, startOfMonth(now), now);
+  renderRanking(rankingYear, startOfYear(now), now);
+  renderHistory();
+}
+
+function renderSalesPanel() {
+  if (!state.salesMode) return;
+
+  if (saleProductSelect) {
+    saleProductSelect.innerHTML = state.products
+      .map((product) => `<option value="${product.id}">${escapeHtml(product.nome)} - estoque ${product.estoque}</option>`)
+      .join("");
+    const selectedProduct = state.products.find((product) => product.id === saleProductSelect.value);
+    if (selectedProduct && saleForm && !saleForm.elements.valor_unitario.value) {
+      saleForm.elements.valor_unitario.value = selectedProduct.preco.toFixed(2);
+    }
+  }
+
+  if (stockList) {
+    stockList.innerHTML = state.products.length
+      ? state.products
+          .map(
+            (product) => `
+              <article class="stock-row">
+                <div>
+                  <strong>${escapeHtml(product.nome)}</strong>
+                  <span>${escapeHtml(product.categoria)} - ${product.ativo && product.estoque > 0 ? "visivel" : "oculto"}</span>
+                </div>
+                <label>
+                  Estoque
+                  <input type="number" min="0" step="1" value="${product.estoque}" data-stock-input="${product.id}" />
+                </label>
+                <button type="button" data-save-stock="${product.id}">Salvar</button>
+              </article>
+            `
+          )
+          .join("")
+      : `<p class="edit-help">Nenhum produto cadastrado.</p>`;
+  }
+
+  customPeriod?.classList.toggle("hidden", state.financeFilter !== "custom");
+  document.querySelectorAll("[data-finance-filter]").forEach((button) => button.classList.toggle("active", button.dataset.financeFilter === state.financeFilter));
+  document.querySelectorAll("[data-history-group]").forEach((button) => button.classList.toggle("active", button.dataset.historyGroup === state.historyGroup));
+  renderFinanceReports();
+}
+
+async function updateStock(productId, nextStock) {
+  if (!state.salesMode) return;
+  const stock = Math.max(0, Number(nextStock || 0));
+  const product = state.products.find((item) => String(item.id) === String(productId));
+  setSalesStatus("Salvando estoque...", "loading");
+
+  if (!supabaseClient) {
+    if (saleError) saleError.textContent = "Configure o Supabase para atualizar estoque.";
+    setSalesStatus("Configure o Supabase para atualizar estoque.", "error");
+    return;
+  }
+
+  const user = await getAuthenticatedUser(saleError, "Faça login para alterar estoque e registrar vendas.");
+  if (!user) return;
+
+  console.log("[Fumacinha Estoque] Sessão autenticada:", user);
+  console.log("[Fumacinha Estoque] Produto selecionado:", product);
+  console.log("[Fumacinha Estoque] Atualizando estoque:", { productId, estoque: stock, ativo: stock > 0 });
+
+  const { error } = await supabaseClient.from(TABLE_NAME).update({ estoque: stock, ativo: stock > 0 }).eq("id", productId);
+  if (error) {
+    if (saleError) saleError.textContent = error.message;
+    setSalesStatus(error.message, "error");
+    console.error("[Fumacinha Estoque] Erro completo do Supabase:", error);
+    return;
+  }
+
+  if (saleError) saleError.textContent = "";
+  await loadProducts();
+  await loadSales();
+  renderSalesPanel();
+  setSalesStatus(stock === 0 ? "Estoque salvo com sucesso. Produto oculto do site." : "Estoque salvo com sucesso.", "success");
+  showToast("Estoque salvo com sucesso.");
+}
+
+async function registerManualSale(event) {
+  event.preventDefault();
+  if (!state.salesMode) return;
+  setSalesStatus("Registrando venda...", "loading");
+
+  const form = event.currentTarget;
+  const productId = form.elements.produto_id.value;
+  const product = state.products.find((item) => item.id === productId);
+  const quantity = Number(form.elements.quantidade.value || 0);
+  const unitValue = Number(form.elements.valor_unitario.value || 0);
+  const costValue = Number(form.elements.custo_unitario?.value || 0);
+
+  if (!product || quantity <= 0 || unitValue <= 0) {
+    if (saleError) saleError.textContent = "Preencha produto, quantidade e valor.";
+    setSalesStatus("Preencha produto, quantidade e valor.", "error");
+    return;
+  }
+
+  if (!supabaseClient) {
+    if (saleError) saleError.textContent = "Configure o Supabase para registrar vendas.";
+    setSalesStatus("Configure o Supabase para registrar vendas.", "error");
+    return;
+  }
+
+  const user = await getAuthenticatedUser(saleError, "Faça login para alterar estoque e registrar vendas.");
+  if (!user) return;
+
+  if (quantity > product.estoque) {
+    if (saleError) saleError.textContent = "Quantidade maior que o estoque disponivel.";
+    setSalesStatus("Quantidade maior que o estoque disponível.", "error");
+    return;
+  }
+
+  const newStock = product.estoque - quantity;
+  const salePayload = {
+    produto_id: product.id,
+    nome_produto: product.nome,
+    quantidade: quantity,
+    valor_unitario: unitValue,
+    valor_total: unitValue * quantity,
+    custo_unitario: costValue,
+    custo_total: costValue * quantity,
+    data_venda: new Date().toISOString(),
+  };
+
+  console.log("[Fumacinha Vendas] Sessão autenticada:", user);
+  console.log("[Fumacinha Vendas] Produto selecionado:", product);
+  console.log("[Fumacinha Vendas] Dados da venda:", salePayload);
+
+  const { data: insertedSale, error: saleInsertError } = await supabaseClient.from(SALES_TABLE_NAME).insert(salePayload).select("*").single();
+  if (saleInsertError) {
+    if (saleError) saleError.textContent = saleInsertError.message;
+    setSalesStatus(saleInsertError.message, "error");
+    console.error("[Fumacinha Vendas] Erro completo ao inserir em VENDAS:", saleInsertError);
+    return;
+  }
+  console.log("[Fumacinha Vendas] Venda inserida:", insertedSale);
+
+  const { error: stockError } = await supabaseClient.from(TABLE_NAME).update({ estoque: newStock, ativo: newStock > 0 }).eq("id", product.id);
+  if (stockError) {
+    if (saleError) saleError.textContent = stockError.message;
+    setSalesStatus(stockError.message, "error");
+    console.error("[Fumacinha Vendas] Erro completo ao atualizar estoque:", stockError);
+    return;
+  }
+
+  if (saleError) saleError.textContent = "";
+  form.reset();
+  form.elements.quantidade.value = 1;
+  await loadProducts();
+  await loadSales();
+  renderSalesPanel();
+  setSalesStatus("Venda registrada com sucesso.", "success");
+  showToast("Venda registrada com sucesso.");
+}
+
+async function cancelSale(saleId) {
+  if (!state.salesMode) return;
+  const sale = state.sales.find((item) => String(item.id) === String(saleId));
+  if (!sale) return;
+  if (!window.confirm("Tem certeza que deseja cancelar esta venda?")) return;
+  setSalesStatus("Cancelando venda...", "loading");
+
+  if (!supabaseClient) {
+    if (saleError) saleError.textContent = "Configure o Supabase para cancelar vendas.";
+    setSalesStatus("Configure o Supabase para cancelar vendas.", "error");
+    return;
+  }
+
+  const user = await getAuthenticatedUser(saleError, "Faça login para alterar estoque e registrar vendas.");
+  if (!user) return;
+  console.log("[Fumacinha Vendas] Sessão autenticada:", user);
+  console.log("[Fumacinha Vendas] Venda selecionada para cancelamento:", sale);
+
+  const product = state.products.find((item) => item.id === String(sale.produto_id));
+  const restoredStock = Number(product?.estoque || 0) + Number(sale.quantidade || 0);
+
+  if (product) {
+    const { error: stockError } = await supabaseClient.from(TABLE_NAME).update({ estoque: restoredStock, ativo: restoredStock > 0 }).eq("id", product.id);
+    if (stockError) {
+      if (saleError) saleError.textContent = stockError.message;
+      setSalesStatus(stockError.message, "error");
+      console.error("[Fumacinha Vendas] Erro completo ao restaurar estoque:", stockError);
+      return;
+    }
+  }
+
+  const { error: deleteError } = await supabaseClient.from(SALES_TABLE_NAME).delete().eq("id", saleId);
+  if (deleteError) {
+    if (saleError) saleError.textContent = deleteError.message;
+    setSalesStatus(deleteError.message, "error");
+    console.error("[Fumacinha Vendas] Erro completo ao excluir venda:", deleteError);
+    return;
+  }
+
+  await loadProducts();
+  await loadSales();
+  renderSalesPanel();
+  setSalesStatus("Venda cancelada e estoque devolvido.", "success");
+  showToast("Venda cancelada e estoque devolvido.");
+}
+
+async function saveSiteContent(event) {
+  event.preventDefault();
+  if (!state.editMode) return;
+
+  const form = event.currentTarget;
+  Object.assign(settings, {
+    brandTitle: form.elements.brandTitle.value.trim() || settings.brandTitle,
+    brandSubtitle: form.elements.brandSubtitle.value.trim() || settings.brandSubtitle,
+    bannerImage: form.elements.bannerImage.value.trim(),
+    homeText: form.elements.homeText.value.trim(),
+    whatsapp: form.elements.whatsapp.value.replace(/\D/g, "") || settings.whatsapp,
+    deliveryInfo: form.elements.deliveryInfo.value.trim() || settings.deliveryInfo,
+  });
+
+  if (!supabaseClient) {
+    if (siteEditorError) siteEditorError.textContent = "Configure o Supabase para salvar configuracoes.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(siteEditorError, "Faça login para editar configurações."))) return;
+
+  const { error } = await supabaseClient.from(CONFIG_TABLE_NAME).upsert(getSiteConfigPayload(), { onConflict: "id" });
+  if (error) {
+    if (siteEditorError) siteEditorError.textContent = error.message;
+    return;
+  }
+
+  renderSettings();
+  closeEditorModal(siteEditor);
+  showToast("Configuracoes salvas");
+}
+
+
+async function saveCategories(event) {
+  event.preventDefault();
+  if (!state.editMode) return;
+
+  const rows = [...categoryEditorList.querySelectorAll(".category-editor-row")];
+
+  if (!supabaseClient) {
+    if (categoryEditorError) categoryEditorError.textContent = "Configure o Supabase para salvar categorias.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(categoryEditorError, "Faça login para editar categorias."))) return;
+
+  for (const row of rows) {
+    const dbId = row.querySelector('[name="dbId"]').value;
+    const oldName = row.querySelector('[name="oldName"]').value;
+    const nome = row.querySelector('[name="nome"]').value.trim();
+    const imagem = row.querySelector('[name="imagem"]').value.trim();
+    const ordem = Number(row.querySelector('[name="ordem"]').value || 1);
+    const ativo_home = row.querySelector('[name="ativo_home"]').checked;
+
+    if (!nome) continue;
+
+    const payload = { nome, imagem, ordem, ativo_home };
+    const request = dbId
+      ? supabaseClient.from(CATEGORY_TABLE_NAME).update(payload).eq("id", dbId)
+      : supabaseClient.from(CATEGORY_TABLE_NAME).insert(payload);
+    const { error } = await request;
+
+    if (error) {
+      if (categoryEditorError) categoryEditorError.textContent = error.message;
+      return;
+    }
+
+    if (oldName && oldName !== nome) {
+      const { error: productError } = await supabaseClient.from(TABLE_NAME).update({ categoria: nome }).eq("categoria", oldName);
+      if (productError) {
+        if (categoryEditorError) categoryEditorError.textContent = productError.message;
+        return;
+      }
+    }
+  }
+
+  closeEditorModal(categoryEditor);
+  await loadProducts();
+  showToast("Categorias atualizadas");
+}
+
+function setupWhatsAppDirectLinks() {
+  const text = "Olá, Fumacinha! Vim pelo site e gostaria de ver móveis e cadeiras.";
+  const url = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
+  document.querySelectorAll("[data-whatsapp-direct]").forEach((link) => {
+    link.href = url;
+  });
+}
+
+document.addEventListener("click", (event) => {
+  const editProductButton = event.target.closest("[data-edit-product]");
+  if (editProductButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const product = state.products.find((item) => item.id === editProductButton.dataset.editProduct);
+    openProductEditor(product);
+    return;
+  }
+
+  const categoryLink = event.target.closest("[data-category-scroll]");
+  if (categoryLink) {
+    event.preventDefault();
+    state.activeCategory = categoryLink.dataset.categoryScroll;
+    renderProductsByCategory();
+    document.querySelector(`#cat-${categoryLink.dataset.categoryScroll}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const viewProductButton = event.target.closest("[data-view-product]");
+  if (viewProductButton) showProduct(viewProductButton.dataset.viewProduct);
+
+  const productQtyButton = event.target.closest("[data-product-qty]");
+  if (productQtyButton) setProductQuantity(Number(productQtyButton.dataset.productQty));
+
+  const addProductButton = event.target.closest("[data-add-product]");
+  if (addProductButton) addToCart(addProductButton.dataset.addProduct, state.productQuantity);
+
+  const cartQtyButton = event.target.closest("[data-cart-qty]");
+  if (cartQtyButton) updateCartQuantity(cartQtyButton.dataset.cartQty, Number(cartQtyButton.dataset.change));
+
+  const removeButton = event.target.closest("[data-remove]");
+  if (removeButton) removeFromCart(removeButton.dataset.remove);
+
+  if (event.target.closest("[data-open-cart]")) openCart();
+  if (event.target.closest("[data-toast-cart]")) openCart();
+  if (event.target.closest("[data-checkout]") && !checkout.classList.contains("disabled")) openOrderConfirmation();
+  if (event.target.closest("[data-close-cart]")) closeCart();
+  if (event.target === cartDrawer) closeCart();
+  if (event.target.closest("[data-close-order-confirmation]")) closeOrderConfirmation();
+  if (event.target === orderConfirmation) closeOrderConfirmation();
+  if (event.target.closest("[data-home-link]")) showHome();
+  if (event.target.closest("[data-close-edit-login]")) closeLogin();
+  if (event.target === editLogin) closeLogin();
+  if (event.target.closest("[data-new-product]")) openProductEditor();
+  if (event.target.closest("[data-open-category-editor]")) openCategoryEditor();
+  if (event.target.closest("[data-open-banner-editor]")) openBannerEditor();
+  if (event.target.closest("[data-open-site-editor]")) openSiteEditor();
+  if (event.target.closest("[data-close-product-editor]")) closeEditorModal(productEditor);
+  if (event.target === productEditor) closeEditorModal(productEditor);
+  if (event.target.closest("[data-close-category-editor]")) closeEditorModal(categoryEditor);
+  if (event.target === categoryEditor) closeEditorModal(categoryEditor);
+  if (event.target.closest("[data-close-banner-editor]")) closeEditorModal(bannerEditor);
+  if (event.target === bannerEditor) closeEditorModal(bannerEditor);
+  if (event.target.closest("[data-add-banner]")) bannerEditorList?.insertAdjacentHTML("beforeend", bannerEditorRow({}, bannerEditorList.querySelectorAll(".banner-editor-row").length));
+  if (event.target.closest("[data-remove-banner]")) event.target.closest(".banner-editor-row")?.remove();
+  if (event.target.closest("[data-close-site-editor]")) closeEditorModal(siteEditor);
+  if (event.target === siteEditor) closeEditorModal(siteEditor);
+  if (event.target.closest("[data-delete-product]")) deleteCurrentProduct();
+  if (event.target.closest("[data-edit-logout]")) disableEditMode();
+  if (event.target.closest("[data-close-sales-login]")) closeSalesLogin();
+  if (event.target === salesLogin) closeSalesLogin();
+  if (event.target.closest("[data-close-sales-panel]")) disableSalesMode();
+  if (event.target === salesPanel) disableSalesMode();
+
+  const saveStockButton = event.target.closest("[data-save-stock]");
+  if (saveStockButton) {
+    const input = document.querySelector(`[data-stock-input="${saveStockButton.dataset.saveStock}"]`);
+    updateStock(saveStockButton.dataset.saveStock, input?.value);
+  }
+
+  const cancelSaleButton = event.target.closest("[data-cancel-sale]");
+  if (cancelSaleButton) cancelSale(cancelSaleButton.dataset.cancelSale);
+
+  const financeFilterButton = event.target.closest("[data-finance-filter]");
+  if (financeFilterButton) {
+    state.financeFilter = financeFilterButton.dataset.financeFilter;
+    renderSalesPanel();
+  }
+
+  const historyGroupButton = event.target.closest("[data-history-group]");
+  if (historyGroupButton) {
+    state.historyGroup = historyGroupButton.dataset.historyGroup;
+    renderSalesPanel();
+  }
+
+  const policyButton = event.target.closest("[data-policy-open]");
+  if (policyButton) openPolicyModal(policyButton.dataset.policyOpen);
+  if (event.target.closest("[data-policy-close]")) closePolicyModal();
+  if (event.target === policyModal) closePolicyModal();
+
+  if (event.target.closest("[data-banner-prev]")) moveHomeBanner(-1);
+  if (event.target.closest("[data-banner-next]")) moveHomeBanner(1);
+  const bannerDot = event.target.closest("[data-banner-dot]");
+  if (bannerDot) {
+    state.bannerIndex = Number(bannerDot.dataset.bannerDot);
+    updateHomeBannerPosition();
+    startBannerAutoplay();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeCart();
+    closePolicyModal();
+    closeOrderConfirmation();
+  }
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    if (state.editMode) {
+      editToolbar?.classList.toggle("hidden");
+      return;
+    }
+    openLogin();
+  }
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
+    event.preventDefault();
+    if (state.salesMode) {
+      disableSalesMode();
+      return;
+    }
+    openSalesAccess();
+  }
+});
+
+editLoginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  editLoginError.textContent = "";
+
+  if (!supabaseClient) {
+    editLoginError.textContent = "Configure o Supabase para fazer login.";
+    return;
+  }
+
+  const email = form.elements.email.value.trim();
+  const password = form.elements.password.value;
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  if (error || !data.session?.user) {
+    editLoginError.textContent = error?.message || "Faça login para editar produtos.";
+    return;
+  }
+
+  form.reset();
+  enableEditMode();
+});
+
+orderConfirmationForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const customer = {
+    nome: form.elements.nome.value.trim(),
+    bairro: form.elements.bairro.value.trim(),
+  };
+
+  form.elements.nome.classList.toggle("field-invalid", !customer.nome);
+  form.elements.bairro.classList.toggle("field-invalid", !customer.bairro);
+
+  if (!customer.nome || !customer.bairro) {
+    if (orderError) orderError.textContent = "Preencha os campos obrigatórios para continuar.";
+    return;
+  }
+
+  if (orderError) orderError.textContent = "";
+  window.open(buildConfirmedWhatsAppUrl(customer), "_blank", "noopener,noreferrer");
+  closeOrderConfirmation();
+});
+
+productEditorForm?.addEventListener("submit", saveProduct);
+categoryEditorForm?.addEventListener("submit", saveCategories);
+bannerEditorForm?.addEventListener("submit", saveBanners);
+siteEditorForm?.addEventListener("submit", saveSiteContent);
+saleForm?.addEventListener("submit", registerManualSale);
+salesLoginForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  salesLoginError.textContent = "";
+
+  if (!supabaseClient) {
+    salesLoginError.textContent = "Configure o Supabase para fazer login.";
+    return;
+  }
+
+  const email = form.elements.email.value.trim();
+  const password = form.elements.password.value;
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+
+  if (error || !data.session?.user) {
+    salesLoginError.textContent = error?.message || "Faça login para alterar estoque e registrar vendas.";
+    return;
+  }
+
+  form.reset();
+  await enableSalesMode();
+});
+
+saleProductSelect?.addEventListener("change", (event) => {
+  const product = state.products.find((item) => item.id === event.target.value);
+  if (product && saleForm) saleForm.elements.valor_unitario.value = product.preco.toFixed(2);
+});
+
+financeStart?.addEventListener("change", renderSalesPanel);
+financeEnd?.addEventListener("change", renderSalesPanel);
+
+searchInput?.addEventListener("input", (event) => {
+  state.search = event.target.value;
+  state.activeCategory = "";
+  renderProductsByCategory();
+});
+
+searchForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  document.querySelector("#produtos")?.scrollIntoView({ behavior: "smooth", block: "start" });
+});
+
+let benefitIndex = 0;
+
+function moveBenefits(direction) {
+  if (!benefitTrack) return;
+  const total = benefitTrack.children.length;
+  if (!total) return;
+  benefitIndex = (benefitIndex + direction + total) % total;
+  benefitTrack.style.transform = `translateX(-${benefitIndex * 100}%)`;
+}
+
+benefitPrev?.addEventListener("click", () => moveBenefits(-1));
+benefitNext?.addEventListener("click", () => moveBenefits(1));
+if (benefitTrack) window.setInterval(() => moveBenefits(1), 3600);
+
+renderSettings();
+renderCart();
+setupWhatsAppDirectLinks();
+loadBannerConfig();
+loadSiteConfig();
+loadProducts();
