@@ -225,6 +225,18 @@
       <button type="button" data-edit-logout>Sair</button>
     </div>
 
+    <button class="admin-mobile-trigger hidden" type="button" data-admin-mobile-toggle aria-expanded="false">Administrar</button>
+    <div class="admin-mobile-menu hidden" data-admin-mobile-menu aria-hidden="true">
+      <div class="admin-mobile-panel" role="menu" aria-label="Menu de administracao">
+        <strong>Administrar Fumacinha</strong>
+        <button type="button" data-new-product>Novo produto</button>
+        <button type="button" data-open-category-editor>Editar categorias</button>
+        <button type="button" data-open-banner-editor>Carrossel de banners</button>
+        <button type="button" data-open-site-editor>Editar textos e banner</button>
+        <button type="button" class="danger" data-edit-logout>Sair</button>
+      </div>
+    </div>
+
     <section class="edit-login hidden" data-product-editor aria-hidden="true">
       <div class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="product-editor-title">
         <button class="edit-close" type="button" data-close-product-editor aria-label="Fechar editor">×</button>
@@ -267,6 +279,7 @@
           <p class="edit-error wide" data-product-editor-error></p>
           <div class="edit-actions wide">
             <button class="btn primary" type="submit">Salvar produto</button>
+            <button class="btn ghost" type="button" data-close-product-editor>Cancelar</button>
             <button class="btn ghost" type="button" data-delete-product>Excluir</button>
           </div>
         </form>
@@ -281,7 +294,10 @@
         <form class="edit-form" data-category-editor-form>
           <div class="category-editor-list" data-category-editor-list></div>
           <p class="edit-error" data-category-editor-error></p>
-          <button class="btn primary" type="submit">Salvar categorias</button>
+          <div class="edit-actions">
+            <button class="btn primary" type="submit">Salvar categorias</button>
+            <button class="btn ghost" type="button" data-close-category-editor>Cancelar</button>
+          </div>
         </form>
       </div>
     </section>
@@ -303,7 +319,10 @@
           <div class="banner-editor-list" data-banner-editor-list></div>
           <button class="btn ghost" type="button" data-add-banner>Adicionar banner</button>
           <p class="edit-error" data-banner-editor-error></p>
-          <button class="btn primary" type="submit">Salvar carrossel</button>
+          <div class="edit-actions">
+            <button class="btn primary" type="submit">Salvar carrossel</button>
+            <button class="btn ghost" type="button" data-close-banner-editor>Cancelar</button>
+          </div>
         </form>
       </div>
     </section>
@@ -339,7 +358,10 @@
             <input type="text" name="deliveryInfo" placeholder="Entregamos para todo o Brasil" />
           </label>
           <p class="edit-error" data-site-editor-error></p>
-          <button class="btn primary" type="submit">Salvar textos</button>
+          <div class="edit-actions">
+            <button class="btn primary" type="submit">Salvar textos</button>
+            <button class="btn ghost" type="button" data-close-site-editor>Cancelar</button>
+          </div>
         </form>
       </div>
     </section>

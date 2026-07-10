@@ -70,6 +70,8 @@ const editLogin = document.querySelector("[data-edit-login]");
 const editLoginForm = document.querySelector("[data-edit-login-form]");
 const editLoginError = document.querySelector("[data-edit-login-error]");
 const editToolbar = document.querySelector("[data-edit-toolbar]");
+const adminMobileTrigger = document.querySelector("[data-admin-mobile-toggle]");
+const adminMobileMenu = document.querySelector("[data-admin-mobile-menu]");
 const productEditor = document.querySelector("[data-product-editor]");
 const productEditorForm = document.querySelector("[data-product-editor-form]");
 const productEditorTitle = document.querySelector("[data-product-editor-title]");
@@ -1138,6 +1140,7 @@ function closeLogin() {
 }
 
 function openEditorModal(modal) {
+  closeAdminMobileMenu();
   modal?.classList.remove("hidden");
   modal?.setAttribute("aria-hidden", "false");
 }
@@ -1145,6 +1148,24 @@ function openEditorModal(modal) {
 function closeEditorModal(modal) {
   modal?.classList.add("hidden");
   modal?.setAttribute("aria-hidden", "true");
+}
+
+function openAdminMobileMenu() {
+  if (!state.editMode) return;
+  adminMobileMenu?.classList.remove("hidden");
+  adminMobileMenu?.setAttribute("aria-hidden", "false");
+  adminMobileTrigger?.setAttribute("aria-expanded", "true");
+}
+
+function closeAdminMobileMenu() {
+  adminMobileMenu?.classList.add("hidden");
+  adminMobileMenu?.setAttribute("aria-hidden", "true");
+  adminMobileTrigger?.setAttribute("aria-expanded", "false");
+}
+
+function toggleAdminMobileMenu() {
+  if (adminMobileMenu?.classList.contains("hidden")) openAdminMobileMenu();
+  else closeAdminMobileMenu();
 }
 
 async function getAuthenticatedUser(errorElement, message = "Faça login para editar produtos.") {
@@ -1176,6 +1197,8 @@ function enableEditMode() {
   state.editMode = true;
   document.body.classList.add("edit-mode");
   editToolbar?.classList.remove("hidden");
+  adminMobileTrigger?.classList.remove("hidden");
+  closeAdminMobileMenu();
   closeLogin();
   renderProductsByCategory();
   showToast("Modo edição habilitado");
@@ -1185,6 +1208,8 @@ function disableEditMode() {
   state.editMode = false;
   document.body.classList.remove("edit-mode");
   editToolbar?.classList.add("hidden");
+  adminMobileTrigger?.classList.add("hidden");
+  closeAdminMobileMenu();
   closeEditorModal(productEditor);
   closeEditorModal(categoryEditor);
   closeEditorModal(bannerEditor);
@@ -1954,6 +1979,8 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-home-link]")) showHome();
   if (event.target.closest("[data-close-edit-login]")) closeLogin();
   if (event.target === editLogin) closeLogin();
+  if (event.target.closest("[data-admin-mobile-toggle]")) toggleAdminMobileMenu();
+  if (event.target === adminMobileMenu) closeAdminMobileMenu();
   if (event.target.closest("[data-new-product]")) openProductEditor();
   if (event.target.closest("[data-open-category-editor]")) openCategoryEditor();
   if (event.target.closest("[data-open-banner-editor]")) openBannerEditor();
