@@ -1232,20 +1232,56 @@ function disableSalesMode() {
   closeSalesLogin();
 }
 
+function getFormField(form, fieldName) {
+  const field = form?.elements?.[fieldName];
+  if (!field) {
+    const message = `Campo "${fieldName}" não encontrado no formulário.`;
+    console.error("[Fumacinha Form]", message);
+    return null;
+  }
+  return field;
+}
+
+function getFormValue(form, fieldName) {
+  return getFormField(form, fieldName)?.value ?? "";
+}
+
+function setFormValue(form, fieldName, value) {
+  const field = getFormField(form, fieldName);
+  if (field) field.value = value;
+}
+
+function getFormChecked(form, fieldName) {
+  return Boolean(getFormField(form, fieldName)?.checked);
+}
+
+function setFormChecked(form, fieldName, value) {
+  const field = getFormField(form, fieldName);
+  if (field) field.checked = Boolean(value);
+}
+
 function openProductEditor(product = null) {
   if (!state.editMode || !productEditorForm) return;
   productEditorForm.reset();
   if (productEditorError) productEditorError.textContent = "";
   productEditorTitle.textContent = product ? "Editar produto" : "Novo produto";
-  productEditorForm.elements.id.value = product?.id || "";
-  productEditorForm.elements.nome.value = product?.nome || "";
-  productEditorForm.elements.categoria.value = product?.categoria || "";
-  productEditorForm.elements.preco.value = product?.preco || "";
-  productEditorForm.elements.estoque.value = product?.estoque ?? 0;
-  productEditorForm.elements.ativo.checked = product ? product.ativo : true;
-  productEditorForm.elements.destaque_home.checked = product ? product.destaque_home : false;
-  productEditorForm.elements.ocultar_home.checked = product ? product.ocultar_home : false;
-  productEditorForm.elements.imagem.value = product?.imagem || "";
+  const requiredFields = ["id", "nome", "categoria", "preco", "estoque", "ativo", "destaque_home", "ocultar_home", "imagem"];
+  const missingFields = requiredFields.filter((field) => !productEditorForm.elements[field]);
+  if (missingFields.length) {
+    const message = `Campos ausentes no formulário de produto: ${missingFields.join(", ")}.`;
+    if (productEditorError) productEditorError.textContent = message;
+    console.error("[Fumacinha Produtos]", message);
+    return;
+  }
+  setFormValue(productEditorForm, "id", product?.id || "");
+  setFormValue(productEditorForm, "nome", product?.nome || "");
+  setFormValue(productEditorForm, "categoria", product?.categoria || "");
+  setFormValue(productEditorForm, "preco", product?.preco || "");
+  setFormValue(productEditorForm, "estoque", product?.estoque ?? 0);
+  setFormChecked(productEditorForm, "ativo", product ? product.ativo : true);
+  setFormChecked(productEditorForm, "destaque_home", product ? product.destaque_home : false);
+  setFormChecked(productEditorForm, "ocultar_home", product ? product.ocultar_home : false);
+  setFormValue(productEditorForm, "imagem", product?.imagem || "");
   document.querySelector("[data-delete-product]")?.classList.toggle("hidden", !product);
   openEditorModal(productEditor);
 }
@@ -1295,16 +1331,18 @@ function openCategoryEditor() {
 }
 
 function getProductPayload(form) {
+  const price = Number(getFormValue(form, "preco") || 0);
+  const stock = Number(getFormValue(form, "estoque") || 0);
   return {
-    nome: form.elements.nome.value.trim(),
-    categoria: form.elements.categoria.value.trim(),
-    preco: Number(form.elements.preco.value || 0),
-    pix: Number(form.elements.preco.value || 0),
-    estoque: Number(form.elements.estoque.value || 0),
-    ativo: form.elements.ativo.checked && Number(form.elements.estoque.value || 0) > 0,
-    destaque_home: form.elements.destaque_home.checked,
-    ocultar_home: form.elements.ocultar_home.checked,
-    imagem: form.elements.imagem.value.trim(),
+    nome: getFormValue(form, "nome").trim(),
+    categoria: getFormValue(form, "categoria").trim(),
+    preco: price,
+    pix: price,
+    estoque: stock,
+    ativo: getFormChecked(form, "ativo") && stock > 0,
+    destaque_home: getFormChecked(form, "destaque_home"),
+    ocultar_home: getFormChecked(form, "ocultar_home"),
+    imagem: getFormValue(form, "imagem").trim(),
   };
 }
 
@@ -1313,7 +1351,7 @@ async function saveProduct(event) {
   if (!state.editMode) return;
 
   const form = event.currentTarget;
-  const existingId = form.elements.id.value;
+  const existingId = getFormValue(form, "id");
   const payload = getProductPayload(form);
   if (productEditorError) productEditorError.textContent = "";
 
@@ -1339,7 +1377,7 @@ async function saveProduct(event) {
 }
 
 async function deleteCurrentProduct() {
-  const id = productEditorForm?.elements.id.value;
+  const id = getFormValue(productEditorForm, "id");
   if (!state.editMode || !id) return;
 
   if (!supabaseClient) {
