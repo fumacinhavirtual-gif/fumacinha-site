@@ -129,6 +129,23 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.hidden {
+  display: none !important;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 0;
+}
+
+.checkbox-label input {
+  width: auto;
+  min-height: auto;
+}
+
 .secondary {
   color: var(--green);
   border: 1px solid #cde3d4;
@@ -170,6 +187,14 @@ textarea {
   margin: 0;
   color: var(--muted);
   line-height: 1.55;
+}
+
+.admin-error {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: #b52020;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .danger button {
