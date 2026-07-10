@@ -22,16 +22,31 @@ function jsString(value) {
   return JSON.stringify(value || "");
 }
 
-loadLocalEnv();
+function writeSupabaseConfig(options = {}) {
+  const outputPath = options.outputPath || path.join(root, "supabase-config.js");
+  const requireEnv = Boolean(options.requireEnv);
 
-const url = process.env.FUMACINHA_SUPABASE_URL || "COLE_AQUI_A_PROJECT_URL_DA_FUMACINHA";
-const key = process.env.FUMACINHA_SUPABASE_PUBLISHABLE_KEY || "COLE_AQUI_A_PUBLISHABLE_KEY_DA_FUMACINHA";
+  loadLocalEnv();
 
-const content = [
-  `window.FUMACINHA_SUPABASE_URL = ${jsString(url)};`,
-  `window.FUMACINHA_SUPABASE_PUBLISHABLE_KEY = ${jsString(key)};`,
-  "",
-].join("\n");
+  const url = process.env.FUMACINHA_SUPABASE_URL;
+  const key = process.env.FUMACINHA_SUPABASE_PUBLISHABLE_KEY;
 
-fs.writeFileSync(path.join(root, "supabase-config.js"), content, "utf8");
-console.log("supabase-config.js gerado para a Fumacinha.");
+  if (requireEnv && (!url || !key)) {
+    throw new Error("Configure FUMACINHA_SUPABASE_URL e FUMACINHA_SUPABASE_PUBLISHABLE_KEY na Vercel antes do deploy.");
+  }
+
+  const content = [
+    `window.FUMACINHA_SUPABASE_URL = ${jsString(url || "COLE_AQUI_A_PROJECT_URL_DA_FUMACINHA")};`,
+    `window.FUMACINHA_SUPABASE_PUBLISHABLE_KEY = ${jsString(key || "COLE_AQUI_A_PUBLISHABLE_KEY_DA_FUMACINHA")};`,
+    "",
+  ].join("\n");
+
+  fs.writeFileSync(outputPath, content, "utf8");
+  console.log(`supabase-config.js gerado em ${outputPath}.`);
+}
+
+if (require.main === module) {
+  writeSupabaseConfig();
+}
+
+module.exports = { writeSupabaseConfig };
