@@ -785,13 +785,13 @@ a {
 }
 
 .product-card h3 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
   color: var(--black);
   font-size: 1.08rem;
 }
 
 .product-card .price-block {
-  margin-top: 28px;
+  margin-top: 10px;
 }
 
 .product-card .view-button {
@@ -812,9 +812,10 @@ a {
 }
 
 .normal-price {
-  color: var(--black);
-  font-size: 1.35rem;
-  font-weight: 950;
+  color: #198754;
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
 }
 
 .normal-price.large {
@@ -2628,7 +2629,7 @@ a {
   }
 
   .normal-price {
-    font-size: 1rem;
+    font-size: 1.3rem;
   }
 
   .view-button {
