@@ -1,6 +1,6 @@
 # Fumacinha
 
-Projeto independente criado a partir da base visual da Confortti, sem alterar a pasta, banco, GitHub ou Vercel da Confortti.
+Projeto independente da Fumacinha, com pasta, banco, GitHub e Vercel proprios.
 
 ## Estrutura
 
@@ -41,7 +41,7 @@ Fumacinha/
 - `index.html`: nome, metadados, textos e assets da Fumacinha.
 - `script.js`: nome da loja, textos, logs, variaveis Supabase e mensagens da Fumacinha.
 - `admin.html` e `admin.js`: painel apontando para variaveis da Fumacinha.
-- `supabase-config.js`: placeholders da Fumacinha, sem URL/chave da Confortti.
+- `supabase-config.js`: placeholders da Fumacinha, sem dados de outro projeto.
 - `supabase-*.sql`: defaults e comentarios adaptados para Fumacinha.
 - `PUBLICACAO.md`: instrucoes de publicacao da Fumacinha.
 - `assets/*`: arquivos renomeados para Fumacinha.
@@ -80,7 +80,7 @@ Esse SQL cria:
 - politicas RLS
 - triggers de `updated_at`
 
-O SQL nao insere produtos da Confortti. Produtos, categorias, estoque, vendas e configuracoes comecam separados no banco novo.
+O SQL nao insere produtos externos. Produtos, categorias, estoque, vendas e configuracoes comecam separados no banco novo.
 
 Depois de executar o SQL, valide pelo REST usando somente Project URL + Publishable Key:
 
@@ -115,7 +115,7 @@ O servidor local usa Node.js e nao depende de Python.
 
 ## Publicar no GitHub
 
-Crie um repositorio novo chamado `fumacinha` e publique esta pasta, sem usar o repositorio da Confortti:
+Crie um repositorio novo chamado `fumacinha` e publique esta pasta como projeto proprio:
 
 ```bash
 git init
@@ -144,4 +144,4 @@ Build Command: npm run build
 Output Directory: dist
 ```
 
-5. Publique em uma Vercel separada da Confortti.
+5. Publique em uma Vercel propria da Fumacinha.

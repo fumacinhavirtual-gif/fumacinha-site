@@ -4,13 +4,13 @@ Data: 2026-07-10
 
 ## Status geral
 
-A Fumacinha esta configurada como projeto independente da Confortti.
+A Fumacinha esta configurada como projeto independente.
 
 - Project URL: `https://rcjsezbqenjoxrfavmmg.supabase.co`
 - Publishable Key: configurada em `.env` e gerada em `supabase-config.js`
 - Banco: tabelas criadas no Supabase da Fumacinha via `supabase-completo.sql`
 - Connection String: nao utilizada
-- Supabase da Confortti: nenhuma referencia ativa no projeto Fumacinha
+- Supabase: configurado somente para o projeto Fumacinha
 - WhatsApp da Fumacinha: `62991877597`
 
 ## Tabelas verificadas
@@ -58,7 +58,7 @@ Foram criados `supabase-dados-exemplo.sql` e `DADOS_TESTE_FUMACINHA.sql` para po
   - `Total: R$ 129,90 + Taxa de entrega: A combinar`
 - Termos removidos: nao apareceram `Pix`, `Parcelamento`, `Desconto`, `10x sem juros` ou `Cidade`
 - Numero antigo: nao encontrado no projeto nem na mensagem gerada
-- Conteudo visivel: vitrine validada sem mencao a Confortti
+- Conteudo visivel: vitrine validada com comunicacao propria da Fumacinha
 - Painel administrativo: abriu em `admin.html` com titulo `Painel Administrativo | Fumacinha`
 - Cadastro sem login: bloqueado com mensagem `Faça login para editar produtos.`
 - Escrita anonima via REST: bloqueada por RLS, como esperado
@@ -72,7 +72,7 @@ Para testar vitrine completa, carrinho com produto e envio do pedido com itens, 
 
 ## Ajuste opcional de dados de exemplo
 
-O arquivo `CORRIGIR_BANNER_FUMACINHA.sql` corrige um texto legado de banner direto no Supabase, caso o dado antigo ainda exista no banco. A aplicacao tambem limpa esse texto ao renderizar, entao a vitrine validada nao mostra Confortti.
+O arquivo `CORRIGIR_BANNER_FUMACINHA.sql` corrige um texto legado de banner direto no Supabase, caso o dado antigo ainda exista no banco. A aplicacao tambem limpa esse texto ao renderizar, entao a vitrine validada mostra comunicacao propria da Fumacinha.
 
 ## Publicacao
 

@@ -2175,7 +2175,7 @@ async function saveCategories(event) {
 }
 
 function setupWhatsAppDirectLinks() {
-  const text = "Olá, Fumacinha! Vim pelo site e gostaria de ver móveis e cadeiras.";
+  const text = "Olá, Fumacinha! Vim pelo site e gostaria de ver os produtos.";
   const url = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
   document.querySelectorAll("[data-whatsapp-direct]").forEach((link) => {
     link.href = url;
