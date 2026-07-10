@@ -7,6 +7,8 @@ const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LOW_STOCK_DEFAULT_LIMIT = 5;
+const ADMIN_ACCESS_PARAM = "admin";
+const ADMIN_ACCESS_SECRET = "fumacinha";
 
 const settings = {
   brandTitle: "Fumacinha",
@@ -516,7 +518,7 @@ function escapeHtml(value) {
 }
 
 function cleanFumacinhaContent(value) {
-  return String(value || "").replace("Produtos separados da Confortti, com estoque proprio.", "Produtos selecionados, com estoque proprio.");
+  return String(value || "");
 }
 
 async function loadBannerConfig() {
@@ -1233,6 +1235,39 @@ function closeLogin() {
   editLogin?.classList.add("hidden");
   editLogin?.setAttribute("aria-hidden", "true");
   if (editLoginError) editLoginError.textContent = "";
+}
+
+function hasSecretAdminAccess() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(ADMIN_ACCESS_PARAM) === ADMIN_ACCESS_SECRET;
+}
+
+function clearSecretAdminAccess() {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has(ADMIN_ACCESS_PARAM)) return;
+
+  url.searchParams.delete(ADMIN_ACCESS_PARAM);
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`;
+  window.history.replaceState({}, document.title, nextUrl);
+}
+
+async function handleSecretAdminAccess() {
+  if (!hasSecretAdminAccess()) return;
+
+  if (!supabaseClient) {
+    openLogin();
+    if (editLoginError) editLoginError.textContent = "Configure o Supabase para fazer login.";
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (!error && data.session?.user) {
+    enableEditMode();
+    clearSecretAdminAccess();
+    return;
+  }
+
+  openLogin();
 }
 
 function openEditorModal(modal) {
@@ -2271,15 +2306,7 @@ document.addEventListener("keydown", (event) => {
     closePolicyModal();
     closeOrderConfirmation();
   }
-  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "e") {
-    event.preventDefault();
-    if (state.editMode) {
-      editToolbar?.classList.toggle("hidden");
-      return;
-    }
-    openLogin();
-  }
-  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
+  if (state.editMode && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
     event.preventDefault();
     if (state.salesMode) {
       disableSalesMode();
@@ -2293,10 +2320,10 @@ editLoginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
 
   const form = event.currentTarget;
-  editLoginError.textContent = "";
+  if (editLoginError) editLoginError.textContent = "";
 
   if (!supabaseClient) {
-    editLoginError.textContent = "Configure o Supabase para fazer login.";
+    if (editLoginError) editLoginError.textContent = "Configure o Supabase para fazer login.";
     return;
   }
 
@@ -2312,6 +2339,7 @@ editLoginForm?.addEventListener("submit", async (event) => {
 
   form.reset();
   enableEditMode();
+  clearSecretAdminAccess();
 });
 
 orderConfirmationForm?.addEventListener("submit", (event) => {
@@ -2446,3 +2474,4 @@ setupWhatsAppDirectLinks();
 loadBannerConfig();
 loadSiteConfig();
 loadProducts();
+handleSecretAdminAccess();
