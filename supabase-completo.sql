@@ -17,6 +17,7 @@ create table if not exists public."PRODUTOS" (
   preco numeric(12, 2) not null default 0 check (preco >= 0),
   pix numeric(12, 2) not null default 0 check (pix >= 0),
   imagem text not null default '',
+  descricao text not null default '',
   categoria text not null default 'Produtos',
   estoque integer not null default 0 check (estoque >= 0),
   ativo boolean not null default true,
@@ -30,6 +31,7 @@ alter table public."PRODUTOS" add column if not exists estoque integer not null 
 alter table public."PRODUTOS" add column if not exists ativo boolean not null default true;
 alter table public."PRODUTOS" add column if not exists destaque_home boolean not null default false;
 alter table public."PRODUTOS" add column if not exists ocultar_home boolean not null default false;
+alter table public."PRODUTOS" add column if not exists descricao text not null default '';
 alter table public."PRODUTOS" add column if not exists created_at timestamptz not null default now();
 alter table public."PRODUTOS" add column if not exists updated_at timestamptz not null default now();
 

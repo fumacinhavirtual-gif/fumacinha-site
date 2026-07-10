@@ -3,6 +3,10 @@ const CONFIG_TABLE_NAME = "SITE_CONFIG";
 const CATEGORY_TABLE_NAME = "CATEGORIAS";
 const SALES_TABLE_NAME = "VENDAS";
 const BANNER_TABLE_NAME = "BANNERS_HOME";
+const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
+const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
+const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const LOW_STOCK_DEFAULT_LIMIT = 5;
 
 const settings = {
   brandTitle: "Fumacinha",
@@ -29,6 +33,15 @@ const state = {
   bannerCarousel: { enabled: false, interval: 5, banners: [] },
   bannerIndex: 0,
   bannerTimer: null,
+  productEditorMode: "create",
+  selectedProductImageFile: null,
+  removeProductImage: false,
+  adminProducts: {
+    query: "",
+    sort: "recent",
+    filter: "all",
+    lowStockLimit: LOW_STOCK_DEFAULT_LIMIT,
+  },
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -72,10 +85,22 @@ const editLoginError = document.querySelector("[data-edit-login-error]");
 const editToolbar = document.querySelector("[data-edit-toolbar]");
 const adminMobileTrigger = document.querySelector("[data-admin-mobile-toggle]");
 const adminMobileMenu = document.querySelector("[data-admin-mobile-menu]");
+const adminProductPanel = document.querySelector("[data-admin-product-panel]");
+const adminProductSearch = document.querySelector("[data-admin-product-search]");
+const adminProductSort = document.querySelector("[data-admin-product-sort]");
+const adminProductFilter = document.querySelector("[data-admin-product-filter]");
+const lowStockLimitInput = document.querySelector("[data-low-stock-limit]");
+const lowStockList = document.querySelector("[data-low-stock-list]");
 const productEditor = document.querySelector("[data-product-editor]");
 const productEditorForm = document.querySelector("[data-product-editor-form]");
 const productEditorTitle = document.querySelector("[data-product-editor-title]");
 const productEditorError = document.querySelector("[data-product-editor-error]");
+const productImageFileInput = document.querySelector("[data-product-image-file]");
+const productImagePreview = document.querySelector("[data-product-image-preview]");
+const productImagePreviewEmpty = document.querySelector("[data-product-image-preview-empty]");
+const productImagePreviewImage = document.querySelector("[data-product-image-preview-img]");
+const productSaveButton = document.querySelector("[data-product-save]");
+const productUploadStatus = document.querySelector("[data-product-upload-status]");
 const categoryEditor = document.querySelector("[data-category-editor]");
 const categoryEditorForm = document.querySelector("[data-category-editor-form]");
 const categoryEditorList = document.querySelector("[data-category-editor-list]");
@@ -190,16 +215,19 @@ function slugify(value) {
 }
 
 function getProductDescription(product) {
+  if (product.descricao) return product.descricao;
   return `Produto da categoria ${product.categoria}, disponível na Fumacinha para confirmar cores, estoque e entrega pelo WhatsApp.`;
+}
+
+function productSearchText(product) {
+  return `${product.nome} ${product.categoria} ${product.descricao || ""}`.toLowerCase();
 }
 
 function getVisibleProducts() {
   const term = state.search.trim().toLowerCase();
   const publicProducts = state.products.filter((product) => product.ativo && product.estoque > 0);
   if (term) {
-    return publicProducts.filter((product) => {
-      return `${product.nome} ${product.categoria}`.toLowerCase().includes(term);
-    });
+    return publicProducts.filter((product) => productSearchText(product).includes(term));
   }
   if (state.activeCategory) {
     return publicProducts.filter((product) => product.categoryId === state.activeCategory);
@@ -225,8 +253,67 @@ function getCategorySearchProducts(category) {
   return publicProducts.filter((product) => {
     if (product.categoryId !== category.id) return false;
     if (!term) return true;
-    return `${product.nome} ${product.categoria}`.toLowerCase().includes(term);
+    return productSearchText(product).includes(term);
   });
+}
+
+function getAdminFilteredProducts(products = state.products) {
+  const query = state.adminProducts.query.trim().toLowerCase();
+  const filter = state.adminProducts.filter;
+  const sort = state.adminProducts.sort;
+  let list = [...products];
+
+  if (query) list = list.filter((product) => productSearchText(product).includes(query));
+  if (filter === "active") list = list.filter((product) => product.ativo);
+  if (filter === "inactive") list = list.filter((product) => !product.ativo);
+  if (filter === "with-stock") list = list.filter((product) => product.estoque > 0);
+  if (filter === "without-stock") list = list.filter((product) => product.estoque <= 0);
+
+  const byName = (a, b) => a.nome.localeCompare(b.nome, "pt-BR");
+  const byRecent = (a, b) => Number(b.id || 0) - Number(a.id || 0);
+  const sorters = {
+    recent: byRecent,
+    az: byName,
+    za: (a, b) => byName(b, a),
+    "stock-asc": (a, b) => a.estoque - b.estoque || byName(a, b),
+    "stock-desc": (a, b) => b.estoque - a.estoque || byName(a, b),
+    active: (a, b) => Number(b.ativo) - Number(a.ativo) || byName(a, b),
+    inactive: (a, b) => Number(a.ativo) - Number(b.ativo) || byName(a, b),
+  };
+
+  return list.sort(sorters[sort] || byRecent);
+}
+
+function renderAdminProductPanel() {
+  adminProductPanel?.classList.toggle("hidden", !state.editMode);
+  if (!state.editMode || !lowStockList) return;
+
+  const limit = Math.max(1, Number(state.adminProducts.lowStockLimit || LOW_STOCK_DEFAULT_LIMIT));
+  const lowStockProducts = state.products
+    .filter((product) => product.estoque <= limit)
+    .sort((a, b) => a.estoque - b.estoque || a.nome.localeCompare(b.nome, "pt-BR"));
+
+  lowStockList.innerHTML = lowStockProducts.length
+    ? lowStockProducts
+        .map(
+          (product) => `
+            <article class="low-stock-card ${product.estoque <= 0 ? "empty" : "warning"}">
+              <div class="low-stock-image">${productImage(product)}</div>
+              <div>
+                <strong>${escapeHtml(product.nome)}</strong>
+                <span>${escapeHtml(product.categoria)} · Estoque atual: ${product.estoque}</span>
+              </div>
+              <label>
+                Atualizar
+                <input type="number" min="0" step="1" value="${product.estoque}" data-low-stock-input="${product.id}" />
+              </label>
+              <button type="button" data-edit-product="${product.id}">Editar</button>
+              <button type="button" data-low-stock-save="${product.id}">Salvar estoque</button>
+            </article>
+          `
+        )
+        .join("")
+    : `<p class="edit-help">Nenhum produto com estoque baixo pelo limite atual.</p>`;
 }
 
 function mapProduct(row) {
@@ -236,11 +323,13 @@ function mapProduct(row) {
   const hasActiveColumn = Object.prototype.hasOwnProperty.call(row, "ativo");
   const hasFeaturedColumn = Object.prototype.hasOwnProperty.call(row, "destaque_home");
   const hasHideHomeColumn = Object.prototype.hasOwnProperty.call(row, "ocultar_home");
+  const hasDescriptionColumn = Object.prototype.hasOwnProperty.call(row, "descricao");
   return {
     id: String(row.id),
     nome: row.nome || "Produto Fumacinha",
     preco: price,
     imagem: row.imagem || "",
+    descricao: hasDescriptionColumn ? row.descricao || "" : "",
     categoria: categoryName,
     estoque: hasStockColumn ? Number(row.estoque ?? 0) : 999,
     ativo: hasActiveColumn ? row.ativo !== false : true,
@@ -259,6 +348,7 @@ function normalizeProduct(product) {
     nome: product.nome || "Produto Fumacinha",
     preco: price,
     imagem: product.imagem || "",
+    descricao: product.descricao || "",
     categoria: categoryName,
     estoque: Number(product.estoque ?? 999),
     ativo: product.ativo !== false,
@@ -284,7 +374,7 @@ async function loadProducts() {
 
   let { data, error } = await supabaseClient
     .from(TABLE_NAME)
-    .select("id,nome,preco,imagem,categoria,estoque,ativo,destaque_home,ocultar_home")
+    .select("id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home")
     .order("categoria", { ascending: true })
     .order("nome", { ascending: true });
 
@@ -292,6 +382,7 @@ async function loadProducts() {
     const missingOptionalColumns =
       error.message?.includes("PRODUTOS.ativo") ||
       error.message?.includes("PRODUTOS.estoque") ||
+      error.message?.includes("PRODUTOS.descricao") ||
       error.message?.includes("PRODUTOS.destaque_home") ||
       error.message?.includes("PRODUTOS.ocultar_home");
     if (!missingOptionalColumns) {
@@ -653,7 +744,10 @@ function productCard(product) {
     <article class="product-card">
       ${
         state.editMode
-          ? `<button class="edit-card-button" type="button" data-edit-product="${product.id}" aria-label="Editar ${escapeHtml(product.nome)}">Editar</button>`
+          ? `<div class="edit-card-actions">
+              <button type="button" data-edit-product="${product.id}" aria-label="Editar ${escapeHtml(product.nome)}">Editar</button>
+              <button type="button" data-duplicate-product="${product.id}" aria-label="Duplicar ${escapeHtml(product.nome)}">Duplicar produto</button>
+            </div>`
           : ""
       }
       <div class="product-photo">${productImage(product)}</div>
@@ -760,15 +854,16 @@ function renderCategories() {
 }
 
 function renderProductsByCategory() {
-  const visibleProducts = getVisibleProducts();
-  const featuredProducts = getFeaturedProducts();
+  const visibleProducts = state.editMode ? getAdminFilteredProducts() : getVisibleProducts();
+  const featuredProducts = state.editMode ? [] : getFeaturedProducts();
   const visibleCategories = state.activeCategory
     ? state.categories.filter((category) => category.id === state.activeCategory)
-    : state.search.trim()
+    : state.search.trim() || (state.editMode && state.adminProducts.query.trim())
       ? state.categories
       : getHomeCategories();
 
   if (!visibleProducts.length && !featuredProducts.length) {
+    renderAdminProductPanel();
     showLoadMessage(state.products.length ? "Nenhum produto encontrado para essa busca." : "Nenhum produto cadastrado no Supabase ainda.");
     return;
   }
@@ -787,7 +882,7 @@ function renderProductsByCategory() {
 
   const categorySections = visibleCategories
     .map((category) => {
-      const categoryProducts = state.search.trim() ? getCategorySearchProducts(category) : visibleProducts.filter((product) => product.categoryId === category.id);
+      const categoryProducts = state.search.trim() && !state.editMode ? getCategorySearchProducts(category) : visibleProducts.filter((product) => product.categoryId === category.id);
       if (!categoryProducts.length) return "";
       return `
         <section class="product-category" id="cat-${category.id}">
@@ -802,6 +897,7 @@ function renderProductsByCategory() {
     .join("");
 
   productRoot.innerHTML = `${featuredSection}${categorySections}`;
+  renderAdminProductPanel();
 }
 
 function showHome(scroll = true) {
@@ -1146,6 +1242,7 @@ function openEditorModal(modal) {
 }
 
 function closeEditorModal(modal) {
+  if (modal === productEditor) setProductLoading(false);
   modal?.classList.add("hidden");
   modal?.setAttribute("aria-hidden", "true");
 }
@@ -1285,12 +1382,90 @@ function setFormChecked(form, fieldName, value) {
   if (field) field.checked = Boolean(value);
 }
 
-function openProductEditor(product = null) {
+function setProductLoading(isLoading, label = "Salvando...") {
+  if (!productSaveButton || !productEditorForm) return;
+  productSaveButton.disabled = isLoading;
+  productSaveButton.textContent = isLoading ? label : "Salvar produto";
+  productEditorForm.querySelectorAll("button, input, textarea, select").forEach((field) => {
+    if (field === productSaveButton) return;
+    field.disabled = isLoading;
+  });
+}
+
+function updateProductImagePreview(source = "") {
+  const value = source || getFormValue(productEditorForm, "imagem");
+  const hasImage = Boolean(value);
+  productImagePreview?.classList.toggle("has-image", hasImage);
+  productImagePreviewEmpty?.classList.toggle("hidden", hasImage);
+  productImagePreviewImage?.classList.toggle("hidden", !hasImage);
+  if (productImagePreviewImage) productImagePreviewImage.src = hasImage ? value : "";
+}
+
+function clearSelectedProductImage() {
+  state.selectedProductImageFile = null;
+  state.removeProductImage = true;
+  if (productImageFileInput) productImageFileInput.value = "";
+  setFormValue(productEditorForm, "imagem", "");
+  if (productUploadStatus) productUploadStatus.textContent = "";
+  updateProductImagePreview("");
+}
+
+function validateProductImageFile(file) {
+  if (!file) return "";
+  if (!PRODUCT_IMAGE_TYPES.includes(file.type)) return "Use imagens JPG, JPEG, PNG ou WEBP.";
+  if (file.size > MAX_PRODUCT_IMAGE_SIZE) return "A imagem deve ter no maximo 5 MB.";
+  return "";
+}
+
+function uniqueProductImagePath(file) {
+  const extension = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const safeExtension = extension === "jpeg" ? "jpg" : extension;
+  const random = Math.random().toString(36).slice(2);
+  return `produtos/${Date.now()}-${random}.${safeExtension || "jpg"}`;
+}
+
+async function uploadSelectedProductImage() {
+  const file = state.selectedProductImageFile;
+  if (!file) return getFormValue(productEditorForm, "imagem").trim();
+
+  const validation = validateProductImageFile(file);
+  if (validation) throw new Error(validation);
+  if (!supabaseClient) throw new Error("Configure o Supabase para enviar imagens.");
+
+  if (productUploadStatus) productUploadStatus.textContent = "Enviando imagem...";
+  const path = uniqueProductImagePath(file);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+
+  const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl || "";
+}
+
+function duplicateProduct(product) {
+  if (!product) return;
+  const copy = {
+    ...product,
+    id: "",
+    nome: `${product.nome} - copia`,
+  };
+  openProductEditor(copy, "duplicate");
+}
+
+function openProductEditor(product = null, mode = product?.id ? "edit" : "create") {
   if (!state.editMode || !productEditorForm) return;
+  state.productEditorMode = mode;
+  state.selectedProductImageFile = null;
+  state.removeProductImage = false;
   productEditorForm.reset();
   if (productEditorError) productEditorError.textContent = "";
-  productEditorTitle.textContent = product ? "Editar produto" : "Novo produto";
-  const requiredFields = ["id", "nome", "categoria", "preco", "estoque", "ativo", "destaque_home", "ocultar_home", "imagem"];
+  if (productUploadStatus) productUploadStatus.textContent = "";
+  if (productImageFileInput) productImageFileInput.value = "";
+  productEditorTitle.textContent = mode === "duplicate" ? "Duplicar produto" : product?.id ? "Editar produto" : "Novo produto";
+  const requiredFields = ["id", "nome", "categoria", "preco", "estoque", "ativo", "destaque_home", "ocultar_home", "imagem", "descricao"];
   const missingFields = requiredFields.filter((field) => !productEditorForm.elements[field]);
   if (missingFields.length) {
     const message = `Campos ausentes no formulário de produto: ${missingFields.join(", ")}.`;
@@ -1298,16 +1473,19 @@ function openProductEditor(product = null) {
     console.error("[Fumacinha Produtos]", message);
     return;
   }
-  setFormValue(productEditorForm, "id", product?.id || "");
+  setFormValue(productEditorForm, "id", mode === "duplicate" ? "" : product?.id || "");
   setFormValue(productEditorForm, "nome", product?.nome || "");
   setFormValue(productEditorForm, "categoria", product?.categoria || "");
   setFormValue(productEditorForm, "preco", product?.preco || "");
   setFormValue(productEditorForm, "estoque", product?.estoque ?? 0);
+  setFormValue(productEditorForm, "descricao", product?.descricao || "");
   setFormChecked(productEditorForm, "ativo", product ? product.ativo : true);
   setFormChecked(productEditorForm, "destaque_home", product ? product.destaque_home : false);
   setFormChecked(productEditorForm, "ocultar_home", product ? product.ocultar_home : false);
   setFormValue(productEditorForm, "imagem", product?.imagem || "");
-  document.querySelector("[data-delete-product]")?.classList.toggle("hidden", !product);
+  updateProductImagePreview(product?.imagem || "");
+  setProductLoading(false);
+  document.querySelector("[data-delete-product]")?.classList.toggle("hidden", !product?.id || mode === "duplicate");
   openEditorModal(productEditor);
 }
 
@@ -1367,8 +1545,25 @@ function getProductPayload(form) {
     ativo: getFormChecked(form, "ativo") && stock > 0,
     destaque_home: getFormChecked(form, "destaque_home"),
     ocultar_home: getFormChecked(form, "ocultar_home"),
+    descricao: getFormValue(form, "descricao").trim(),
     imagem: getFormValue(form, "imagem").trim(),
   };
+}
+
+async function saveProductWithFallback(existingId, payload) {
+  const result = existingId
+    ? await supabaseClient.from(TABLE_NAME).update(payload).eq("id", existingId)
+    : await supabaseClient.from(TABLE_NAME).insert(payload);
+
+  if (result.error?.message?.includes("descricao")) {
+    const fallbackPayload = { ...payload };
+    delete fallbackPayload.descricao;
+    return existingId
+      ? supabaseClient.from(TABLE_NAME).update(fallbackPayload).eq("id", existingId)
+      : supabaseClient.from(TABLE_NAME).insert(fallbackPayload);
+  }
+
+  return result;
 }
 
 async function saveProduct(event) {
@@ -1387,18 +1582,31 @@ async function saveProduct(event) {
 
   if (!(await getAuthenticatedUser(productEditorError, "Faça login para editar produtos."))) return;
 
-  const request = existingId
-    ? supabaseClient.from(TABLE_NAME).update(payload).eq("id", existingId)
-    : supabaseClient.from(TABLE_NAME).insert(payload);
-  const { error } = await request;
-  if (error) {
-    if (productEditorError) productEditorError.textContent = error.message;
-    return;
-  }
+  try {
+    setProductLoading(true, state.selectedProductImageFile ? "Enviando..." : "Salvando...");
+    payload.imagem = state.removeProductImage ? "" : await uploadSelectedProductImage();
+    const { error } = await saveProductWithFallback(existingId, payload);
+    if (error) {
+      if (productEditorError) productEditorError.textContent = error.message;
+      console.error("[Fumacinha Produtos] Erro ao salvar produto:", error);
+      return;
+    }
 
-  closeEditorModal(productEditor);
-  await loadProducts();
-  showToast(existingId ? "Produto atualizado" : "Produto cadastrado");
+    closeEditorModal(productEditor);
+    await loadProducts();
+    const successMessage = existingId
+      ? "Produto atualizado com sucesso."
+      : state.productEditorMode === "duplicate"
+        ? "Produto duplicado com sucesso."
+        : "Produto salvo com sucesso.";
+    showToast(successMessage);
+  } catch (error) {
+    if (productEditorError) productEditorError.textContent = error.message || "Erro ao salvar produto.";
+    console.error("[Fumacinha Produtos] Erro completo ao salvar:", error);
+  } finally {
+    setProductLoading(false);
+    if (productUploadStatus) productUploadStatus.textContent = "";
+  }
 }
 
 async function deleteCurrentProduct() {
@@ -1412,15 +1620,18 @@ async function deleteCurrentProduct() {
 
   if (!(await getAuthenticatedUser(productEditorError, "Faça login para editar produtos."))) return;
 
+  setProductLoading(true, "Excluindo...");
   const { error } = await supabaseClient.from(TABLE_NAME).delete().eq("id", id);
   if (error) {
+    setProductLoading(false);
     if (productEditorError) productEditorError.textContent = error.message;
     return;
   }
 
   closeEditorModal(productEditor);
   await loadProducts();
-  showToast("Produto excluído");
+  showToast("Produto excluído com sucesso.");
+  setProductLoading(false);
 }
 
 function saleDateValue(sale) {
@@ -1691,7 +1902,7 @@ function renderSalesPanel() {
 }
 
 async function updateStock(productId, nextStock) {
-  if (!state.salesMode) return;
+  if (!state.salesMode && !state.editMode) return;
   const stock = Math.max(0, Number(nextStock || 0));
   const product = state.products.find((item) => String(item.id) === String(productId));
   setSalesStatus("Salvando estoque...", "loading");
@@ -1946,6 +2157,15 @@ document.addEventListener("click", (event) => {
     return;
   }
 
+  const duplicateProductButton = event.target.closest("[data-duplicate-product]");
+  if (duplicateProductButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    const product = state.products.find((item) => item.id === duplicateProductButton.dataset.duplicateProduct);
+    duplicateProduct(product);
+    return;
+  }
+
   const categoryLink = event.target.closest("[data-category-scroll]");
   if (categoryLink) {
     event.preventDefault();
@@ -1996,6 +2216,7 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-close-site-editor]")) closeEditorModal(siteEditor);
   if (event.target === siteEditor) closeEditorModal(siteEditor);
   if (event.target.closest("[data-delete-product]")) deleteCurrentProduct();
+  if (event.target.closest("[data-remove-product-image]")) clearSelectedProductImage();
   if (event.target.closest("[data-edit-logout]")) disableEditMode();
   if (event.target.closest("[data-close-sales-login]")) closeSalesLogin();
   if (event.target === salesLogin) closeSalesLogin();
@@ -2006,6 +2227,12 @@ document.addEventListener("click", (event) => {
   if (saveStockButton) {
     const input = document.querySelector(`[data-stock-input="${saveStockButton.dataset.saveStock}"]`);
     updateStock(saveStockButton.dataset.saveStock, input?.value);
+  }
+
+  const lowStockSaveButton = event.target.closest("[data-low-stock-save]");
+  if (lowStockSaveButton) {
+    const input = document.querySelector(`[data-low-stock-input="${lowStockSaveButton.dataset.lowStockSave}"]`);
+    updateStock(lowStockSaveButton.dataset.lowStockSave, input?.value);
   }
 
   const cancelSaleButton = event.target.closest("[data-cancel-sale]");
@@ -2143,6 +2370,50 @@ saleProductSelect?.addEventListener("change", (event) => {
 
 financeStart?.addEventListener("change", renderSalesPanel);
 financeEnd?.addEventListener("change", renderSalesPanel);
+
+productImageFileInput?.addEventListener("change", (event) => {
+  const file = event.target.files?.[0] || null;
+  const validation = validateProductImageFile(file);
+  if (validation) {
+    if (productEditorError) productEditorError.textContent = validation;
+    event.target.value = "";
+    state.selectedProductImageFile = null;
+    return;
+  }
+
+  state.selectedProductImageFile = file;
+  state.removeProductImage = false;
+  if (productEditorError) productEditorError.textContent = "";
+  if (productUploadStatus) productUploadStatus.textContent = file ? "Imagem selecionada. Ela sera enviada ao salvar." : "";
+  if (file) updateProductImagePreview(URL.createObjectURL(file));
+});
+
+productEditorForm?.elements?.imagem?.addEventListener("input", (event) => {
+  state.selectedProductImageFile = null;
+  state.removeProductImage = false;
+  if (productImageFileInput) productImageFileInput.value = "";
+  updateProductImagePreview(event.target.value.trim());
+});
+
+adminProductSearch?.addEventListener("input", (event) => {
+  state.adminProducts.query = event.target.value;
+  renderProductsByCategory();
+});
+
+adminProductSort?.addEventListener("change", (event) => {
+  state.adminProducts.sort = event.target.value;
+  renderProductsByCategory();
+});
+
+adminProductFilter?.addEventListener("change", (event) => {
+  state.adminProducts.filter = event.target.value;
+  renderProductsByCategory();
+});
+
+lowStockLimitInput?.addEventListener("input", (event) => {
+  state.adminProducts.lowStockLimit = Math.max(1, Number(event.target.value || LOW_STOCK_DEFAULT_LIMIT));
+  renderAdminProductPanel();
+});
 
 searchInput?.addEventListener("input", (event) => {
   state.search = event.target.value;

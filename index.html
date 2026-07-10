@@ -225,6 +225,50 @@
       <button type="button" data-edit-logout>Sair</button>
     </div>
 
+    <section class="admin-product-panel hidden" data-admin-product-panel>
+      <div class="admin-product-controls">
+        <label>
+          Buscar produtos
+          <input type="search" data-admin-product-search placeholder="Nome, categoria ou descricao" />
+        </label>
+        <label>
+          Ordenar
+          <select data-admin-product-sort>
+            <option value="recent">Mais recentes</option>
+            <option value="az">Nome de A a Z</option>
+            <option value="za">Nome de Z a A</option>
+            <option value="stock-asc">Menor estoque</option>
+            <option value="stock-desc">Maior estoque</option>
+            <option value="active">Ativos</option>
+            <option value="inactive">Inativos</option>
+          </select>
+        </label>
+        <label>
+          Filtrar
+          <select data-admin-product-filter>
+            <option value="all">Todos</option>
+            <option value="active">Somente ativos</option>
+            <option value="inactive">Somente inativos</option>
+            <option value="with-stock">Com estoque</option>
+            <option value="without-stock">Sem estoque</option>
+          </select>
+        </label>
+      </div>
+      <div class="low-stock-section">
+        <div class="low-stock-heading">
+          <div>
+            <p class="eyebrow">Estoque baixo</p>
+            <h2>Produtos com pouca quantidade</h2>
+          </div>
+          <label>
+            Limite
+            <input type="number" min="1" step="1" value="5" data-low-stock-limit />
+          </label>
+        </div>
+        <div class="low-stock-list" data-low-stock-list></div>
+      </div>
+    </section>
+
     <button class="admin-mobile-trigger hidden" type="button" data-admin-mobile-toggle aria-expanded="false">Administrar</button>
     <div class="admin-mobile-menu hidden" data-admin-mobile-menu aria-hidden="true">
       <div class="admin-mobile-panel" role="menu" aria-label="Menu de administracao">
@@ -260,6 +304,10 @@
             Estoque
             <input type="number" name="estoque" step="1" min="0" required />
           </label>
+          <label class="wide">
+            Descricao
+            <textarea name="descricao" rows="3" placeholder="Detalhes do produto, sabor, tamanho ou observacoes"></textarea>
+          </label>
           <label class="edit-check">
             <input type="checkbox" name="ativo" />
             Produto visivel no site
@@ -274,11 +322,23 @@
           </label>
           <label class="wide">
             Imagem do produto (URL)
-            <input type="url" name="imagem" placeholder="https://..." />
+            <input type="url" name="imagem" placeholder="https://..." data-product-image-url />
           </label>
+          <label class="wide">
+            Enviar imagem do celular
+            <input type="file" accept="image/jpeg,image/png,image/webp" data-product-image-file />
+          </label>
+          <div class="product-image-preview wide" data-product-image-preview>
+            <span data-product-image-preview-empty>Nenhuma imagem selecionada</span>
+            <img class="hidden" src="" alt="Previa do produto" data-product-image-preview-img />
+          </div>
+          <div class="edit-actions wide image-actions">
+            <button class="btn ghost" type="button" data-remove-product-image>Remover imagem</button>
+          </div>
+          <p class="edit-help wide" data-product-upload-status></p>
           <p class="edit-error wide" data-product-editor-error></p>
           <div class="edit-actions wide">
-            <button class="btn primary" type="submit">Salvar produto</button>
+            <button class="btn primary" type="submit" data-product-save>Salvar produto</button>
             <button class="btn ghost" type="button" data-close-product-editor>Cancelar</button>
             <button class="btn ghost" type="button" data-delete-product>Excluir</button>
           </div>
