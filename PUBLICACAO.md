@@ -78,7 +78,7 @@ Na Vercel:
 
 1. Importe o projeto.
 2. Configure `FUMACINHA_SUPABASE_URL` e `FUMACINHA_SUPABASE_PUBLISHABLE_KEY`.
-3. Use o deploy padrao com `Output Directory` igual a `.`.
+3. Use o deploy padrao com `Output Directory` igual a `dist`.
 4. Depois conecte o dominio proprio.
 
 ## Observacao de seguranca

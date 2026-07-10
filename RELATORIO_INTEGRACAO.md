@@ -81,7 +81,7 @@ O projeto esta preparado para GitHub e Vercel:
 - `.gitignore` evita versionar `.env`, `node_modules`, `.vercel` e `dist`
 - `.env.example` documenta as variaveis necessarias
 - `package.json` possui `build`, `dev`, `start` e `verify:supabase`
-- `vercel.json` usa `npm run build` e publica a raiz do projeto
+- `vercel.json` usa `npm run build` e publica a pasta `dist`
 
 Na Vercel, configure:
 

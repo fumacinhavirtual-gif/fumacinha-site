@@ -141,7 +141,7 @@ FUMACINHA_SUPABASE_PUBLISHABLE_KEY=SUA_PUBLISHABLE_KEY
 
 ```text
 Build Command: npm run build
-Output Directory: .
+Output Directory: dist
 ```
 
 5. Publique em uma Vercel separada da Confortti.
