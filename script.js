@@ -1352,6 +1352,12 @@ function toggleAdminMobileMenu() {
   else closeAdminMobileMenu();
 }
 
+function openLowStockPanel() {
+  if (!state.editMode || !adminProductPanel) return;
+  closeAdminMobileMenu();
+  adminProductPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 async function getAuthenticatedUser(errorElement, message = "Faça login para editar produtos.") {
   if (!supabaseClient) {
     if (errorElement) errorElement.textContent = "Configure o Supabase para salvar alterações.";
@@ -2389,6 +2395,7 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-open-category-editor]")) openCategoryEditor();
   if (event.target.closest("[data-open-banner-editor]")) openBannerEditor();
   if (event.target.closest("[data-open-site-editor]")) openSiteEditor();
+  if (event.target.closest("[data-open-low-stock]")) openLowStockPanel();
   if (event.target.closest("[data-close-product-editor]")) closeEditorModal(productEditor);
   if (event.target === productEditor) closeEditorModal(productEditor);
   if (event.target.closest("[data-close-category-editor]")) closeEditorModal(categoryEditor);

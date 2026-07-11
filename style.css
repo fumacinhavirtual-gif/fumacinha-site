@@ -1758,7 +1758,7 @@ a {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: min(720px, calc(100% - 24px));
+  width: min(980px, calc(100% - 24px));
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 18px;
@@ -2369,7 +2369,7 @@ a {
   }
 }
 
-@media (max-width: 680px) {
+@media (max-width: 768px) {
   .edit-login {
     place-items: stretch;
     padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
