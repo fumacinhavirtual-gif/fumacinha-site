@@ -25,7 +25,7 @@ html {
 body {
   display: flex;
   flex-direction: column;
-  min-height: 100svh;
+  min-height: 100dvh;
   margin: 0;
   background: var(--white);
   color: var(--ink);
@@ -50,6 +50,10 @@ a {
 button,
 a {
   font: inherit;
+}
+
+main {
+  flex: 1 0 auto;
 }
 
 .hidden {
@@ -1268,7 +1272,7 @@ a {
   grid-template-columns: 1fr 1.4fr minmax(150px, 0.45fr);
   gap: 24px;
   align-items: start;
-  flex-grow: 1;
+  flex-shrink: 0;
   margin-top: 0;
   padding: 42px clamp(16px, 5vw, 64px);
   color: var(--white);
