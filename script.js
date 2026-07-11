@@ -13,6 +13,7 @@ const ADMIN_ACCESS_SECRET = "fumacinha";
 const settings = {
   brandTitle: "Fumacinha",
   brandSubtitle: "Loja Fumacinha com produtos separados, estoque proprio e atendimento pelo WhatsApp.",
+  logoUrl: "",
   bannerImage: "",
   homeText: "",
   whatsapp: "62991877597",
@@ -38,6 +39,10 @@ const state = {
   productEditorMode: "create",
   selectedProductImageFile: null,
   removeProductImage: false,
+  selectedSiteLogoFile: null,
+  removeSiteLogo: false,
+  selectedBannerImageFiles: new Map(),
+  removedBannerImages: new Set(),
   adminProducts: {
     query: "",
     sort: "recent",
@@ -74,6 +79,7 @@ const benefitTrack = document.querySelector("[data-benefit-track]");
 const benefitPrev = document.querySelector("[data-benefit-prev]");
 const benefitNext = document.querySelector("[data-benefit-next]");
 const homeBannerCarousel = document.querySelector("[data-home-banner-carousel]");
+const brandLogoImage = document.querySelector("[data-brand-logo-image]");
 const bannerTrack = document.querySelector("[data-banner-track]");
 const bannerDots = document.querySelector("[data-banner-dots]");
 const bannerPrev = document.querySelector("[data-banner-prev]");
@@ -114,6 +120,11 @@ const bannerEditorError = document.querySelector("[data-banner-editor-error]");
 const siteEditor = document.querySelector("[data-site-editor]");
 const siteEditorForm = document.querySelector("[data-site-editor-form]");
 const siteEditorError = document.querySelector("[data-site-editor-error]");
+const siteLogoFileInputs = document.querySelectorAll("[data-site-logo-file]");
+const siteLogoPreview = document.querySelector("[data-site-logo-preview]");
+const siteLogoPreviewEmpty = document.querySelector("[data-site-logo-preview-empty]");
+const siteLogoPreviewImage = document.querySelector("[data-site-logo-preview-img]");
+const siteLogoUploadStatus = document.querySelector("[data-site-logo-upload-status]");
 const salesLogin = document.querySelector("[data-sales-login]");
 const salesLoginForm = document.querySelector("[data-sales-login-form]");
 const salesLoginError = document.querySelector("[data-sales-login-error]");
@@ -610,12 +621,28 @@ function renderHomeBannerCarousel() {
 }
 
 function bannerEditorRow(banner = {}, index = 0) {
+  const rowId = `banner-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`;
   return `
-    <article class="banner-editor-row">
-      <label>
-        Imagem do banner
+    <article class="banner-editor-row" data-banner-row-id="${rowId}">
+      <label class="wide">
+        Imagem do banner (URL)
         <input type="url" name="imagem" value="${escapeHtml(banner.imagem)}" placeholder="https://..." />
       </label>
+      <label class="wide file-picker">
+        Escolher imagem da galeria
+        <input type="file" accept="image/jpeg,image/png,image/webp" data-banner-image-file />
+      </label>
+      <label class="wide file-picker">
+        Usar camera do celular
+        <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-banner-image-file />
+      </label>
+      <div class="product-image-preview wide banner-image-preview" data-banner-image-preview>
+        <span class="${banner.imagem ? "hidden" : ""}" data-banner-image-preview-empty>Nenhuma imagem selecionada</span>
+        <img class="${banner.imagem ? "" : "hidden"}" src="${escapeHtml(banner.imagem)}" alt="Previa do banner" data-banner-image-preview-img />
+      </div>
+      <div class="edit-actions wide image-actions">
+        <button class="btn ghost" type="button" data-remove-banner-image>Remover imagem</button>
+      </div>
       <label>
         Título
         <input type="text" name="titulo" value="${escapeHtml(banner.titulo)}" />
@@ -632,6 +659,10 @@ function bannerEditorRow(banner = {}, index = 0) {
         Ordem
         <input type="number" name="ordem" min="1" step="1" value="${Number(banner.ordem || index + 1)}" />
       </label>
+      <label class="edit-check">
+        <input type="checkbox" name="ativo" ${banner.ativo === false ? "" : "checked"} />
+        Ativo
+      </label>
       <button class="remove-banner-button" type="button" data-remove-banner>Excluir</button>
     </article>
   `;
@@ -642,6 +673,8 @@ function openBannerEditor() {
   if (bannerEditorError) bannerEditorError.textContent = "";
   bannerEditorForm.elements.enabled.checked = state.bannerCarousel.enabled;
   bannerEditorForm.elements.interval.value = state.bannerCarousel.interval || 5;
+  state.selectedBannerImageFiles.clear();
+  state.removedBannerImages.clear();
   bannerEditorList.innerHTML = state.bannerCarousel.banners.length
     ? state.bannerCarousel.banners.map(bannerEditorRow).join("")
     : bannerEditorRow({}, 0);
@@ -659,58 +692,71 @@ async function saveBanners(event) {
 
   if (!(await getAuthenticatedUser(bannerEditorError, "Faça login para editar banners."))) return;
 
-  const rows = [...bannerEditorList.querySelectorAll(".banner-editor-row")];
-  state.bannerCarousel = {
-    enabled: bannerEditorForm.elements.enabled.checked,
-    interval: Math.max(2, Number(bannerEditorForm.elements.interval.value || 5)),
-    banners: rows
-      .map((row, index) => ({
-        imagem: row.querySelector('[name="imagem"]').value.trim(),
+  const submitButton = bannerEditorForm.querySelector('button[type="submit"]');
+  const previousText = submitButton?.textContent || "";
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = "Salvando...";
+  }
+
+  try {
+    const rows = [...bannerEditorList.querySelectorAll(".banner-editor-row")];
+    const banners = [];
+    for (const [index, row] of rows.entries()) {
+      const imagem = await resolveBannerImageUrl(row);
+      const banner = {
+        imagem,
         titulo: row.querySelector('[name="titulo"]').value.trim(),
         subtitulo: row.querySelector('[name="subtitulo"]').value.trim(),
         link: row.querySelector('[name="link"]').value.trim(),
         ordem: Number(row.querySelector('[name="ordem"]').value || index + 1),
-      }))
-      .filter((banner) => banner.imagem || banner.titulo || banner.subtitulo),
-  };
+        ativo: row.querySelector('[name="ativo"]')?.checked !== false,
+      };
+      if (banner.imagem || banner.titulo || banner.subtitulo) banners.push(banner);
+    }
 
-  const { error: configError } = await supabaseClient
-    .from(CONFIG_TABLE_NAME)
-    .upsert({ id: 1, carrossel_ativo: state.bannerCarousel.enabled, carrossel_intervalo: state.bannerCarousel.interval }, { onConflict: "id" });
+    state.bannerCarousel = {
+      enabled: bannerEditorForm.elements.enabled.checked,
+      interval: Math.max(2, Number(bannerEditorForm.elements.interval.value || 5)),
+      banners,
+    };
 
-  if (configError) {
-    if (bannerEditorError) bannerEditorError.textContent = configError.message;
-    return;
-  }
+    const { error: configError } = await supabaseClient
+      .from(CONFIG_TABLE_NAME)
+      .upsert({ id: 1, carrossel_ativo: state.bannerCarousel.enabled, carrossel_intervalo: state.bannerCarousel.interval }, { onConflict: "id" });
+    if (configError) throw configError;
 
-  const { error: deleteError } = await supabaseClient.from(BANNER_TABLE_NAME).delete().neq("id", 0);
-  if (deleteError) {
-    if (bannerEditorError) bannerEditorError.textContent = deleteError.message;
-    return;
-  }
+    const { error: deleteError } = await supabaseClient.from(BANNER_TABLE_NAME).delete().neq("id", 0);
+    if (deleteError) throw deleteError;
 
-  if (state.bannerCarousel.banners.length) {
-    const { error: insertError } = await supabaseClient.from(BANNER_TABLE_NAME).insert(
-      state.bannerCarousel.banners.map((banner) => ({
-        imagem: banner.imagem,
-        titulo: banner.titulo,
-        subtitulo: banner.subtitulo,
-        link: banner.link,
-        ordem: banner.ordem,
-        ativo: true,
-      }))
-    );
+    if (state.bannerCarousel.banners.length) {
+      const { error: insertError } = await supabaseClient.from(BANNER_TABLE_NAME).insert(
+        state.bannerCarousel.banners.map((banner) => ({
+          imagem: banner.imagem,
+          titulo: banner.titulo,
+          subtitulo: banner.subtitulo,
+          link: banner.link,
+          ordem: banner.ordem,
+          ativo: banner.ativo,
+        }))
+      );
+      if (insertError) throw insertError;
+    }
 
-    if (insertError) {
-      if (bannerEditorError) bannerEditorError.textContent = insertError.message;
-      return;
+    state.selectedBannerImageFiles.clear();
+    state.removedBannerImages.clear();
+    await loadBannerConfig();
+    renderHomeBannerCarousel();
+    closeEditorModal(bannerEditor);
+    showToast("Carrossel de banners salvo");
+  } catch (error) {
+    if (bannerEditorError) bannerEditorError.textContent = error.message || "Erro ao salvar banners.";
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = previousText;
     }
   }
-
-  await loadBannerConfig();
-  renderHomeBannerCarousel();
-  closeEditorModal(bannerEditor);
-  showToast("Carrossel de banners salvo");
 }
 
 function productImage(product, large = false) {
@@ -772,6 +818,10 @@ function renderSettings() {
     item.textContent = settings.brandSubtitle;
   });
 
+  if (brandLogoImage) {
+    brandLogoImage.src = settings.logoUrl || "./assets/fumacinha-logo.png";
+  }
+
   const benefitCards = document.querySelectorAll(".benefit-card");
   benefitCards[0]?.querySelector("span") && (benefitCards[0].querySelector("span").textContent = settings.deliveryInfo);
 
@@ -793,6 +843,7 @@ function mapSiteConfig(row) {
   Object.assign(settings, {
     brandTitle: row.titulo_principal || settings.brandTitle,
     brandSubtitle: row.subtitulo || settings.brandSubtitle,
+    logoUrl: row.logo_url || "",
     bannerImage: row.banners || "",
     homeText: row.textos_pagina_inicial || "",
     whatsapp: row.whatsapp || settings.whatsapp,
@@ -807,6 +858,7 @@ function getSiteConfigPayload() {
     id: 1,
     titulo_principal: settings.brandTitle,
     subtitulo: settings.brandSubtitle,
+    logo_url: settings.logoUrl,
     banners: settings.bannerImage,
     textos_pagina_inicial: settings.homeText,
     whatsapp: settings.whatsapp,
@@ -1459,6 +1511,39 @@ function uniqueProductImagePath(file) {
   return `produtos/${Date.now()}-${random}.${safeExtension || "jpg"}`;
 }
 
+function uniqueStorageImagePath(file, folder = "produtos") {
+  const extension = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const safeExtension = extension === "jpeg" ? "jpg" : extension;
+  const random = Math.random().toString(36).slice(2);
+  return `${folder}/${Date.now()}-${random}.${safeExtension || "jpg"}`;
+}
+
+async function uploadImageFileToStorage(file, folder, statusElement) {
+  const validation = validateProductImageFile(file);
+  if (validation) throw new Error(validation);
+  if (!supabaseClient) throw new Error("Configure o Supabase para enviar imagens.");
+
+  if (statusElement) statusElement.textContent = "Enviando imagem...";
+  const path = uniqueStorageImagePath(file, folder);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+
+  const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl || "";
+}
+
+function updateImagePreview(preview, emptyElement, imageElement, value) {
+  const hasImage = Boolean(value);
+  preview?.classList.toggle("has-image", hasImage);
+  emptyElement?.classList.toggle("hidden", hasImage);
+  imageElement?.classList.toggle("hidden", !hasImage);
+  if (imageElement) imageElement.src = hasImage ? value : "";
+}
+
 async function uploadSelectedProductImage() {
   const file = state.selectedProductImageFile;
   if (!file) return getFormValue(productEditorForm, "imagem").trim();
@@ -1478,6 +1563,46 @@ async function uploadSelectedProductImage() {
 
   const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
   return data.publicUrl || "";
+}
+
+function updateSiteLogoPreview(value) {
+  updateImagePreview(siteLogoPreview, siteLogoPreviewEmpty, siteLogoPreviewImage, value);
+}
+
+function clearSelectedSiteLogo() {
+  state.selectedSiteLogoFile = null;
+  state.removeSiteLogo = true;
+  siteLogoFileInputs.forEach((input) => (input.value = ""));
+  setFormValue(siteEditorForm, "logoUrl", "");
+  if (siteLogoUploadStatus) siteLogoUploadStatus.textContent = "";
+  updateSiteLogoPreview("");
+}
+
+async function resolveSiteLogoUrl() {
+  if (state.removeSiteLogo) return "";
+  if (state.selectedSiteLogoFile) return uploadImageFileToStorage(state.selectedSiteLogoFile, "logo", siteLogoUploadStatus);
+  return getFormValue(siteEditorForm, "logoUrl").trim();
+}
+
+function getBannerRowId(row) {
+  return row?.dataset.bannerRowId || "";
+}
+
+function updateBannerImagePreview(row, value) {
+  updateImagePreview(
+    row?.querySelector("[data-banner-image-preview]"),
+    row?.querySelector("[data-banner-image-preview-empty]"),
+    row?.querySelector("[data-banner-image-preview-img]"),
+    value
+  );
+}
+
+async function resolveBannerImageUrl(row) {
+  const rowId = getBannerRowId(row);
+  if (state.removedBannerImages.has(rowId)) return "";
+  const file = state.selectedBannerImageFiles.get(rowId);
+  if (file) return uploadImageFileToStorage(file, "banners", bannerEditorError);
+  return row.querySelector('[name="imagem"]').value.trim();
 }
 
 function duplicateProduct(product) {
@@ -1526,12 +1651,18 @@ function openProductEditor(product = null, mode = product?.id ? "edit" : "create
 
 function openSiteEditor() {
   if (!state.editMode || !siteEditorForm) return;
+  state.selectedSiteLogoFile = null;
+  state.removeSiteLogo = false;
   siteEditorForm.elements.brandTitle.value = settings.brandTitle;
   siteEditorForm.elements.brandSubtitle.value = settings.brandSubtitle;
+  siteEditorForm.elements.logoUrl.value = settings.logoUrl || "";
   siteEditorForm.elements.bannerImage.value = settings.bannerImage || "";
   siteEditorForm.elements.homeText.value = settings.homeText || "";
   siteEditorForm.elements.whatsapp.value = settings.whatsapp || "";
   siteEditorForm.elements.deliveryInfo.value = settings.deliveryInfo || "";
+  siteLogoFileInputs.forEach((input) => (input.value = ""));
+  if (siteLogoUploadStatus) siteLogoUploadStatus.textContent = "";
+  updateSiteLogoPreview(settings.logoUrl || "");
   if (siteEditorError) siteEditorError.textContent = "";
   openEditorModal(siteEditor);
 }
@@ -2098,15 +2229,6 @@ async function saveSiteContent(event) {
   if (!state.editMode) return;
 
   const form = event.currentTarget;
-  Object.assign(settings, {
-    brandTitle: form.elements.brandTitle.value.trim() || settings.brandTitle,
-    brandSubtitle: form.elements.brandSubtitle.value.trim() || settings.brandSubtitle,
-    bannerImage: form.elements.bannerImage.value.trim(),
-    homeText: form.elements.homeText.value.trim(),
-    whatsapp: form.elements.whatsapp.value.replace(/\D/g, "") || settings.whatsapp,
-    deliveryInfo: form.elements.deliveryInfo.value.trim() || settings.deliveryInfo,
-  });
-
   if (!supabaseClient) {
     if (siteEditorError) siteEditorError.textContent = "Configure o Supabase para salvar configuracoes.";
     return;
@@ -2114,15 +2236,42 @@ async function saveSiteContent(event) {
 
   if (!(await getAuthenticatedUser(siteEditorError, "Faça login para editar configurações."))) return;
 
-  const { error } = await supabaseClient.from(CONFIG_TABLE_NAME).upsert(getSiteConfigPayload(), { onConflict: "id" });
-  if (error) {
-    if (siteEditorError) siteEditorError.textContent = error.message;
-    return;
+  const submitButton = form.querySelector('button[type="submit"]');
+  const previousText = submitButton?.textContent || "";
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.textContent = state.selectedSiteLogoFile ? "Enviando..." : "Salvando...";
   }
 
-  renderSettings();
-  closeEditorModal(siteEditor);
-  showToast("Configuracoes salvas");
+  try {
+    const logoUrl = await resolveSiteLogoUrl();
+    Object.assign(settings, {
+      brandTitle: form.elements.brandTitle.value.trim() || settings.brandTitle,
+      brandSubtitle: form.elements.brandSubtitle.value.trim() || settings.brandSubtitle,
+      logoUrl,
+      bannerImage: form.elements.bannerImage.value.trim(),
+      homeText: form.elements.homeText.value.trim(),
+      whatsapp: form.elements.whatsapp.value.replace(/\D/g, "") || settings.whatsapp,
+      deliveryInfo: form.elements.deliveryInfo.value.trim() || settings.deliveryInfo,
+    });
+
+    const { error } = await supabaseClient.from(CONFIG_TABLE_NAME).upsert(getSiteConfigPayload(), { onConflict: "id" });
+    if (error) throw error;
+
+    state.selectedSiteLogoFile = null;
+    state.removeSiteLogo = false;
+    renderSettings();
+    closeEditorModal(siteEditor);
+    showToast("Configuracoes salvas");
+  } catch (error) {
+    if (siteEditorError) siteEditorError.textContent = error.message || "Erro ao salvar configuracoes.";
+  } finally {
+    if (siteLogoUploadStatus) siteLogoUploadStatus.textContent = "";
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = previousText;
+    }
+  }
 }
 
 
@@ -2247,11 +2396,28 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-close-banner-editor]")) closeEditorModal(bannerEditor);
   if (event.target === bannerEditor) closeEditorModal(bannerEditor);
   if (event.target.closest("[data-add-banner]")) bannerEditorList?.insertAdjacentHTML("beforeend", bannerEditorRow({}, bannerEditorList.querySelectorAll(".banner-editor-row").length));
-  if (event.target.closest("[data-remove-banner]")) event.target.closest(".banner-editor-row")?.remove();
+  if (event.target.closest("[data-remove-banner]")) {
+    const row = event.target.closest(".banner-editor-row");
+    const rowId = getBannerRowId(row);
+    state.selectedBannerImageFiles.delete(rowId);
+    state.removedBannerImages.delete(rowId);
+    row?.remove();
+  }
+  if (event.target.closest("[data-remove-banner-image]")) {
+    const row = event.target.closest(".banner-editor-row");
+    const rowId = getBannerRowId(row);
+    state.selectedBannerImageFiles.delete(rowId);
+    state.removedBannerImages.add(rowId);
+    row?.querySelectorAll("[data-banner-image-file]").forEach((input) => (input.value = ""));
+    const urlInput = row?.querySelector('[name="imagem"]');
+    if (urlInput) urlInput.value = "";
+    updateBannerImagePreview(row, "");
+  }
   if (event.target.closest("[data-close-site-editor]")) closeEditorModal(siteEditor);
   if (event.target === siteEditor) closeEditorModal(siteEditor);
   if (event.target.closest("[data-delete-product]")) deleteCurrentProduct();
   if (event.target.closest("[data-remove-product-image]")) clearSelectedProductImage();
+  if (event.target.closest("[data-remove-site-logo]")) clearSelectedSiteLogo();
   if (event.target.closest("[data-edit-logout]")) disableEditMode();
   if (event.target.closest("[data-close-sales-login]")) closeSalesLogin();
   if (event.target === salesLogin) closeSalesLogin();
@@ -2421,6 +2587,74 @@ productEditorForm?.elements?.imagem?.addEventListener("input", (event) => {
   state.removeProductImage = false;
   if (productImageFileInput) productImageFileInput.value = "";
   updateProductImagePreview(event.target.value.trim());
+});
+
+siteEditorForm?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-site-logo-file]");
+  if (!input) return;
+
+  const file = event.target.files?.[0] || null;
+  const validation = validateProductImageFile(file);
+  if (validation) {
+    if (siteEditorError) siteEditorError.textContent = validation;
+    input.value = "";
+    state.selectedSiteLogoFile = null;
+    return;
+  }
+
+  state.selectedSiteLogoFile = file;
+  state.removeSiteLogo = false;
+  siteLogoFileInputs.forEach((fileInput) => {
+    if (fileInput !== input) fileInput.value = "";
+  });
+  if (siteEditorError) siteEditorError.textContent = "";
+  if (siteLogoUploadStatus) siteLogoUploadStatus.textContent = file ? "Imagem selecionada. Ela sera enviada ao salvar." : "";
+  if (file) updateSiteLogoPreview(URL.createObjectURL(file));
+});
+
+siteEditorForm?.elements?.logoUrl?.addEventListener("input", (event) => {
+  state.selectedSiteLogoFile = null;
+  state.removeSiteLogo = false;
+  siteLogoFileInputs.forEach((input) => (input.value = ""));
+  updateSiteLogoPreview(event.target.value.trim());
+});
+
+bannerEditorList?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-banner-image-file]");
+  if (!input) return;
+
+  const row = input.closest(".banner-editor-row");
+  const rowId = getBannerRowId(row);
+  const file = input.files?.[0] || null;
+  const validation = validateProductImageFile(file);
+  if (validation) {
+    if (bannerEditorError) bannerEditorError.textContent = validation;
+    input.value = "";
+    state.selectedBannerImageFiles.delete(rowId);
+    return;
+  }
+
+  if (file) {
+    row?.querySelectorAll("[data-banner-image-file]").forEach((fileInput) => {
+      if (fileInput !== input) fileInput.value = "";
+    });
+    state.selectedBannerImageFiles.set(rowId, file);
+    state.removedBannerImages.delete(rowId);
+    if (bannerEditorError) bannerEditorError.textContent = "Imagem selecionada. Ela sera enviada ao salvar.";
+    updateBannerImagePreview(row, URL.createObjectURL(file));
+  }
+});
+
+bannerEditorList?.addEventListener("input", (event) => {
+  const input = event.target.closest('[name="imagem"]');
+  if (!input) return;
+
+  const row = input.closest(".banner-editor-row");
+  const rowId = getBannerRowId(row);
+  state.selectedBannerImageFiles.delete(rowId);
+  state.removedBannerImages.delete(rowId);
+  row?.querySelectorAll("[data-banner-image-file]").forEach((input) => (input.value = ""));
+  updateBannerImagePreview(row, input.value.trim());
 });
 
 adminProductSearch?.addEventListener("input", (event) => {

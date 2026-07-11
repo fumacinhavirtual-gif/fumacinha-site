@@ -2001,7 +2001,16 @@ a {
 }
 
 .banner-editor-row {
-  grid-template-columns: minmax(180px, 1.3fr) minmax(120px, 0.9fr) minmax(140px, 1fr) minmax(140px, 1fr) 80px auto;
+  grid-template-columns: repeat(2, minmax(160px, 1fr)) 90px auto;
+}
+
+.file-picker input[type="file"] {
+  padding: 10px;
+  background: var(--white);
+}
+
+.banner-image-preview {
+  min-height: 180px;
 }
 
 .remove-banner-button {

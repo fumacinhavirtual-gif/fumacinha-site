@@ -25,7 +25,7 @@
     <header class="site-header">
       <a class="brand" href="#inicio" data-home-link aria-label="Fumacinha">
         <span class="brand-logo">
-          <img src="./assets/fumacinha-logo.png" alt="Fumacinha" />
+          <img src="./assets/fumacinha-logo.png" alt="Fumacinha" data-brand-logo-image />
         </span>
         <span class="brand-text">
           <strong>Fumacinha</strong>
@@ -415,6 +415,26 @@
             Banner (URL da imagem)
             <input type="url" name="bannerImage" placeholder="https://..." />
           </label>
+          <label class="wide">
+            Foto de perfil / logo da loja (URL)
+            <input type="url" name="logoUrl" placeholder="https://..." />
+          </label>
+          <label class="wide file-picker">
+            Escolher foto da galeria
+            <input type="file" accept="image/jpeg,image/png,image/webp" data-site-logo-file />
+          </label>
+          <label class="wide file-picker">
+            Usar camera do celular
+            <input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" data-site-logo-file />
+          </label>
+          <div class="product-image-preview wide" data-site-logo-preview>
+            <span data-site-logo-preview-empty>Nenhuma imagem selecionada</span>
+            <img class="hidden" src="" alt="Previa da logo da loja" data-site-logo-preview-img />
+          </div>
+          <div class="edit-actions wide image-actions">
+            <button class="btn ghost" type="button" data-remove-site-logo>Remover imagem</button>
+          </div>
+          <p class="edit-help wide" data-site-logo-upload-status></p>
           <label>
             Texto da pagina inicial
             <textarea name="homeText" rows="3"></textarea>
