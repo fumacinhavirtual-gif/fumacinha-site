@@ -10,7 +10,7 @@ const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LOW_STOCK_DEFAULT_LIMIT = 5;
 const ADMIN_ACCESS_PARAM = "admin";
 const ADMIN_ACCESS_SECRET = "fumacinha";
-const PRODUCT_LOAD_TIMEOUT_MS = 8000;
+const PRODUCT_SLOW_LOAD_MS = 5000;
 
 const settings = {
   brandTitle: "Fumacinha",
@@ -398,15 +398,6 @@ function normalizeProduct(product) {
   };
 }
 
-function withTimeout(promise, timeoutMs, message) {
-  let timeoutId;
-  const timeout = new Promise((_, reject) => {
-    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
-  });
-
-  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
-}
-
 function renderProductSkeletons() {
   if (!productRoot || state.productsLoaded || state.products.length) return;
   productRoot.innerHTML = `
@@ -414,6 +405,11 @@ function renderProductSkeletons() {
       ${Array.from({ length: 6 }, () => '<article class="product-card product-skeleton" aria-hidden="true"><span></span><i></i><b></b><em></em></article>').join("")}
     </div>
   `;
+}
+
+function showProductSlowMessage() {
+  if (state.products.length || state.productsLoaded) return;
+  showLoadMessage("Carregando produtos...");
 }
 
 function showProductRetry(message = "Não foi possível carregar os produtos. Toque para tentar novamente.") {
@@ -452,24 +448,50 @@ async function loadProductsOnce({ showLoading = true } = {}) {
   if (showLoading) renderProductSkeletons();
 
   const fields = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home";
-  const query = supabaseClient.from(TABLE_NAME).select(fields).order("categoria", { ascending: true }).order("nome", { ascending: true });
+  const slowTimer = window.setTimeout(showProductSlowMessage, PRODUCT_SLOW_LOAD_MS);
   let response;
 
   try {
-    response = await withTimeout(query, PRODUCT_LOAD_TIMEOUT_MS, "Tempo limite ao carregar produtos.");
+    response = await supabaseClient.from(TABLE_NAME).select(fields).order("categoria", { ascending: true }).order("nome", { ascending: true });
   } catch (error) {
+    console.error("[Fumacinha Produtos] Exceção ao carregar produtos:", error);
     if (!state.products.length) showProductRetry();
-    console.warn("Erro ao carregar produtos.", error.message);
+    console.warn("Erro ao carregar produtos.", error.message || error);
     return;
+  } finally {
+    window.clearTimeout(slowTimer);
   }
 
-  const { data, error } = response;
+  let { data, error } = response;
 
   if (error) {
+    const missingOptionalColumns =
+      error.message?.includes("PRODUTOS.ativo") ||
+      error.message?.includes("PRODUTOS.estoque") ||
+      error.message?.includes("PRODUTOS.descricao") ||
+      error.message?.includes("PRODUTOS.destaque_home") ||
+      error.message?.includes("PRODUTOS.ocultar_home");
+
+    if (missingOptionalColumns) {
+      console.warn("[Fumacinha Produtos] Colunas opcionais ausentes, usando consulta mínima:", error.message);
+      const fallback = await supabaseClient.from(TABLE_NAME).select("id,nome,preco,imagem,categoria").order("categoria", { ascending: true }).order("nome", { ascending: true });
+      data = fallback.data;
+      error = fallback.error;
+    }
+  }
+
+  if (error) {
+    console.error("[Fumacinha Produtos] Resposta de erro do Supabase:", error);
     if (!state.products.length) showProductRetry();
     console.warn("Erro ao carregar produtos.", error.message);
     return;
   }
+
+  console.log("[Fumacinha Produtos] Produtos carregados:", {
+    count: data?.length || 0,
+    status: response.status,
+    statusText: response.statusText,
+  });
 
   state.products = (data || []).map(mapProduct);
   state.productsLoaded = true;
