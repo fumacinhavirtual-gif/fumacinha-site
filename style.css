@@ -1266,7 +1266,8 @@ a {
   grid-template-columns: 1fr 1.4fr minmax(150px, 0.45fr);
   gap: 24px;
   align-items: start;
-  margin-top: auto;
+  flex-grow: 1;
+  margin-top: 0;
   padding: 42px clamp(16px, 5vw, 64px);
   color: var(--white);
   background: var(--black);
