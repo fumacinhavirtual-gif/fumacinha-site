@@ -19,6 +19,7 @@
     <meta name="twitter:image" content="https://fumacinha-site.vercel.app/assets/fumacinha-og.png" />
     <link rel="stylesheet" href="./style.css" />
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="./supabase-config.js"></script>
   </head>
   <body>
@@ -73,17 +74,12 @@
         <p data-home-text></p>
       </section>
 
-      <section class="benefit-carousel" data-view="home" aria-label="Benefícios">
+      <section class="benefit-carousel hidden" data-benefit-carousel data-view="home" aria-label="Benefícios">
         <button class="benefit-arrow prev" type="button" data-benefit-prev aria-label="Benefício anterior">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6" /></svg>
         </button>
         <div class="benefit-viewport">
-          <div class="benefit-track" data-benefit-track>
-            <article class="benefit-card">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h11v9H3z" /><path d="M14 10h4l3 3v3h-7z" /><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /></svg>
-              <div><strong>Entregamos</strong><span>Para todo o Brasil</span></div>
-            </article>
-          </div>
+          <div class="benefit-track" data-benefit-track></div>
         </div>
         <button class="benefit-arrow next" type="button" data-benefit-next aria-label="Próximo benefício">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
@@ -231,6 +227,7 @@
       <button type="button" data-new-product>Novo produto</button>
       <button type="button" data-open-category-editor>Editar categorias</button>
       <button type="button" data-open-banner-editor>Carrossel de Banners</button>
+      <button type="button" data-open-benefit-editor>Benefícios da Loja</button>
       <button type="button" data-open-site-editor>Editar textos e banner</button>
       <button type="button" data-open-low-stock>Estoque baixo</button>
       <button type="button" data-edit-logout>Sair</button>
@@ -287,6 +284,7 @@
         <button type="button" data-new-product>Novo produto</button>
         <button type="button" data-open-category-editor>Editar categorias</button>
         <button type="button" data-open-banner-editor>Carrossel de banners</button>
+        <button type="button" data-open-benefit-editor>Benefícios da Loja</button>
         <button type="button" data-open-site-editor>Editar textos e banner</button>
         <button type="button" data-open-low-stock>Estoque baixo</button>
         <button type="button" class="danger" data-edit-logout>Sair</button>
@@ -394,6 +392,23 @@
           <div class="edit-actions">
             <button class="btn primary" type="submit">Salvar carrossel</button>
             <button class="btn ghost" type="button" data-close-banner-editor>Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="edit-login hidden" data-benefit-editor aria-hidden="true">
+      <div class="edit-modal benefit-editor-modal" role="dialog" aria-modal="true" aria-labelledby="benefit-editor-title">
+        <button class="edit-close" type="button" data-close-benefit-editor aria-label="Fechar editor">×</button>
+        <p class="eyebrow">Home</p>
+        <h2 id="benefit-editor-title">Benefícios da Loja</h2>
+        <form class="edit-form" data-benefit-editor-form>
+          <div class="benefit-editor-list" data-benefit-editor-list></div>
+          <button class="btn ghost" type="button" data-add-benefit>Adicionar benefício</button>
+          <p class="edit-error" data-benefit-editor-error></p>
+          <div class="edit-actions">
+            <button class="btn primary" type="submit" data-benefit-save>Salvar benefícios</button>
+            <button class="btn ghost" type="button" data-close-benefit-editor>Cancelar</button>
           </div>
         </form>
       </div>

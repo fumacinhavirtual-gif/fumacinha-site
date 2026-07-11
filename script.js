@@ -3,6 +3,7 @@ const CONFIG_TABLE_NAME = "SITE_CONFIG";
 const CATEGORY_TABLE_NAME = "CATEGORIAS";
 const SALES_TABLE_NAME = "VENDAS";
 const BANNER_TABLE_NAME = "BANNERS_HOME";
+const BENEFITS_TABLE_NAME = "BENEFICIOS_LOJA";
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -29,6 +30,7 @@ const state = {
   editMode: false,
   salesMode: false,
   sales: [],
+  benefits: [],
   categoryConfigs: [],
   activeCategory: "",
   financeFilter: "today",
@@ -43,6 +45,8 @@ const state = {
   removeSiteLogo: false,
   selectedBannerImageFiles: new Map(),
   removedBannerImages: new Set(),
+  selectedBenefitImageFiles: new Map(),
+  removedBenefitImages: new Set(),
   adminProducts: {
     query: "",
     sort: "recent",
@@ -75,6 +79,7 @@ const orderError = document.querySelector("[data-order-error]");
 const toastRegion = document.querySelector("[data-toast-region]");
 const searchInput = document.querySelector("[data-search]");
 const searchForm = document.querySelector(".search-form");
+const benefitCarousel = document.querySelector("[data-benefit-carousel]");
 const benefitTrack = document.querySelector("[data-benefit-track]");
 const benefitPrev = document.querySelector("[data-benefit-prev]");
 const benefitNext = document.querySelector("[data-benefit-next]");
@@ -117,6 +122,11 @@ const bannerEditor = document.querySelector("[data-banner-editor]");
 const bannerEditorForm = document.querySelector("[data-banner-editor-form]");
 const bannerEditorList = document.querySelector("[data-banner-editor-list]");
 const bannerEditorError = document.querySelector("[data-banner-editor-error]");
+const benefitEditor = document.querySelector("[data-benefit-editor]");
+const benefitEditorForm = document.querySelector("[data-benefit-editor-form]");
+const benefitEditorList = document.querySelector("[data-benefit-editor-list]");
+const benefitEditorError = document.querySelector("[data-benefit-editor-error]");
+const benefitSaveButton = document.querySelector("[data-benefit-save]");
 const siteEditor = document.querySelector("[data-site-editor]");
 const siteEditorForm = document.querySelector("[data-site-editor-form]");
 const siteEditorError = document.querySelector("[data-site-editor-error]");
@@ -206,6 +216,20 @@ const policies = {
     `,
   },
 };
+
+const LUCIDE_BENEFIT_ICONS = [
+  "truck", "shield-check", "clock-3", "credit-card", "package", "gift", "map-pin", "store", "badge-check", "wallet",
+  "star", "headphones", "phone", "percent", "flame", "zap", "lock", "sparkles", "heart", "shopping-bag",
+  "shopping-cart", "badge-dollar-sign", "banknote", "coins", "receipt", "tag", "tags", "ticket", "award", "medal",
+  "trophy", "thumbs-up", "smile", "message-circle", "send", "mail", "calendar-check", "calendar-days", "timer", "alarm-clock",
+  "route", "navigation", "map", "home", "building-2", "warehouse", "box", "boxes", "package-check", "package-open",
+  "package-search", "package-plus", "archive", "clipboard-check", "list-checks", "check-circle", "circle-check", "shield", "shield-plus", "user-check",
+  "users", "id-card", "key-round", "scan-line", "qr-code", "wifi", "smartphone", "monitor", "laptop", "camera",
+  "image", "upload", "download", "refresh-cw", "rotate-ccw", "repeat", "undo-2", "redo-2", "settings", "sliders-horizontal",
+  "filter", "search", "eye", "bell", "megaphone", "radio", "newspaper", "bookmark", "flag", "pin",
+  "gem", "crown", "party-popper", "flower", "leaf", "sun", "moon", "cloud", "umbrella", "life-buoy",
+  "handshake", "hand-heart", "circle-dollar-sign", "landmark", "scale", "ruler", "wrench", "hammer", "paintbrush", "palette"
+];
 
 const supabaseClient = createSupabaseClient();
 
@@ -620,6 +644,234 @@ function renderHomeBannerCarousel() {
   startBannerAutoplay();
 }
 
+function activeBenefits() {
+  return state.benefits
+    .filter((benefit) => benefit.ativo !== false && (benefit.titulo || benefit.subtitulo || benefit.imagem))
+    .sort((a, b) => Number(a.ordem || 1) - Number(b.ordem || 1));
+}
+
+function renderLucideIcons() {
+  window.lucide?.createIcons?.();
+}
+
+function benefitVisual(benefit) {
+  if (benefit.imagem) {
+    return `<img class="benefit-image" src="${escapeHtml(benefit.imagem)}" alt="${escapeHtml(benefit.titulo || "Benefício Fumacinha")}" />`;
+  }
+  const icon = benefit.icone || "truck";
+  return `<i data-lucide="${escapeHtml(icon)}" aria-hidden="true"></i>`;
+}
+
+function renderBenefits() {
+  const benefits = activeBenefits();
+  benefitCarousel?.classList.toggle("hidden", benefits.length === 0);
+  if (!benefitTrack) return;
+
+  benefitIndex = Math.min(benefitIndex, Math.max(benefits.length - 1, 0));
+  benefitTrack.innerHTML = benefits
+    .map(
+      (benefit) => `
+        <article class="benefit-card">
+          ${benefitVisual(benefit)}
+          <div>
+            <strong>${escapeHtml(benefit.titulo)}</strong>
+            <span>${escapeHtml(benefit.subtitulo)}</span>
+          </div>
+        </article>
+      `
+    )
+    .join("");
+  benefitTrack.style.transform = `translateX(-${benefitIndex * 100}%)`;
+  renderLucideIcons();
+}
+
+async function loadBenefits() {
+  if (!supabaseClient) {
+    state.benefits = [];
+    renderBenefits();
+    return;
+  }
+
+  const { data, error } = await supabaseClient
+    .from(BENEFITS_TABLE_NAME)
+    .select("id,titulo,subtitulo,icone,imagem,ordem,ativo,created_at")
+    .order("ordem", { ascending: true });
+
+  if (error) {
+    console.warn(`Configure a tabela ${BENEFITS_TABLE_NAME} no Supabase para gerenciar benefícios.`, error.message);
+    state.benefits = [];
+    renderBenefits();
+    return;
+  }
+
+  state.benefits = (data || []).map((benefit) => ({
+    id: benefit.id,
+    titulo: benefit.titulo || "",
+    subtitulo: benefit.subtitulo || "",
+    icone: benefit.icone || "truck",
+    imagem: benefit.imagem || "",
+    ordem: Number(benefit.ordem || 1),
+    ativo: benefit.ativo !== false,
+  }));
+  renderBenefits();
+}
+
+function benefitIconOptions(selected = "truck") {
+  return LUCIDE_BENEFIT_ICONS.map((icon) => `<option value="${icon}" ${icon === selected ? "selected" : ""}>${icon}</option>`).join("");
+}
+
+function benefitEditorRow(benefit = {}, index = 0) {
+  const rowId = `benefit-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`;
+  const icon = benefit.icone || "truck";
+  return `
+    <article class="benefit-editor-row" data-benefit-row-id="${rowId}">
+      <label>
+        Ícone Lucide
+        <select name="icone">${benefitIconOptions(icon)}</select>
+      </label>
+      <label>
+        Ordem
+        <input type="number" name="ordem" min="1" max="6" step="1" value="${Number(benefit.ordem || index + 1)}" />
+      </label>
+      <label class="edit-check">
+        <input type="checkbox" name="ativo" ${benefit.ativo === false ? "" : "checked"} />
+        Ativo
+      </label>
+      <label class="wide">
+        Título
+        <input type="text" name="titulo" value="${escapeHtml(benefit.titulo)}" />
+      </label>
+      <label class="wide">
+        Subtítulo
+        <input type="text" name="subtitulo" value="${escapeHtml(benefit.subtitulo)}" />
+      </label>
+      <label class="wide">
+        Imagem alternativa (URL)
+        <input type="url" name="imagem" value="${escapeHtml(benefit.imagem)}" placeholder="https://..." />
+      </label>
+      <label class="wide file-picker">
+        Upload de imagem PNG, SVG ou WEBP
+        <input type="file" accept="image/png,image/svg+xml,image/webp" data-benefit-image-file />
+      </label>
+      <div class="product-image-preview wide benefit-image-preview" data-benefit-image-preview>
+        <span class="${benefit.imagem ? "hidden" : ""}" data-benefit-image-preview-empty>Nenhuma imagem selecionada</span>
+        <img class="${benefit.imagem ? "" : "hidden"}" src="${escapeHtml(benefit.imagem)}" alt="Prévia do benefício" data-benefit-image-preview-img />
+      </div>
+      <div class="edit-actions wide image-actions benefit-row-actions">
+        <button class="btn ghost" type="button" data-benefit-up>↑</button>
+        <button class="btn ghost" type="button" data-benefit-down>↓</button>
+        <button class="btn ghost" type="button" data-duplicate-benefit>Duplicar</button>
+        <button class="btn ghost" type="button" data-remove-benefit-image>Remover imagem</button>
+        <button class="btn ghost" type="button" data-remove-benefit>Excluir</button>
+      </div>
+    </article>
+  `;
+}
+
+function openBenefitEditor() {
+  if (!state.editMode || !benefitEditorForm || !benefitEditorList) return;
+  if (benefitEditorError) benefitEditorError.textContent = "";
+  state.selectedBenefitImageFiles.clear();
+  state.removedBenefitImages.clear();
+  benefitEditorList.innerHTML = state.benefits.length
+    ? state.benefits.slice(0, 6).map(benefitEditorRow).join("")
+    : benefitEditorRow({ titulo: "", subtitulo: "", icone: "truck", ativo: true, ordem: 1 }, 0);
+  openEditorModal(benefitEditor);
+}
+
+function getBenefitRowId(row) {
+  return row?.dataset.benefitRowId || "";
+}
+
+function updateBenefitImagePreview(row, value) {
+  updateImagePreview(
+    row?.querySelector("[data-benefit-image-preview]"),
+    row?.querySelector("[data-benefit-image-preview-empty]"),
+    row?.querySelector("[data-benefit-image-preview-img]"),
+    value
+  );
+}
+
+async function resolveBenefitImageUrl(row) {
+  const rowId = getBenefitRowId(row);
+  if (state.removedBenefitImages.has(rowId)) return "";
+  const file = state.selectedBenefitImageFiles.get(rowId);
+  if (file) return uploadBenefitImageFile(file, benefitEditorError);
+  return row.querySelector('[name="imagem"]').value.trim();
+}
+
+function renumberBenefitRows() {
+  benefitEditorList?.querySelectorAll(".benefit-editor-row").forEach((row, index) => {
+    const input = row.querySelector('[name="ordem"]');
+    if (input) input.value = String(index + 1);
+  });
+}
+
+function moveBenefitRow(row, direction) {
+  if (!row || !benefitEditorList) return;
+  const sibling = direction < 0 ? row.previousElementSibling : row.nextElementSibling;
+  if (!sibling) return;
+  if (direction < 0) benefitEditorList.insertBefore(row, sibling);
+  else benefitEditorList.insertBefore(sibling, row);
+  renumberBenefitRows();
+}
+
+async function saveBenefits(event) {
+  event.preventDefault();
+  if (!state.editMode) return;
+
+  if (!supabaseClient) {
+    if (benefitEditorError) benefitEditorError.textContent = "Configure o Supabase para salvar beneficios.";
+    return;
+  }
+
+  if (!(await getAuthenticatedUser(benefitEditorError, "Faça login para editar beneficios."))) return;
+
+  const previousText = benefitSaveButton?.textContent || "";
+  if (benefitSaveButton) {
+    benefitSaveButton.disabled = true;
+    benefitSaveButton.textContent = "Salvando...";
+  }
+
+  try {
+    const rows = [...benefitEditorList.querySelectorAll(".benefit-editor-row")].slice(0, 6);
+    const benefits = [];
+    for (const [index, row] of rows.entries()) {
+      const imagem = await resolveBenefitImageUrl(row);
+      const benefit = {
+        titulo: row.querySelector('[name="titulo"]').value.trim(),
+        subtitulo: row.querySelector('[name="subtitulo"]').value.trim(),
+        icone: row.querySelector('[name="icone"]').value.trim() || "truck",
+        imagem,
+        ordem: Number(row.querySelector('[name="ordem"]').value || index + 1),
+        ativo: row.querySelector('[name="ativo"]')?.checked !== false,
+      };
+      if (benefit.titulo || benefit.subtitulo || benefit.imagem) benefits.push(benefit);
+    }
+
+    const { error: deleteError } = await supabaseClient.from(BENEFITS_TABLE_NAME).delete().neq("id", 0);
+    if (deleteError) throw deleteError;
+
+    if (benefits.length) {
+      const { error: insertError } = await supabaseClient.from(BENEFITS_TABLE_NAME).insert(benefits);
+      if (insertError) throw insertError;
+    }
+
+    state.selectedBenefitImageFiles.clear();
+    state.removedBenefitImages.clear();
+    await loadBenefits();
+    closeEditorModal(benefitEditor);
+    showToast("Benefício salvo com sucesso.");
+  } catch (error) {
+    if (benefitEditorError) benefitEditorError.textContent = error.message || "Erro ao salvar beneficios.";
+  } finally {
+    if (benefitSaveButton) {
+      benefitSaveButton.disabled = false;
+      benefitSaveButton.textContent = previousText;
+    }
+  }
+}
+
 function bannerEditorRow(banner = {}, index = 0) {
   const rowId = `banner-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`;
   return `
@@ -821,9 +1073,6 @@ function renderSettings() {
   if (brandLogoImage) {
     brandLogoImage.src = settings.logoUrl || "./assets/fumacinha-logo.png";
   }
-
-  const benefitCards = document.querySelectorAll(".benefit-card");
-  benefitCards[0]?.querySelector("span") && (benefitCards[0].querySelector("span").textContent = settings.deliveryInfo);
 
   if (configBanner && configBannerImage && homeText) {
     const hasBanner = Boolean(settings.bannerImage);
@@ -1424,6 +1673,7 @@ function disableEditMode() {
   closeEditorModal(productEditor);
   closeEditorModal(categoryEditor);
   closeEditorModal(bannerEditor);
+  closeEditorModal(benefitEditor);
   closeEditorModal(siteEditor);
   closeLogin();
   renderProductsByCategory();
@@ -1532,6 +1782,13 @@ function validateProductImageFile(file) {
   return "";
 }
 
+function validateBenefitImageFile(file) {
+  if (!file) return "";
+  if (!["image/png", "image/svg+xml", "image/webp"].includes(file.type)) return "Use imagens PNG, SVG ou WEBP.";
+  if (file.size > MAX_PRODUCT_IMAGE_SIZE) return "A imagem deve ter no maximo 5 MB.";
+  return "";
+}
+
 function uniqueProductImagePath(file) {
   const extension = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
   const safeExtension = extension === "jpeg" ? "jpg" : extension;
@@ -1553,6 +1810,24 @@ async function uploadImageFileToStorage(file, folder, statusElement) {
 
   if (statusElement) statusElement.textContent = "Enviando imagem...";
   const path = uniqueStorageImagePath(file, folder);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+
+  const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl || "";
+}
+
+async function uploadBenefitImageFile(file, statusElement) {
+  const validation = validateBenefitImageFile(file);
+  if (validation) throw new Error(validation);
+  if (!supabaseClient) throw new Error("Configure o Supabase para enviar imagens.");
+
+  if (statusElement) statusElement.textContent = "Enviando imagem...";
+  const path = uniqueStorageImagePath(file, "beneficios");
   const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
     cacheControl: "3600",
     upsert: false,
@@ -2416,6 +2691,7 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-new-product]")) openProductEditor();
   if (event.target.closest("[data-open-category-editor]")) openCategoryEditor();
   if (event.target.closest("[data-open-banner-editor]")) openBannerEditor();
+  if (event.target.closest("[data-open-benefit-editor]")) openBenefitEditor();
   if (event.target.closest("[data-open-site-editor]")) openSiteEditor();
   if (event.target.closest("[data-open-low-stock]")) openLowStockPanel();
   if (event.target.closest("[data-close-product-editor]")) closeEditorModal(productEditor);
@@ -2424,6 +2700,8 @@ document.addEventListener("click", (event) => {
   if (event.target === categoryEditor) closeEditorModal(categoryEditor);
   if (event.target.closest("[data-close-banner-editor]")) closeEditorModal(bannerEditor);
   if (event.target === bannerEditor) closeEditorModal(bannerEditor);
+  if (event.target.closest("[data-close-benefit-editor]")) closeEditorModal(benefitEditor);
+  if (event.target === benefitEditor) closeEditorModal(benefitEditor);
   if (event.target.closest("[data-add-banner]")) bannerEditorList?.insertAdjacentHTML("beforeend", bannerEditorRow({}, bannerEditorList.querySelectorAll(".banner-editor-row").length));
   if (event.target.closest("[data-remove-banner]")) {
     const row = event.target.closest(".banner-editor-row");
@@ -2444,6 +2722,52 @@ document.addEventListener("click", (event) => {
   }
   if (event.target.closest("[data-close-site-editor]")) closeEditorModal(siteEditor);
   if (event.target === siteEditor) closeEditorModal(siteEditor);
+  if (event.target.closest("[data-add-benefit]")) {
+    if ((benefitEditorList?.querySelectorAll(".benefit-editor-row").length || 0) >= 6) {
+      if (benefitEditorError) benefitEditorError.textContent = "Cadastre no maximo 6 beneficios.";
+    } else {
+      benefitEditorList?.insertAdjacentHTML("beforeend", benefitEditorRow({}, benefitEditorList.querySelectorAll(".benefit-editor-row").length));
+      renumberBenefitRows();
+    }
+  }
+  if (event.target.closest("[data-benefit-up]")) moveBenefitRow(event.target.closest(".benefit-editor-row"), -1);
+  if (event.target.closest("[data-benefit-down]")) moveBenefitRow(event.target.closest(".benefit-editor-row"), 1);
+  if (event.target.closest("[data-duplicate-benefit]")) {
+    const row = event.target.closest(".benefit-editor-row");
+    if ((benefitEditorList?.querySelectorAll(".benefit-editor-row").length || 0) >= 6) {
+      if (benefitEditorError) benefitEditorError.textContent = "Cadastre no maximo 6 beneficios.";
+    } else if (row) {
+      const copy = {
+        titulo: row.querySelector('[name="titulo"]').value.trim(),
+        subtitulo: row.querySelector('[name="subtitulo"]').value.trim(),
+        icone: row.querySelector('[name="icone"]').value.trim(),
+        imagem: row.querySelector('[name="imagem"]').value.trim(),
+        ativo: row.querySelector('[name="ativo"]')?.checked !== false,
+        ordem: (benefitEditorList.querySelectorAll(".benefit-editor-row").length || 0) + 1,
+      };
+      benefitEditorList.insertAdjacentHTML("beforeend", benefitEditorRow(copy, copy.ordem - 1));
+      renumberBenefitRows();
+      if (benefitEditorError) benefitEditorError.textContent = "";
+    }
+  }
+  if (event.target.closest("[data-remove-benefit]")) {
+    const row = event.target.closest(".benefit-editor-row");
+    const rowId = getBenefitRowId(row);
+    state.selectedBenefitImageFiles.delete(rowId);
+    state.removedBenefitImages.delete(rowId);
+    row?.remove();
+    renumberBenefitRows();
+  }
+  if (event.target.closest("[data-remove-benefit-image]")) {
+    const row = event.target.closest(".benefit-editor-row");
+    const rowId = getBenefitRowId(row);
+    state.selectedBenefitImageFiles.delete(rowId);
+    state.removedBenefitImages.add(rowId);
+    row?.querySelectorAll("[data-benefit-image-file]").forEach((input) => (input.value = ""));
+    const urlInput = row?.querySelector('[name="imagem"]');
+    if (urlInput) urlInput.value = "";
+    updateBenefitImagePreview(row, "");
+  }
   if (event.target.closest("[data-delete-product]")) deleteCurrentProduct();
   if (event.target.closest("[data-remove-product-image]")) clearSelectedProductImage();
   if (event.target.closest("[data-remove-site-logo]")) clearSelectedSiteLogo();
@@ -2566,6 +2890,7 @@ orderConfirmationForm?.addEventListener("submit", (event) => {
 productEditorForm?.addEventListener("submit", saveProduct);
 categoryEditorForm?.addEventListener("submit", saveCategories);
 bannerEditorForm?.addEventListener("submit", saveBanners);
+benefitEditorForm?.addEventListener("submit", saveBenefits);
 siteEditorForm?.addEventListener("submit", saveSiteContent);
 saleForm?.addEventListener("submit", registerManualSale);
 salesLoginForm?.addEventListener("submit", async (event) => {
@@ -2691,6 +3016,42 @@ bannerEditorList?.addEventListener("input", (event) => {
   updateBannerImagePreview(row, input.value.trim());
 });
 
+benefitEditorList?.addEventListener("change", (event) => {
+  const input = event.target.closest("[data-benefit-image-file]");
+  if (!input) return;
+
+  const row = input.closest(".benefit-editor-row");
+  const rowId = getBenefitRowId(row);
+  const file = input.files?.[0] || null;
+  const validation = validateBenefitImageFile(file);
+  if (validation) {
+    if (benefitEditorError) benefitEditorError.textContent = validation;
+    input.value = "";
+    state.selectedBenefitImageFiles.delete(rowId);
+    return;
+  }
+
+  if (file) {
+    state.selectedBenefitImageFiles.set(rowId, file);
+    state.removedBenefitImages.delete(rowId);
+    if (benefitEditorError) benefitEditorError.textContent = "Imagem selecionada. Ela sera enviada ao salvar.";
+    updateBenefitImagePreview(row, URL.createObjectURL(file));
+  }
+});
+
+benefitEditorList?.addEventListener("input", (event) => {
+  const input = event.target.closest('[name="imagem"]');
+  if (!input) return;
+
+  const row = input.closest(".benefit-editor-row");
+  const rowId = getBenefitRowId(row);
+  state.selectedBenefitImageFiles.delete(rowId);
+  state.removedBenefitImages.delete(rowId);
+  const fileInput = row?.querySelector("[data-benefit-image-file]");
+  if (fileInput) fileInput.value = "";
+  updateBenefitImagePreview(row, input.value.trim());
+});
+
 adminProductSearch?.addEventListener("input", (event) => {
   state.adminProducts.query = event.target.value;
   renderProductsByCategory();
@@ -2740,6 +3101,7 @@ renderSettings();
 renderCart();
 setupWhatsAppDirectLinks();
 loadBannerConfig();
+loadBenefits();
 loadSiteConfig();
 loadProducts();
 handleSecretAdminAccess();

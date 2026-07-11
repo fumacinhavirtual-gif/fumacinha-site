@@ -471,7 +471,8 @@ a {
   box-shadow: none;
 }
 
-.benefit-card svg {
+.benefit-card svg,
+.benefit-card i {
   width: 32px;
   height: 32px;
   fill: none;
@@ -479,6 +480,12 @@ a {
   stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.benefit-image {
+  width: 38px;
+  height: 38px;
+  object-fit: contain;
 }
 
 .benefit-card .discount-tag-icon {
@@ -1757,8 +1764,9 @@ a {
   z-index: 80;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  width: min(980px, calc(100% - 24px));
+  width: min(1120px, calc(100% - 24px));
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 18px;
@@ -1988,8 +1996,14 @@ a {
   gap: 12px;
 }
 
+.benefit-editor-list {
+  display: grid;
+  gap: 12px;
+}
+
 .category-editor-row,
-.banner-editor-row {
+.banner-editor-row,
+.benefit-editor-row {
   display: grid;
   grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.2fr) 92px minmax(150px, 0.9fr);
   gap: 12px;
@@ -2004,6 +2018,10 @@ a {
   grid-template-columns: repeat(2, minmax(160px, 1fr)) 90px auto;
 }
 
+.benefit-editor-row {
+  grid-template-columns: minmax(180px, 1fr) 90px minmax(120px, auto);
+}
+
 .file-picker input[type="file"] {
   padding: 10px;
   background: var(--white);
@@ -2011,6 +2029,14 @@ a {
 
 .banner-image-preview {
   min-height: 180px;
+}
+
+.benefit-image-preview {
+  min-height: 150px;
+}
+
+.benefit-row-actions {
+  align-items: center;
 }
 
 .remove-banner-button {
@@ -2489,6 +2515,7 @@ a {
 
   .category-editor-modal,
   .banner-editor-modal,
+  .benefit-editor-modal,
   .sales-modal {
     width: 100%;
   }
@@ -2504,7 +2531,8 @@ a {
   .sale-row,
   .history-sale,
   .category-editor-row,
-  .banner-editor-row {
+  .banner-editor-row,
+  .benefit-editor-row {
     grid-template-columns: 1fr;
   }
 }
