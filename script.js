@@ -1250,7 +1250,6 @@ function renderProductsByCategory() {
       return `
         <section class="product-category" id="cat-${category.id}">
           <div class="product-category-heading">
-            <p class="eyebrow">${escapeHtml(category.name)}</p>
             <h3>${escapeHtml(category.name)}</h3>
           </div>
           <div class="products-grid">${categoryProducts.map(productCard).join("")}</div>
