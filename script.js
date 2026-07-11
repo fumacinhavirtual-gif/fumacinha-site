@@ -3144,6 +3144,45 @@ searchForm?.addEventListener("submit", (event) => {
   document.querySelector("#produtos")?.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 
+let lastTouchY = 0;
+
+function getScrollableParent(element) {
+  let current = element;
+  while (current && current !== document.body) {
+    const styles = window.getComputedStyle(current);
+    const canScrollY = /(auto|scroll)/.test(styles.overflowY) && current.scrollHeight > current.clientHeight;
+    if (canScrollY) return current;
+    current = current.parentElement;
+  }
+  return null;
+}
+
+function preventPageRubberBand(event) {
+  if (event.touches.length !== 1 || document.body.classList.contains("no-scroll")) return;
+
+  const currentY = event.touches[0].clientY;
+  const deltaY = currentY - lastTouchY;
+  lastTouchY = currentY;
+
+  const scrollableParent = getScrollableParent(event.target);
+  if (scrollableParent) {
+    const atScrollableTop = scrollableParent.scrollTop <= 0;
+    const atScrollableBottom = Math.ceil(scrollableParent.scrollTop + scrollableParent.clientHeight) >= scrollableParent.scrollHeight;
+    if ((atScrollableTop && deltaY > 0) || (atScrollableBottom && deltaY < 0)) event.preventDefault();
+    return;
+  }
+
+  const pageTop = window.scrollY <= 0;
+  const pageBottom = Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight;
+  if ((pageTop && deltaY > 0) || (pageBottom && deltaY < 0)) event.preventDefault();
+}
+
+document.addEventListener("touchstart", (event) => {
+  if (event.touches.length === 1) lastTouchY = event.touches[0].clientY;
+}, { passive: true });
+
+document.addEventListener("touchmove", preventPageRubberBand, { passive: false });
+
 let benefitIndex = 0;
 
 function moveBenefits(direction) {
