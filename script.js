@@ -3145,6 +3145,7 @@ searchForm?.addEventListener("submit", (event) => {
 });
 
 let lastTouchY = 0;
+let footerClampFrame = 0;
 
 function getScrollableParent(element) {
   let current = element;
@@ -3173,8 +3174,37 @@ function preventPageRubberBand(event) {
   }
 
   const pageTop = window.scrollY <= 0;
-  const pageBottom = Math.ceil(window.scrollY + window.innerHeight) >= document.documentElement.scrollHeight;
-  if ((pageTop && deltaY > 0) || (pageBottom && deltaY < 0)) event.preventDefault();
+  const pageBottom = window.scrollY >= getFooterMaxScrollY() - 1;
+  if ((pageTop && deltaY > 0) || (pageBottom && deltaY < 0)) {
+    event.preventDefault();
+    clampScrollToFooter();
+  }
+}
+
+function getViewportHeight() {
+  return window.visualViewport?.height || window.innerHeight;
+}
+
+function getFooterMaxScrollY() {
+  const footer = document.querySelector(".site-footer");
+  if (!footer) return Math.max(0, document.documentElement.scrollHeight - getViewportHeight());
+
+  const footerBottom = footer.getBoundingClientRect().bottom + window.scrollY;
+  return Math.max(0, Math.ceil(footerBottom - getViewportHeight()));
+}
+
+function clampScrollToFooter() {
+  if (document.body.classList.contains("no-scroll")) return;
+  const maxScrollY = getFooterMaxScrollY();
+  if (window.scrollY > maxScrollY) window.scrollTo(0, maxScrollY);
+}
+
+function scheduleFooterClamp() {
+  if (footerClampFrame) return;
+  footerClampFrame = window.requestAnimationFrame(() => {
+    footerClampFrame = 0;
+    clampScrollToFooter();
+  });
 }
 
 document.addEventListener("touchstart", (event) => {
@@ -3182,6 +3212,8 @@ document.addEventListener("touchstart", (event) => {
 }, { passive: true });
 
 document.addEventListener("touchmove", preventPageRubberBand, { passive: false });
+window.addEventListener("scroll", scheduleFooterClamp, { passive: true });
+window.visualViewport?.addEventListener("resize", scheduleFooterClamp);
 
 let benefitIndex = 0;
 
