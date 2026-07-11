@@ -10,6 +10,7 @@ const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LOW_STOCK_DEFAULT_LIMIT = 5;
 const ADMIN_ACCESS_PARAM = "admin";
 const ADMIN_ACCESS_SECRET = "fumacinha";
+const PRODUCT_LOAD_TIMEOUT_MS = 8000;
 
 const settings = {
   brandTitle: "Fumacinha",
@@ -31,6 +32,8 @@ const state = {
   salesMode: false,
   sales: [],
   benefits: [],
+  productsLoaded: false,
+  productLoadPromise: null,
   categoryConfigs: [],
   activeCategory: "",
   financeFilter: "today",
@@ -395,10 +398,49 @@ function normalizeProduct(product) {
   };
 }
 
-async function loadProducts() {
+function withTimeout(promise, timeoutMs, message) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
+function renderProductSkeletons() {
+  if (!productRoot || state.productsLoaded || state.products.length) return;
+  productRoot.innerHTML = `
+    <div class="products-grid product-skeleton-grid" aria-label="Carregando produtos">
+      ${Array.from({ length: 6 }, () => '<article class="product-card product-skeleton" aria-hidden="true"><span></span><i></i><b></b><em></em></article>').join("")}
+    </div>
+  `;
+}
+
+function showProductRetry(message = "Não foi possível carregar os produtos. Toque para tentar novamente.") {
+  if (!productRoot) return;
+  productRoot.innerHTML = `
+    <div class="load-message product-load-error">
+      <span>${escapeHtml(message)}</span>
+      <button class="btn primary" type="button" data-retry-products>Tentar novamente</button>
+    </div>
+  `;
+}
+
+async function loadProducts({ force = false, showLoading = true } = {}) {
+  if (state.productLoadPromise && !force) return state.productLoadPromise;
+
+  state.productLoadPromise = loadProductsOnce({ showLoading }).finally(() => {
+    state.productLoadPromise = null;
+  });
+
+  return state.productLoadPromise;
+}
+
+async function loadProductsOnce({ showLoading = true } = {}) {
   if (!supabaseClient) {
     state.products = [];
-    await loadCategories();
+    state.productsLoaded = true;
+    state.categories = buildFallbackCategories();
     renderCategories();
     renderProductsByCategory();
     syncCartWithProducts();
@@ -407,48 +449,42 @@ async function loadProducts() {
     return;
   }
 
-  productRoot.innerHTML = `<p class="load-message">Carregando produtos...</p>`;
+  if (showLoading) renderProductSkeletons();
 
-  let { data, error } = await supabaseClient
-    .from(TABLE_NAME)
-    .select("id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home")
-    .order("categoria", { ascending: true })
-    .order("nome", { ascending: true });
+  const fields = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home";
+  const query = supabaseClient.from(TABLE_NAME).select(fields).order("categoria", { ascending: true }).order("nome", { ascending: true });
+  let response;
+
+  try {
+    response = await withTimeout(query, PRODUCT_LOAD_TIMEOUT_MS, "Tempo limite ao carregar produtos.");
+  } catch (error) {
+    if (!state.products.length) showProductRetry();
+    console.warn("Erro ao carregar produtos.", error.message);
+    return;
+  }
+
+  const { data, error } = response;
 
   if (error) {
-    const missingOptionalColumns =
-      error.message?.includes("PRODUTOS.ativo") ||
-      error.message?.includes("PRODUTOS.estoque") ||
-      error.message?.includes("PRODUTOS.descricao") ||
-      error.message?.includes("PRODUTOS.destaque_home") ||
-      error.message?.includes("PRODUTOS.ocultar_home");
-    if (!missingOptionalColumns) {
-      showLoadMessage(`Erro ao carregar produtos: ${error.message}`);
-      return;
-    }
-
-    const fallback = await supabaseClient
-      .from(TABLE_NAME)
-      .select("id,nome,preco,imagem,categoria")
-      .order("categoria", { ascending: true })
-      .order("nome", { ascending: true });
-
-    data = fallback.data;
-    error = fallback.error;
-
-    if (error) {
-      showLoadMessage(`Erro ao carregar produtos: ${error.message}`);
-      return;
-    }
+    if (!state.products.length) showProductRetry();
+    console.warn("Erro ao carregar produtos.", error.message);
+    return;
   }
 
   state.products = (data || []).map(mapProduct);
-  await loadCategories();
-
+  state.productsLoaded = true;
+  state.categories = buildFallbackCategories();
   renderCategories();
   renderProductsByCategory();
   syncCartWithProducts();
   renderSalesPanel();
+
+  loadCategories()
+    .then(() => {
+      renderCategories();
+      renderProductsByCategory();
+    })
+    .catch((error) => console.warn("Erro ao atualizar categorias.", error.message));
 }
 
 function buildFallbackCategories() {
@@ -1011,9 +1047,11 @@ async function saveBanners(event) {
   }
 }
 
-function productImage(product, large = false) {
+function productImage(product, large = false, priority = false) {
   if (product.imagem) {
-    return `<img class="product-image" src="${product.imagem}" alt="${product.nome}" />`;
+    const loading = priority ? "eager" : "lazy";
+    const fetchPriority = priority ? ' fetchpriority="high"' : "";
+    return `<img class="product-image" src="${escapeHtml(product.imagem)}" alt="${escapeHtml(product.nome)}" loading="${loading}" decoding="async"${fetchPriority} />`;
   }
 
   const color = product.categoryId.includes("mesa") ? "#111111" : "#2d7d46";
@@ -1039,7 +1077,7 @@ function productImage(product, large = false) {
   `;
 }
 
-function productCard(product) {
+function productCard(product, index = 0) {
   return `
     <article class="product-card">
       ${
@@ -1050,7 +1088,7 @@ function productCard(product) {
             </div>`
           : ""
       }
-      <div class="product-photo">${productImage(product)}</div>
+      <div class="product-photo">${productImage(product, false, index < 4)}</div>
       <span class="category">${escapeHtml(product.categoria)}</span>
       <h3>${escapeHtml(product.nome)}</h3>
       <div class="price-block">
@@ -1228,7 +1266,7 @@ function showProduct(productId) {
   productPage.innerHTML = `
     <button class="btn back-link" type="button" data-home-link>Voltar para a página inicial</button>
     <section class="product-detail">
-      <div class="detail-photo">${productImage(product, true)}</div>
+      <div class="detail-photo">${productImage(product, true, true)}</div>
       <div class="product-info">
         <span class="category">${product.categoria}</span>
         <h1>${product.nome}</h1>
@@ -2062,7 +2100,7 @@ async function saveProduct(event) {
     }
 
     closeEditorModal(productEditor);
-    await loadProducts();
+    await loadProducts({ force: true, showLoading: false });
     const successMessage = existingId
       ? "Produto atualizado com sucesso."
       : state.productEditorMode === "duplicate"
@@ -2098,7 +2136,7 @@ async function deleteCurrentProduct() {
   }
 
   closeEditorModal(productEditor);
-  await loadProducts();
+  await loadProducts({ force: true, showLoading: false });
   showToast("Produto excluído com sucesso.");
   setProductLoading(false);
 }
@@ -2398,7 +2436,7 @@ async function updateStock(productId, nextStock) {
   }
 
   if (saleError) saleError.textContent = "";
-  await loadProducts();
+  await loadProducts({ force: true, showLoading: false });
   await loadSales();
   renderSalesPanel();
   setSalesStatus(stock === 0 ? "Estoque salvo com sucesso. Produto oculto do site." : "Estoque salvo com sucesso.", "success");
@@ -2474,7 +2512,7 @@ async function registerManualSale(event) {
   if (saleError) saleError.textContent = "";
   form.reset();
   form.elements.quantidade.value = 1;
-  await loadProducts();
+  await loadProducts({ force: true, showLoading: false });
   await loadSales();
   renderSalesPanel();
   setSalesStatus("Venda registrada com sucesso.", "success");
@@ -2520,7 +2558,7 @@ async function cancelSale(saleId) {
     return;
   }
 
-  await loadProducts();
+  await loadProducts({ force: true, showLoading: false });
   await loadSales();
   renderSalesPanel();
   setSalesStatus("Venda cancelada e estoque devolvido.", "success");
@@ -2622,7 +2660,7 @@ async function saveCategories(event) {
   }
 
   closeEditorModal(categoryEditor);
-  await loadProducts();
+  await loadProducts({ force: true, showLoading: false });
   showToast("Categorias atualizadas");
 }
 
@@ -2678,6 +2716,7 @@ document.addEventListener("click", (event) => {
 
   if (event.target.closest("[data-open-cart]")) openCart();
   if (event.target.closest("[data-toast-cart]")) openCart();
+  if (event.target.closest("[data-retry-products]")) loadProducts({ force: true });
   if (event.target.closest("[data-checkout]") && !checkout.classList.contains("disabled")) openOrderConfirmation();
   if (event.target.closest("[data-close-cart]")) closeCart();
   if (event.target === cartDrawer) closeCart();
@@ -3100,8 +3139,6 @@ if (benefitTrack) window.setInterval(() => moveBenefits(1), 3600);
 renderSettings();
 renderCart();
 setupWhatsAppDirectLinks();
-loadBannerConfig();
-loadBenefits();
-loadSiteConfig();
-loadProducts();
+renderProductSkeletons();
+Promise.allSettled([loadProducts(), loadBannerConfig(), loadBenefits(), loadSiteConfig()]);
 handleSecretAdminAccess();

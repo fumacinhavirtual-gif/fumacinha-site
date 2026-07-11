@@ -18,9 +18,13 @@
 
 html {
   scroll-behavior: smooth;
+  min-height: 100%;
 }
 
 body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
   margin: 0;
   background: var(--white);
   color: var(--ink);
@@ -700,9 +704,86 @@ a {
   gap: 18px;
 }
 
+.product-skeleton-grid {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+}
+
+.product-skeleton {
+  min-height: 430px;
+  pointer-events: none;
+}
+
+.product-skeleton span,
+.product-skeleton i,
+.product-skeleton b,
+.product-skeleton em {
+  display: block;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #eeeeee 0%, #f8f8f8 45%, #eeeeee 100%);
+  background-size: 220% 100%;
+  animation: skeletonPulse 1.2s ease-in-out infinite;
+}
+
+.product-skeleton span {
+  min-height: 250px;
+  margin-bottom: 18px;
+  border-radius: 0;
+}
+
+.product-skeleton i {
+  width: 42%;
+  height: 14px;
+  margin: 0 auto 12px;
+}
+
+.product-skeleton b {
+  width: 68%;
+  height: 22px;
+  margin: 0 auto 12px;
+}
+
+.product-skeleton em {
+  width: 54%;
+  height: 42px;
+  margin: 0 auto;
+  border-radius: 999px;
+}
+
+@keyframes skeletonPulse {
+  0% {
+    background-position: 120% 0;
+  }
+
+  100% {
+    background-position: -120% 0;
+  }
+}
+
 .category-product-list {
   display: grid;
   gap: 58px;
+}
+
+.load-message {
+  width: min(680px, 100%);
+  margin: 0 auto;
+  padding: 28px 18px;
+  color: var(--muted);
+  font-weight: 800;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.product-load-error {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+}
+
+.product-load-error .btn {
+  min-width: 180px;
+  min-height: 46px;
 }
 
 .product-category {
@@ -951,7 +1032,7 @@ a {
   position: fixed;
   inset: 0;
   z-index: 40;
-  display: flex;
+  display: none;
   justify-content: end;
   background: rgba(17, 17, 17, 0.48);
   opacity: 0;
@@ -960,6 +1041,7 @@ a {
 }
 
 .cart-drawer.open {
+  display: flex;
   opacity: 1;
   pointer-events: auto;
 }
@@ -1184,6 +1266,7 @@ a {
   grid-template-columns: 1fr 1.4fr minmax(150px, 0.45fr);
   gap: 24px;
   align-items: start;
+  margin-top: auto;
   padding: 42px clamp(16px, 5vw, 64px);
   color: var(--white);
   background: var(--black);
