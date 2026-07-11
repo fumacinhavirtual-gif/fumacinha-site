@@ -1322,6 +1322,27 @@ async function handleSecretAdminAccess() {
   openLogin();
 }
 
+function isTypingShortcutTarget(target) {
+  const field = target?.closest?.("input, textarea, select, [contenteditable='true']");
+  return Boolean(field);
+}
+
+async function openEditAccess() {
+  if (!supabaseClient) {
+    openLogin();
+    if (editLoginError) editLoginError.textContent = "Configure o Supabase para fazer login.";
+    return;
+  }
+
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (!error && data.session?.user) {
+    enableEditMode();
+    return;
+  }
+
+  openLogin();
+}
+
 function openEditorModal(modal) {
   closeAdminMobileMenu();
   modal?.classList.remove("hidden");
@@ -1423,6 +1444,7 @@ function closeSalesLogin() {
 
 async function enableSalesMode() {
   if (!(await getAuthenticatedUser(salesLoginError || saleError, "Faça login para alterar estoque e registrar vendas."))) return;
+  if (!state.editMode) enableEditMode();
   state.salesMode = true;
   closeSalesLogin();
   openEditorModal(salesPanel);
@@ -2479,7 +2501,12 @@ document.addEventListener("keydown", (event) => {
     closePolicyModal();
     closeOrderConfirmation();
   }
-  if (state.editMode && event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
+  if (isTypingShortcutTarget(event.target)) return;
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "e") {
+    event.preventDefault();
+    openEditAccess();
+  }
+  if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "v") {
     event.preventDefault();
     if (state.salesMode) {
       disableSalesMode();
