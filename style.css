@@ -2754,6 +2754,13 @@ main {
     padding: 52px 14px;
   }
 
+  .product-page .back-link {
+    width: fit-content;
+    margin: 20px 0;
+    padding: 12px 24px;
+    align-self: flex-start;
+  }
+
   .section-heading {
     display: block;
   }
