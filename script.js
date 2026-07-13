@@ -1359,11 +1359,11 @@ function buildWhatsAppProductLines(items) {
     const lines = [
       index > 0 ? "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501" : "",
       "",
-      `*${index + 1}. ${item.product.nome}*`,
+      `*${item.product.nome}*`,
+      "",
+      `\u2022 Valor da unidade: ${currency.format(item.product.preco)}`,
       "",
       `\u2022 Quantidade: ${item.quantity}`,
-      "",
-      `\u2022 Valor: ${currency.format(item.product.preco)}`,
     ];
 
     lines.push("");
