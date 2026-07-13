@@ -1,6 +1,13 @@
 const SUPABASE_URL = window.FUMACINHA_SUPABASE_URL || "";
 const SUPABASE_KEY = window.FUMACINHA_SUPABASE_PUBLISHABLE_KEY || "";
 const supabaseClient = window.supabase?.createClient?.(SUPABASE_URL, SUPABASE_KEY);
+const TABLES = {
+  products: "PRODUTOS",
+  sales: "VENDAS",
+  saleItems: "ITENS_VENDA",
+  stockMoves: "MOVIMENTACOES_ESTOQUE",
+  expenses: "DESPESAS",
+};
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const app = {
@@ -186,11 +193,11 @@ async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
   const [productsResult, salesResult, itemsResult, movesResult, expensesResult] = await Promise.allSettled([
-    supabaseClient.from("PRODUTOS").select("*").order("nome", { ascending: true }),
-    supabaseClient.from("VENDAS").select("*").order("data_venda", { ascending: false }).limit(500),
-    supabaseClient.from("ITENS_VENDA").select("*").order("created_at", { ascending: false }).limit(1000),
-    supabaseClient.from("MOVIMENTACOES_ESTOQUE").select("*").order("created_at", { ascending: false }).limit(500),
-    supabaseClient.from("DESPESAS").select("*").order("data_despesa", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
+    supabaseClient.from(TABLES.sales).select("*").order("data_venda", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.stockMoves).select("*").order("created_at", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.expenses).select("*").order("data_despesa", { ascending: false }).limit(500),
   ]);
 
   const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult]
@@ -339,13 +346,13 @@ async function insertStockMove(product, previous, next, type, saleId = null) {
     venda_id: saleId,
     usuario_id: app.user?.id || null,
   };
-  return supabaseClient.from("MOVIMENTACOES_ESTOQUE").insert(payload);
+  return supabaseClient.from(TABLES.stockMoves).insert(payload);
 }
 
 async function updateProductStock(product, nextStock, type = "ajuste manual", saleId = null) {
   const previous = toNumber(product.estoque);
   const next = Math.max(0, Number(nextStock));
-  const { error } = await supabaseClient.from("PRODUTOS").update({ estoque: next, ativo: next > 0 }).eq("id", product.id);
+  const { error } = await supabaseClient.from(TABLES.products).update({ estoque: next, ativo: next > 0 }).eq("id", product.id);
   if (error) throw error;
   await insertStockMove(product, previous, next, type, saleId);
   product.estoque = next;
@@ -389,7 +396,7 @@ async function registerSale(event) {
       cancelada: false,
       usuario_id: app.user?.id || null,
     };
-    const { data: sale, error: saleError } = await supabaseClient.from("VENDAS").insert(salePayload).select("*").single();
+    const { data: sale, error: saleError } = await supabaseClient.from(TABLES.sales).insert(salePayload).select("*").single();
     if (saleError) throw saleError;
     const itemPayload = items.map((item) => ({
       venda_id: sale.id,
@@ -401,7 +408,7 @@ async function registerSale(event) {
       custo_unitario: productCost(item.product),
       custo_total: item.quantity * productCost(item.product),
     }));
-    const { error: itemError } = await supabaseClient.from("ITENS_VENDA").insert(itemPayload);
+    const { error: itemError } = await supabaseClient.from(TABLES.saleItems).insert(itemPayload);
     if (itemError) throw itemError;
     for (const item of items) {
       await updateProductStock(item.product, toNumber(item.product.estoque) - item.quantity, "venda", sale.id);
@@ -426,7 +433,7 @@ async function cancelSale(saleId) {
       const product = app.products.find((productItem) => String(productItem.id) === String(item.produto_id));
       if (product) await updateProductStock(product, toNumber(product.estoque) + toNumber(item.quantidade), "cancelamento", sale.id);
     }
-    const { error } = await supabaseClient.from("VENDAS").update({ cancelada: true, cancelada_em: new Date().toISOString() }).eq("id", sale.id);
+    const { error } = await supabaseClient.from(TABLES.sales).update({ cancelada: true, cancelada_em: new Date().toISOString() }).eq("id", sale.id);
     if (error) throw error;
     setStatus("Venda cancelada e estoque devolvido.", "success");
     await loadAll();
@@ -551,7 +558,7 @@ async function saveExpense(event) {
     usuario_id: app.user?.id || null,
   };
   if (!payload.descricao || payload.valor <= 0) return setStatus("Preencha a despesa corretamente.", "error");
-  const { error } = await supabaseClient.from("DESPESAS").insert(payload);
+  const { error } = await supabaseClient.from(TABLES.expenses).insert(payload);
   if (error) return setStatus(error.message, "error");
   form.reset();
   form.elements.data_despesa.value = dateValue();

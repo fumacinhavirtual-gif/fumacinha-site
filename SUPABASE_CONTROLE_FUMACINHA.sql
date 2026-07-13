@@ -32,6 +32,15 @@ create table if not exists public."VENDAS" (
   updated_at timestamptz not null default now()
 );
 
+alter table public."VENDAS" add column if not exists produto_id text not null default '';
+alter table public."VENDAS" add column if not exists nome_produto text not null default '';
+alter table public."VENDAS" add column if not exists quantidade integer not null default 1;
+alter table public."VENDAS" add column if not exists valor_unitario numeric(12, 2) not null default 0;
+alter table public."VENDAS" add column if not exists valor_total numeric(12, 2) not null default 0;
+alter table public."VENDAS" add column if not exists custo_unitario numeric(12, 2) not null default 0;
+alter table public."VENDAS" add column if not exists custo_total numeric(12, 2) not null default 0;
+alter table public."VENDAS" add column if not exists data_venda timestamptz not null default now();
+alter table public."VENDAS" add column if not exists created_at timestamptz not null default now();
 alter table public."VENDAS" add column if not exists quantidade_total integer not null default 1;
 alter table public."VENDAS" add column if not exists desconto numeric(12, 2) not null default 0;
 alter table public."VENDAS" add column if not exists forma_pagamento text not null default 'Pix';
@@ -55,6 +64,16 @@ create table if not exists public."ITENS_VENDA" (
   created_at timestamptz not null default now()
 );
 
+alter table public."ITENS_VENDA" add column if not exists venda_id bigint;
+alter table public."ITENS_VENDA" add column if not exists produto_id text not null default '';
+alter table public."ITENS_VENDA" add column if not exists nome_produto text not null default '';
+alter table public."ITENS_VENDA" add column if not exists quantidade integer not null default 1;
+alter table public."ITENS_VENDA" add column if not exists valor_unitario numeric(12, 2) not null default 0;
+alter table public."ITENS_VENDA" add column if not exists valor_total numeric(12, 2) not null default 0;
+alter table public."ITENS_VENDA" add column if not exists custo_unitario numeric(12, 2) not null default 0;
+alter table public."ITENS_VENDA" add column if not exists custo_total numeric(12, 2) not null default 0;
+alter table public."ITENS_VENDA" add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public."MOVIMENTACOES_ESTOQUE" (
   id bigserial primary key,
   produto_id text not null,
@@ -69,6 +88,17 @@ create table if not exists public."MOVIMENTACOES_ESTOQUE" (
   created_at timestamptz not null default now()
 );
 
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists produto_id text not null default '';
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists nome_produto text not null default '';
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists quantidade_anterior integer not null default 0;
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists quantidade_nova integer not null default 0;
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists diferenca integer not null default 0;
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists tipo text not null default 'ajuste manual';
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists venda_id bigint;
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists usuario_id uuid;
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists observacao text not null default '';
+alter table public."MOVIMENTACOES_ESTOQUE" add column if not exists created_at timestamptz not null default now();
+
 create table if not exists public."DESPESAS" (
   id bigserial primary key,
   descricao text not null,
@@ -81,6 +111,16 @@ create table if not exists public."DESPESAS" (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public."DESPESAS" add column if not exists descricao text not null default '';
+alter table public."DESPESAS" add column if not exists categoria text not null default 'Outros';
+alter table public."DESPESAS" add column if not exists valor numeric(12, 2) not null default 0;
+alter table public."DESPESAS" add column if not exists data_despesa date not null default current_date;
+alter table public."DESPESAS" add column if not exists forma_pagamento text not null default 'Pix';
+alter table public."DESPESAS" add column if not exists observacao text not null default '';
+alter table public."DESPESAS" add column if not exists usuario_id uuid;
+alter table public."DESPESAS" add column if not exists created_at timestamptz not null default now();
+alter table public."DESPESAS" add column if not exists updated_at timestamptz not null default now();
 
 create table if not exists public."FECHAMENTOS_CAIXA" (
   id bigserial primary key,
@@ -95,6 +135,65 @@ create table if not exists public."FECHAMENTOS_CAIXA" (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public."FECHAMENTOS_CAIXA" add column if not exists data_fechamento date not null default current_date;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists faturamento numeric(12, 2) not null default 0;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists custo_produtos numeric(12, 2) not null default 0;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists despesas numeric(12, 2) not null default 0;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists lucro_bruto numeric(12, 2) not null default 0;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists lucro_liquido numeric(12, 2) not null default 0;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists observacao text not null default '';
+alter table public."FECHAMENTOS_CAIXA" add column if not exists usuario_id uuid;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists created_at timestamptz not null default now();
+alter table public."FECHAMENTOS_CAIXA" add column if not exists updated_at timestamptz not null default now();
+
+create index if not exists produtos_nome_idx on public."PRODUTOS" (nome);
+create index if not exists produtos_categoria_idx on public."PRODUTOS" (categoria);
+create index if not exists produtos_estoque_idx on public."PRODUTOS" (estoque);
+create index if not exists vendas_data_venda_idx on public."VENDAS" (data_venda desc);
+create index if not exists vendas_cancelada_idx on public."VENDAS" (cancelada);
+create index if not exists itens_venda_venda_id_idx on public."ITENS_VENDA" (venda_id);
+create index if not exists itens_venda_produto_id_idx on public."ITENS_VENDA" (produto_id);
+create index if not exists movimentacoes_estoque_produto_id_idx on public."MOVIMENTACOES_ESTOQUE" (produto_id);
+create index if not exists movimentacoes_estoque_created_at_idx on public."MOVIMENTACOES_ESTOQUE" (created_at desc);
+create index if not exists despesas_data_despesa_idx on public."DESPESAS" (data_despesa desc);
+create index if not exists fechamentos_caixa_data_idx on public."FECHAMENTOS_CAIXA" (data_fechamento desc);
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint constraint_info
+    join pg_attribute column_info
+      on column_info.attrelid = constraint_info.conrelid
+     and column_info.attnum = any(constraint_info.conkey)
+    where constraint_info.contype = 'f'
+      and constraint_info.conrelid = 'public."ITENS_VENDA"'::regclass
+      and constraint_info.confrelid = 'public."VENDAS"'::regclass
+      and column_info.attname = 'venda_id'
+  ) then
+    alter table public."ITENS_VENDA"
+    add constraint itens_venda_venda_id_fkey
+    foreign key (venda_id) references public."VENDAS"(id) on delete cascade;
+  end if;
+
+  if not exists (
+    select 1
+    from pg_constraint constraint_info
+    join pg_attribute column_info
+      on column_info.attrelid = constraint_info.conrelid
+     and column_info.attnum = any(constraint_info.conkey)
+    where constraint_info.contype = 'f'
+      and constraint_info.conrelid = 'public."MOVIMENTACOES_ESTOQUE"'::regclass
+      and constraint_info.confrelid = 'public."VENDAS"'::regclass
+      and column_info.attname = 'venda_id'
+  ) then
+    alter table public."MOVIMENTACOES_ESTOQUE"
+    add constraint movimentacoes_estoque_venda_id_fkey
+    foreign key (venda_id) references public."VENDAS"(id) on delete set null;
+  end if;
+end;
+$$;
 
 drop trigger if exists produtos_set_updated_at on public."PRODUTOS";
 create trigger produtos_set_updated_at
@@ -122,6 +221,32 @@ alter table public."ITENS_VENDA" enable row level security;
 alter table public."MOVIMENTACOES_ESTOQUE" enable row level security;
 alter table public."DESPESAS" enable row level security;
 alter table public."FECHAMENTOS_CAIXA" enable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select on public."PRODUTOS" to anon, authenticated;
+grant insert, update, delete on public."PRODUTOS" to authenticated;
+grant select, insert, update, delete on public."VENDAS" to authenticated;
+grant select, insert, update, delete on public."ITENS_VENDA" to authenticated;
+grant select, insert, update, delete on public."MOVIMENTACOES_ESTOQUE" to authenticated;
+grant select, insert, update, delete on public."DESPESAS" to authenticated;
+grant select, insert, update, delete on public."FECHAMENTOS_CAIXA" to authenticated;
+grant usage, select on all sequences in schema public to authenticated;
+
+drop policy if exists "PRODUTOS controle leitura autenticada" on public."PRODUTOS";
+drop policy if exists "PRODUTOS controle edicao autenticada" on public."PRODUTOS";
+
+create policy "PRODUTOS controle leitura autenticada"
+on public."PRODUTOS"
+for select
+to authenticated
+using (true);
+
+create policy "PRODUTOS controle edicao autenticada"
+on public."PRODUTOS"
+for update
+to authenticated
+using (true)
+with check (true);
 
 -- Remove politicas financeiras antigas abertas, se existirem.
 drop policy if exists "VENDAS leitura pelo site" on public."VENDAS";
@@ -197,3 +322,5 @@ create policy "FECHAMENTOS_CAIXA leitura autenticada" on public."FECHAMENTOS_CAI
 create policy "FECHAMENTOS_CAIXA inserir autenticado" on public."FECHAMENTOS_CAIXA" for insert to authenticated with check (true);
 create policy "FECHAMENTOS_CAIXA editar autenticado" on public."FECHAMENTOS_CAIXA" for update to authenticated using (true) with check (true);
 create policy "FECHAMENTOS_CAIXA excluir autenticado" on public."FECHAMENTOS_CAIXA" for delete to authenticated using (true);
+
+notify pgrst, 'reload schema';
