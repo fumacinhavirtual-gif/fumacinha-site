@@ -1361,27 +1361,12 @@ function getCartSummary() {
   return { items, count, normalTotal };
 }
 
-function getPublicProductImageUrl(product) {
-  const imageUrl = String(product?.imagem || "").trim();
-  if (!imageUrl || imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")) return "";
-
-  try {
-    const url = new URL(imageUrl);
-    const isHttp = url.protocol === "https:" || url.protocol === "http:";
-    const isLocal = ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname);
-    return isHttp && !isLocal ? url.href : "";
-  } catch {
-    return "";
-  }
-}
-
 function buildWhatsAppSendUrl(text) {
   return `https://api.whatsapp.com/send?phone=${settings.whatsapp}&text=${encodeURIComponent(text)}`;
 }
 
 function buildWhatsAppProductLines(items) {
   return items.flatMap((item, index) => {
-    const imageUrl = getPublicProductImageUrl(item.product);
     const lines = [
       index > 0 ? "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501" : "",
       "",
@@ -1392,7 +1377,6 @@ function buildWhatsAppProductLines(items) {
       `\u2022 Valor: ${currency.format(item.product.preco)}`,
     ];
 
-    if (imageUrl) lines.push("", "\uD83D\uDCF7 Foto:", imageUrl);
     lines.push("");
     return lines;
   });
