@@ -2805,6 +2805,10 @@ document.addEventListener("click", (event) => {
   if (event.target.closest("[data-open-benefit-editor]")) openBenefitEditor();
   if (event.target.closest("[data-open-site-editor]")) openSiteEditor();
   if (event.target.closest("[data-open-low-stock]")) openLowStockPanel();
+  if (event.target.closest("[data-open-sales-panel]")) {
+    closeAdminMobileMenu();
+    openSalesAccess();
+  }
   if (event.target.closest("[data-close-product-editor]")) closeEditorModal(productEditor);
   if (event.target === productEditor) closeEditorModal(productEditor);
   if (event.target.closest("[data-close-category-editor]")) closeEditorModal(categoryEditor);
