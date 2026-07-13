@@ -2733,8 +2733,8 @@ async function saveCategories(event) {
 }
 
 function setupWhatsAppDirectLinks() {
-  const text = "Olá, Fumacinha! Vim pelo site e gostaria de ver os produtos.";
-  const url = `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(text)}`;
+  const text = "Ol\u00e1, Fumacinha! Queria tirar uma d\u00favida.";
+  const url = `https://api.whatsapp.com/send/?phone=${settings.whatsapp}&text=${encodeURIComponent(text)}`;
   document.querySelectorAll("[data-whatsapp-direct]").forEach((link) => {
     link.href = url;
   });
