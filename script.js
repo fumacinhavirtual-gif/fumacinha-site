@@ -1190,7 +1190,7 @@ function renderCategories() {
   categoryRail.innerHTML = categories
     .map(
       (category) => `
-        <a class="category-button" href="#cat-${category.id}" data-category-scroll="${category.id}">
+        <a class="category-button ${category.id === state.activeCategory ? "active" : ""}" href="#cat-${category.id}" data-category-scroll="${category.id}">
           <span class="category-circle">
             ${
               category.imagem
@@ -2752,6 +2752,7 @@ document.addEventListener("click", (event) => {
   if (categoryLink) {
     event.preventDefault();
     state.activeCategory = categoryLink.dataset.categoryScroll;
+    renderCategories();
     renderProductsByCategory();
     document.querySelector(`#cat-${categoryLink.dataset.categoryScroll}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
