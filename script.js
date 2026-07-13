@@ -1542,6 +1542,7 @@ function openOrderConfirmation() {
   if (!items.length || !orderConfirmation) return;
   renderOrderSummary();
   if (orderError) orderError.textContent = "";
+  setOrderSubmitState(false);
   closeCart();
   orderConfirmation.classList.remove("hidden");
   orderConfirmation.setAttribute("aria-hidden", "false");
@@ -1554,7 +1555,21 @@ function closeOrderConfirmation() {
   orderConfirmation?.setAttribute("aria-hidden", "true");
   if (orderError) orderError.textContent = "";
   orderConfirmationForm?.querySelectorAll(".field-invalid").forEach((field) => field.classList.remove("field-invalid"));
+  setOrderSubmitState(false);
   document.body.classList.remove("no-scroll");
+}
+
+function setOrderSubmitState(isSubmitting) {
+  if (!orderConfirmationForm) return;
+  const submitButton = orderConfirmationForm.querySelector('button[type="submit"]');
+  orderConfirmationForm.dataset.submitting = isSubmitting ? "true" : "false";
+
+  if (submitButton) {
+    submitButton.dataset.defaultHtml = submitButton.dataset.defaultHtml || submitButton.innerHTML;
+    submitButton.disabled = isSubmitting;
+    submitButton.setAttribute("aria-busy", isSubmitting ? "true" : "false");
+    submitButton.innerHTML = isSubmitting ? "Abrindo WhatsApp..." : submitButton.dataset.defaultHtml;
+  }
 }
 
 function openPolicyModal(policyKey) {
@@ -2966,6 +2981,8 @@ editLoginForm?.addEventListener("submit", async (event) => {
 orderConfirmationForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   const form = event.currentTarget;
+  if (form.dataset.submitting === "true") return;
+
   const customer = {
     nome: form.elements.nome.value.trim(),
     bairro: form.elements.bairro.value.trim(),
@@ -2980,8 +2997,19 @@ orderConfirmationForm?.addEventListener("submit", (event) => {
   }
 
   if (orderError) orderError.textContent = "";
-  window.open(buildConfirmedWhatsAppUrlWithImages(customer), "_blank", "noopener,noreferrer");
-  closeOrderConfirmation();
+  const whatsappUrl = buildConfirmedWhatsAppUrlWithImages(customer);
+
+  try {
+    setOrderSubmitState(true);
+    window.location.assign(whatsappUrl);
+  } catch {
+    setOrderSubmitState(false);
+    if (orderError) orderError.textContent = "Não foi possível abrir o WhatsApp. Tente novamente.";
+  }
+});
+
+window.addEventListener("pageshow", () => {
+  setOrderSubmitState(false);
 });
 
 productEditorForm?.addEventListener("submit", saveProduct);
