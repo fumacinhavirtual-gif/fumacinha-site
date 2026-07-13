@@ -1379,12 +1379,16 @@ function buildWhatsAppProductLines(items) {
   return items.flatMap((item, index) => {
     const imageUrl = getPublicProductImageUrl(item.product);
     const lines = [
-      `${index + 1}. ${item.product.nome}`,
-      `Quantidade: ${item.quantity}`,
-      `Valor unitário: ${currency.format(item.product.preco)}`,
+      index > 0 ? "━━━━━━━━━━━━━━" : "",
+      "",
+      `🔹 *${item.product.nome}*`,
+      "",
+      `📦 Quantidade: ${item.quantity}`,
+      "",
+      `💵 Valor: ${currency.format(item.product.preco)}`,
     ];
 
-    if (imageUrl) lines.push(`Imagem: ${imageUrl}`);
+    if (imageUrl) lines.push("", "🖼️ Foto:", imageUrl);
     lines.push("");
     return lines;
   });
@@ -1450,13 +1454,20 @@ function buildConfirmedWhatsAppUrl(customer = {}) {
 function buildConfirmedWhatsAppUrlWithImages(customer = {}) {
   const { items, normalTotal } = getCartSummary();
   const lines = [
-    `Nome: ${customer.nome}`,
-    `Bairro: ${customer.bairro}`,
+    "📦 *Pedido Fumacinha*",
     "",
-    "Pedido:",
+    "━━━━━━━━━━━━━━",
     "",
     ...buildWhatsAppProductLines(items),
-    `Total: ${currency.format(normalTotal)} + Taxa de entrega: A combinar`,
+    "━━━━━━━━━━━━━━",
+    "",
+    `👤 *Nome:* ${customer.nome}`,
+    "",
+    `📍 *Bairro:* ${customer.bairro}`,
+    "",
+    `💰 *Valor do Pedido:* ${currency.format(normalTotal)}`,
+    "",
+    "🚚 *Entrega:* Taxa a combinar",
   ];
 
   return `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`;
