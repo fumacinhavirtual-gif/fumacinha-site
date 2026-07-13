@@ -56,7 +56,7 @@ Foram criados `supabase-dados-exemplo.sql` e `DADOS_TESTE_FUMACINHA.sql` para po
   - `Quantidade: 1`
   - `Valor unitario: R$ 129,90`
   - `Total: R$ 129,90 + Taxa de entrega: A combinar`
-- Termos removidos: nao apareceram `Pix`, `Parcelamento`, `Desconto`, `10x sem juros` ou `Cidade`
+- Itens removidos: nao apareceram `Pix`, `Parcelamento`, `Desconto`, `10x sem juros` ou `Cidade`
 - Numero antigo: nao encontrado no projeto nem na mensagem gerada
 - Conteudo visivel: vitrine validada com comunicacao propria da Fumacinha
 - Painel administrativo: abriu em `admin.html` com titulo `Painel Administrativo | Fumacinha`

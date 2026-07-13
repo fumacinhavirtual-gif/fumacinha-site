@@ -1523,10 +1523,16 @@ main {
   font-size: 1.05rem;
 }
 
+.policy-content p {
+  margin: 0 0 14px;
+  color: var(--ink);
+  line-height: 1.65;
+}
+
 .policy-content ul {
   display: grid;
   gap: 12px;
-  margin: 0;
+  margin: 0 0 16px;
   padding-left: 20px;
 }
 

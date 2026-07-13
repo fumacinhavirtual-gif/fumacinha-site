@@ -179,43 +179,32 @@ const policies = {
   entrega: {
     title: "Entrega",
     html: `
-      <h3>Política de entrega</h3>
+      <h3>Entrega</h3>
+      <p>A taxa de entrega é cobrada por quilômetro.</p>
+      <p>Todos os pedidos saem em rotas. Por isso, envie sua localização correta para evitar atrasos ou problemas na entrega.</p>
+      <p>Horários de saída das rotas:</p>
       <ul>
-        <li>O prazo de entrega passa a contar após a confirmação do pagamento.</li>
-        <li>São realizadas até 3 tentativas de entrega no endereço informado.</li>
-        <li>Confira as medidas do produto antes da compra para garantir passagem por portas, elevadores e corredores.</li>
-        <li>Podem ocorrer atrasos por fatores externos, como clima, transporte, disponibilidade logística ou restrições de acesso.</li>
-        <li>No recebimento, recuse produtos avariados, violados ou divergentes do pedido.</li>
+        <li>11:00</li>
+        <li>13:00</li>
+        <li>15:00</li>
+        <li>17:00</li>
+        <li>19:00</li>
+        <li>21:00</li>
       </ul>
+      <p>Quando o entregador estiver chegando com o seu pedido, ele enviará uma mensagem. Fique atento ao celular.</p>
+      <p>Após a chegada do entregador, há uma tolerância máxima de 5 minutos para o recebimento.</p>
+      <p>Se o pedido não for recebido dentro desse prazo, o entregador continuará a rota e retornará com o produto.</p>
+      <p>Para uma nova tentativa de entrega, será cobrada outra taxa, devido aos custos e ao tempo da nova rota.</p>
     `,
   },
   trocas: {
     title: "Trocas e Devolução",
     html: `
-      <h3>Política de trocas e devolução</h3>
-      <ul>
-        <li>O prazo para arrependimento da compra é de 7 dias corridos, conforme o Código de Defesa do Consumidor.</li>
-        <li>O produto deve retornar com todos os acessórios, embalagem quando aplicável e nota fiscal.</li>
-        <li>Trocas por defeito seguem as regras do CDC e dependem de avaliação técnica do produto.</li>
-        <li>O reembolso pode ser realizado conforme o meio de pagamento utilizado pela loja.</li>
-        <li>A análise de troca, devolução ou defeito pode levar até 30 dias.</li>
-      </ul>
-    `,
-  },
-  termos: {
-    title: "Termos e Condições",
-    html: `
-      <h3>Termos de uso da FUMACINHA</h3>
-      <ul>
-        <li>Ao comprar ou solicitar atendimento pelo site da FUMACINHA, o cliente declara estar de acordo com estes termos.</li>
-        <li>As imagens dos produtos são ilustrativas e podem apresentar pequenas variações de cor, acabamento ou proporção conforme tela, lote ou fornecedor.</li>
-        <li>Preços, disponibilidade, estoque e condições comerciais podem ser alterados sem aviso prévio.</li>
-        <li>Pedidos enviados pelo WhatsApp passam por confirmação de disponibilidade, pagamento, entrega e dados do cliente.</li>
-        <li>A FUMACINHA pode solicitar informações adicionais para concluir o atendimento, emitir nota fiscal ou combinar entrega.</li>
-        <li>O cliente é responsável por conferir medidas, local de entrega, acesso ao imóvel e compatibilidade do produto com o ambiente.</li>
-        <li>Garantias, trocas e devoluções seguem as regras informadas pela loja e a legislação brasileira aplicável.</li>
-        <li>O uso indevido do site, tentativa de fraude ou envio de informações falsas pode levar ao cancelamento do atendimento.</li>
-      </ul>
+      <h3>Trocas e Devolução</h3>
+      <p>Ao receber o pedido, peça ao entregador que aguarde enquanto você testa o produto.</p>
+      <p>Caso o produto não funcione, o entregador poderá realizar a troca no mesmo momento.</p>
+      <p>Se o produto não for testado no momento da entrega, será necessário pagar uma nova taxa para que o entregador faça a troca no próximo horário de saída.</p>
+      <p>Por isso, é muito importante testar o produto na hora do recebimento, evitando transtornos e custos adicionais.</p>
     `,
   },
 };
