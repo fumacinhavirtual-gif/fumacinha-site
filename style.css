@@ -938,8 +938,20 @@ main {
 
 .back-link {
   margin-bottom: 24px;
-  color: var(--green-dark);
-  background: var(--soft);
+  color: var(--white);
+  background: #e53935;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.back-link:hover,
+.back-link:focus-visible {
+  color: var(--white);
+  background: #c62828;
+  box-shadow: 0 14px 34px rgba(229, 57, 53, 0.24);
+}
+
+.back-link:active {
+  background: #b71c1c;
 }
 
 .product-detail {
