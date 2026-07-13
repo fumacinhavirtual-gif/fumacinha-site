@@ -1379,16 +1379,16 @@ function buildWhatsAppProductLines(items) {
   return items.flatMap((item, index) => {
     const imageUrl = getPublicProductImageUrl(item.product);
     const lines = [
-      index > 0 ? "━━━━━━━━━━━━━━" : "",
+      index > 0 ? "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501" : "",
       "",
-      `🔹 *${item.product.nome}*`,
+      `*${index + 1}. ${item.product.nome}*`,
       "",
-      `📦 Quantidade: ${item.quantity}`,
+      `\u2022 Quantidade: ${item.quantity}`,
       "",
-      `💵 Valor: ${currency.format(item.product.preco)}`,
+      `\u2022 Valor: ${currency.format(item.product.preco)}`,
     ];
 
-    if (imageUrl) lines.push("", "🖼️ Foto:", imageUrl);
+    if (imageUrl) lines.push("", "\u{1F4F7} Foto:", imageUrl);
     lines.push("");
     return lines;
   });
@@ -1454,20 +1454,24 @@ function buildConfirmedWhatsAppUrl(customer = {}) {
 function buildConfirmedWhatsAppUrlWithImages(customer = {}) {
   const { items, normalTotal } = getCartSummary();
   const lines = [
-    "📦 *Pedido Fumacinha*",
+    "\u{1F4E6} *Pedido Fumacinha*",
     "",
-    "━━━━━━━━━━━━━━",
+    "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
     "",
     ...buildWhatsAppProductLines(items),
-    "━━━━━━━━━━━━━━",
+    "\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501",
     "",
-    `👤 *Nome:* ${customer.nome}`,
+    "\u{1F464} *Cliente:*",
+    customer.nome,
     "",
-    `📍 *Bairro:* ${customer.bairro}`,
+    "\u{1F4CD} *Bairro:*",
+    customer.bairro,
     "",
-    `💰 *Valor do Pedido:* ${currency.format(normalTotal)}`,
+    "\u{1F4B0} *Valor do Pedido:*",
+    currency.format(normalTotal),
     "",
-    "🚚 *Entrega:* Taxa a combinar",
+    "\u{1F69A} *Entrega:*",
+    "Taxa a combinar",
   ];
 
   return `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`;
