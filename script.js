@@ -1368,8 +1368,8 @@ function getPublicProductImageUrl(product) {
   try {
     const url = new URL(imageUrl);
     const isHttp = url.protocol === "https:" || url.protocol === "http:";
-    const isSupabaseStorage = url.hostname.includes("supabase.co") && url.pathname.includes("/storage/v1/object/public/");
-    return isHttp && isSupabaseStorage ? url.href : "";
+    const isLocal = ["localhost", "127.0.0.1", "0.0.0.0"].includes(url.hostname);
+    return isHttp && !isLocal ? url.href : "";
   } catch {
     return "";
   }
