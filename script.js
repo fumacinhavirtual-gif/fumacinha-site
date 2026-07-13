@@ -1813,13 +1813,7 @@ async function enableSalesMode() {
 }
 
 async function openSalesAccess() {
-  const user = await getAuthenticatedUser(null);
-  if (user) {
-    await enableSalesMode();
-    return;
-  }
-
-  openSalesLogin();
+  window.location.assign("./controle.html");
 }
 
 function disableSalesMode() {

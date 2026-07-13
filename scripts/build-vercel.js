@@ -26,15 +26,32 @@ function copyRecursive(source, target) {
 }
 
 function stampAssetVersion() {
-  const indexPath = path.join(dist, "index.html");
   const versionSource = process.env.VERCEL_GIT_COMMIT_SHA || process.env.VERCEL_DEPLOYMENT_ID || String(Date.now());
   const version = versionSource.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 24);
-  const html = fs.readFileSync(indexPath, "utf8");
-  const stamped = html
-    .replace(/\.\/style\.css(?:\?v=[^"]*)?/g, `./style.css?v=${version}`)
-    .replace(/\.\/script\.js(?:\?v=[^"]*)?/g, `./script.js?v=${version}`);
+  const files = [
+    {
+      file: "index.html",
+      replacements: [
+        [/\.\/style\.css(?:\?v=[^"]*)?/g, `./style.css?v=${version}`],
+        [/\.\/script\.js(?:\?v=[^"]*)?/g, `./script.js?v=${version}`],
+      ],
+    },
+    {
+      file: "controle.html",
+      replacements: [
+        [/\.\/controle\.css(?:\?v=[^"]*)?/g, `./controle.css?v=${version}`],
+        [/\.\/controle\.js(?:\?v=[^"]*)?/g, `./controle.js?v=${version}`],
+      ],
+    },
+  ];
 
-  fs.writeFileSync(indexPath, stamped);
+  files.forEach(({ file, replacements }) => {
+    const filePath = path.join(dist, file);
+    if (!fs.existsSync(filePath)) return;
+    const html = fs.readFileSync(filePath, "utf8");
+    const stamped = replacements.reduce((content, [pattern, replacement]) => content.replace(pattern, replacement), html);
+    fs.writeFileSync(filePath, stamped);
+  });
 }
 
 fs.rmSync(dist, { recursive: true, force: true });

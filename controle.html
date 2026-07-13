@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#111111" />
+    <meta name="robots" content="noindex,nofollow" />
+    <title>Fumacinha Controle</title>
+    <link rel="manifest" href="./controle.webmanifest" />
+    <link rel="apple-touch-icon" href="./assets/fumacinha-logo.png" />
+    <link rel="stylesheet" href="./controle.css" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="./supabase-config.js"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="login-view" data-login-view>
+        <div class="login-card">
+          <img src="./assets/fumacinha-logo.png" alt="Fumacinha" />
+          <p class="eyebrow">Controle interno</p>
+          <h1>Fumacinha Controle</h1>
+          <form data-login-form>
+            <label>
+              E-mail
+              <input type="email" name="email" autocomplete="email" required />
+            </label>
+            <label>
+              Senha
+              <input type="password" name="password" autocomplete="current-password" required />
+            </label>
+            <p class="form-status" data-login-status></p>
+            <button class="primary-action" type="submit">Entrar</button>
+          </form>
+        </div>
+      </section>
+
+      <section class="control-view hidden" data-control-view>
+        <header class="control-header">
+          <div>
+            <p class="eyebrow">Fumacinha</p>
+            <h1>Controle da loja</h1>
+          </div>
+          <button class="ghost-action" type="button" data-refresh>Atualizar</button>
+        </header>
+
+        <nav class="period-tabs" aria-label="Filtros de periodo">
+          <button type="button" data-period="today" class="active">Hoje</button>
+          <button type="button" data-period="yesterday">Ontem</button>
+          <button type="button" data-period="last7">Ultimos 7 dias</button>
+          <button type="button" data-period="month">Mes atual</button>
+          <button type="button" data-period="custom">Personalizado</button>
+        </nav>
+
+        <div class="custom-period hidden" data-custom-period>
+          <label>Inicio <input type="date" data-date-start /></label>
+          <label>Fim <input type="date" data-date-end /></label>
+        </div>
+
+        <p class="app-status" data-app-status></p>
+
+        <section class="tab-panel" data-panel="home">
+          <div class="kpi-grid">
+            <article><span>Vendas de hoje</span><strong data-kpi-sales-today>0</strong></article>
+            <article><span>Faturamento de hoje</span><strong data-kpi-revenue-today>R$ 0,00</strong></article>
+            <article><span>Ticket medio</span><strong data-kpi-ticket>R$ 0,00</strong></article>
+            <article><span>Lucro estimado</span><strong data-kpi-profit>R$ 0,00</strong></article>
+            <article><span>Quantidade de vendas</span><strong data-kpi-sales-count>0</strong></article>
+            <article><span>Estoque baixo</span><strong data-kpi-low-stock>0</strong></article>
+          </div>
+
+          <div class="report-grid">
+            <section>
+              <h2>Produtos mais vendidos</h2>
+              <div data-report-top-products></div>
+            </section>
+            <section>
+              <h2>Faturamento</h2>
+              <div data-report-revenue></div>
+            </section>
+          </div>
+        </section>
+
+        <section class="tab-panel hidden" data-panel="sales">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Vendas</p>
+              <h2>Registrar venda manual</h2>
+            </div>
+            <button class="ghost-action" type="button" data-add-sale-item>Adicionar produto</button>
+          </div>
+
+          <form class="panel-card" data-sale-form>
+            <div class="sale-items" data-sale-items></div>
+            <div class="form-grid">
+              <label>Desconto <input type="number" name="desconto" min="0" step="0.01" value="0" /></label>
+              <label>
+                Forma de pagamento
+                <select name="forma_pagamento">
+                  <option value="Pix">Pix</option>
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="Cartao">Cartao</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </label>
+              <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
+              <label>Data e hora <input type="datetime-local" name="data_venda" /></label>
+            </div>
+            <label>Observacao <textarea name="observacao" rows="3"></textarea></label>
+            <div class="form-footer">
+              <strong data-sale-total>Total: R$ 0,00</strong>
+              <button class="primary-action" type="submit">Registrar venda</button>
+            </div>
+          </form>
+
+          <section class="panel-card">
+            <h2>Historico de vendas</h2>
+            <div data-sales-history></div>
+          </section>
+        </section>
+
+        <section class="tab-panel hidden" data-panel="stock">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Estoque</p>
+              <h2>Produtos e movimentacoes</h2>
+            </div>
+          </div>
+          <div class="stock-filters">
+            <input type="search" data-stock-search placeholder="Buscar por nome" />
+            <select data-stock-category></select>
+            <select data-stock-filter>
+              <option value="all">Todos</option>
+              <option value="low">Estoque baixo</option>
+            </select>
+            <select data-stock-sort>
+              <option value="name">Nome</option>
+              <option value="stock-asc">Menor quantidade</option>
+              <option value="stock-desc">Maior quantidade</option>
+            </select>
+          </div>
+          <div class="stock-list" data-stock-list></div>
+          <section class="panel-card">
+            <h2>Historico de estoque</h2>
+            <div data-stock-history></div>
+          </section>
+        </section>
+
+        <section class="tab-panel hidden" data-panel="finance">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Financeiro</p>
+              <h2>Entradas, despesas e lucro</h2>
+            </div>
+          </div>
+          <div class="finance-grid">
+            <article><span>Faturamento</span><strong data-finance-revenue>R$ 0,00</strong></article>
+            <article><span>Custo dos produtos</span><strong data-finance-cost>R$ 0,00</strong></article>
+            <article><span>Lucro bruto</span><strong data-finance-gross>R$ 0,00</strong></article>
+            <article><span>Despesas</span><strong data-finance-expenses>R$ 0,00</strong></article>
+            <article><span>Lucro liquido</span><strong data-finance-net>R$ 0,00</strong></article>
+          </div>
+
+          <form class="panel-card" data-expense-form>
+            <h2>Registrar despesa</h2>
+            <div class="form-grid">
+              <label>Descricao <input type="text" name="descricao" required /></label>
+              <label>
+                Categoria
+                <select name="categoria">
+                  <option>Frete</option>
+                  <option>Fornecedor</option>
+                  <option>Aluguel</option>
+                  <option>Energia</option>
+                  <option>Internet</option>
+                  <option>Funcionario</option>
+                  <option>Manutencao</option>
+                  <option>Impostos</option>
+                  <option>Outros</option>
+                </select>
+              </label>
+              <label>Valor <input type="number" name="valor" min="0.01" step="0.01" required /></label>
+              <label>Data <input type="date" name="data_despesa" required /></label>
+              <label>
+                Forma de pagamento
+                <select name="forma_pagamento">
+                  <option>Pix</option>
+                  <option>Dinheiro</option>
+                  <option>Cartao</option>
+                  <option>Outros</option>
+                </select>
+              </label>
+            </div>
+            <label>Observacao <textarea name="observacao" rows="3"></textarea></label>
+            <button class="primary-action" type="submit">Salvar despesa</button>
+          </form>
+
+          <section class="panel-card">
+            <h2>Despesas</h2>
+            <div data-expense-list></div>
+          </section>
+        </section>
+
+        <section class="tab-panel hidden" data-panel="more">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Relatorios</p>
+              <h2>Indicadores da loja</h2>
+            </div>
+          </div>
+          <div class="report-grid">
+            <section><h2>Menos vendidos</h2><div data-report-low-products></div></section>
+            <section><h2>Sem venda</h2><div data-report-no-sales></div></section>
+            <section><h2>Estoque baixo</h2><div data-report-low-stock></div></section>
+            <section><h2>Pagamento</h2><div data-report-payments></div></section>
+            <section><h2>Lucro por produto</h2><div data-report-profit-product></div></section>
+            <section><h2>Valor total do estoque</h2><div data-report-stock-value></div></section>
+          </div>
+          <button class="danger-action" type="button" data-logout>Sair</button>
+        </section>
+      </section>
+    </main>
+
+    <nav class="bottom-nav hidden" data-bottom-nav aria-label="Navegacao do controle">
+      <button type="button" data-tab="home" class="active">Inicio</button>
+      <button type="button" data-tab="sales">Vendas</button>
+      <button type="button" data-tab="stock">Estoque</button>
+      <button type="button" data-tab="finance">Financeiro</button>
+      <button type="button" data-tab="more">Mais</button>
+    </nav>
+
+    <script src="./controle.js"></script>
+  </body>
+</html>
