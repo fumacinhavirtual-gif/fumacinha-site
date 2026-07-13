@@ -1361,6 +1361,35 @@ function getCartSummary() {
   return { items, count, normalTotal };
 }
 
+function getPublicProductImageUrl(product) {
+  const imageUrl = String(product?.imagem || "").trim();
+  if (!imageUrl || imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")) return "";
+
+  try {
+    const url = new URL(imageUrl);
+    const isHttp = url.protocol === "https:" || url.protocol === "http:";
+    const isSupabaseStorage = url.hostname.includes("supabase.co") && url.pathname.includes("/storage/v1/object/public/");
+    return isHttp && isSupabaseStorage ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function buildWhatsAppProductLines(items) {
+  return items.flatMap((item, index) => {
+    const imageUrl = getPublicProductImageUrl(item.product);
+    const lines = [
+      `${index + 1}. ${item.product.nome}`,
+      `Quantidade: ${item.quantity}`,
+      `Valor unitário: ${currency.format(item.product.preco)}`,
+    ];
+
+    if (imageUrl) lines.push(`Imagem: ${imageUrl}`);
+    lines.push("");
+    return lines;
+  });
+}
+
 function syncCartWithProducts() {
   if (!state.cart.size) {
     renderCart();
@@ -1412,6 +1441,21 @@ function buildConfirmedWhatsAppUrl(customer = {}) {
     "",
     "Pedido:",
     ...productLines,
+    `Total: ${currency.format(normalTotal)} + Taxa de entrega: A combinar`,
+  ];
+
+  return `https://wa.me/${settings.whatsapp}?text=${encodeURIComponent(lines.join("\n"))}`;
+}
+
+function buildConfirmedWhatsAppUrlWithImages(customer = {}) {
+  const { items, normalTotal } = getCartSummary();
+  const lines = [
+    `Nome: ${customer.nome}`,
+    `Bairro: ${customer.bairro}`,
+    "",
+    "Pedido:",
+    "",
+    ...buildWhatsAppProductLines(items),
     `Total: ${currency.format(normalTotal)} + Taxa de entrega: A combinar`,
   ];
 
@@ -2943,7 +2987,7 @@ orderConfirmationForm?.addEventListener("submit", (event) => {
   }
 
   if (orderError) orderError.textContent = "";
-  window.open(buildConfirmedWhatsAppUrl(customer), "_blank", "noopener,noreferrer");
+  window.open(buildConfirmedWhatsAppUrlWithImages(customer), "_blank", "noopener,noreferrer");
   closeOrderConfirmation();
 });
 
