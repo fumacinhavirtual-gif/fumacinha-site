@@ -1280,7 +1280,6 @@ function showProduct(productId) {
       <div class="product-info">
         <span class="category">${product.categoria}</span>
         <h1>${product.nome}</h1>
-        <span class="availability">Disponivel</span>
         <div class="price-block detail-prices">
           <strong class="normal-price large">${currency.format(product.preco)}</strong>
         </div>
