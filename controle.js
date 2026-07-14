@@ -50,7 +50,7 @@ const app = {
   stockSearch: "",
   stockCategory: "all",
   stockFilter: "all",
-  stockSort: "name",
+  stockSort: "filter",
   user: null,
 };
 
@@ -1024,8 +1024,16 @@ function stockProducts() {
     .sort((a, b) => {
       if (app.stockSort === "stock-asc") return toNumber(a.estoque) - toNumber(b.estoque);
       if (app.stockSort === "stock-desc") return toNumber(b.estoque) - toNumber(a.estoque);
-      return a.nome.localeCompare(b.nome);
+      return 0;
     });
+}
+
+function stockLevelClass(stock) {
+  const quantity = toNumber(stock);
+  if (quantity <= 0) return "estoque-zero";
+  if (quantity <= 5) return "estoque-baixo";
+  if (quantity <= 10) return "estoque-medio";
+  return "estoque-alto";
 }
 
 function renderStock() {
@@ -1037,7 +1045,7 @@ function renderStock() {
       <div>
         <h3>${escapeHtml(product.nome)}</h3>
         <small>${escapeHtml(product.categoria || "Produtos")}</small>
-        <p>Estoque atual: <strong>${toNumber(product.estoque)}</strong></p>
+        <p>Estoque atual: <strong class="${stockLevelClass(product.estoque)}">${toNumber(product.estoque)}</strong></p>
         <p>Custo: ${currency.format(productCost(product))} | Venda: ${currency.format(product.preco)}</p>
       </div>
       <div class="stock-actions">

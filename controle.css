@@ -546,6 +546,22 @@ textarea {
   font-weight: 800;
 }
 
+.estoque-zero {
+  color: #d32f2f;
+}
+
+.estoque-baixo {
+  color: #1565c0;
+}
+
+.estoque-medio {
+  color: #198754;
+}
+
+.estoque-alto {
+  color: #1f2937;
+}
+
 .stock-actions {
   grid-column: 1 / -1;
   display: grid;
