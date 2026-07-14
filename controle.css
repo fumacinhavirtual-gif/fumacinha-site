@@ -564,21 +564,90 @@ textarea {
 
 .stock-actions {
   grid-column: 1 / -1;
-  display: grid;
-  grid-template-columns: 48px 48px 1fr;
-  gap: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
-.stock-actions button {
-  min-height: 44px;
+.stock-quantity-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  flex: 0 0 auto;
+}
+
+.stock-row .stock-quantity-input {
+  width: 72px;
+  min-width: 72px;
+  max-width: 72px;
+  height: 42px;
+  min-height: 42px;
+  flex: 0 0 72px;
+  padding: 0 8px;
+  text-align: center;
+}
+
+.stock-minus,
+.stock-plus {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  flex: 0 0 42px;
   border: 0;
   border-radius: 12px;
   background: var(--soft);
   font-weight: 900;
 }
 
-.stock-save {
-  grid-column: 1 / -1;
+.stock-save-button {
+  min-height: 42px;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 18px;
+  color: #ffffff;
+  background: #198754;
+  font-weight: 700;
+  cursor: pointer;
+  opacity: 1;
+}
+
+.stock-save-button:hover {
+  background: #157347;
+}
+
+.stock-save-button:disabled {
+  color: #ffffff;
+  background: #a7cdb6;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+@media (max-width: 767px) {
+  .stock-actions {
+    align-items: stretch;
+  }
+
+  .stock-row .stock-quantity-input {
+    width: 64px;
+    min-width: 64px;
+    max-width: 64px;
+    flex-basis: 64px;
+  }
+
+  .stock-minus,
+  .stock-plus {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    flex-basis: 44px;
+  }
+
+  .stock-save-button {
+    width: 100%;
+  }
 }
 
 .report-grid {
@@ -716,8 +785,7 @@ textarea {
     height: 88px;
   }
 
-  .stock-actions,
-  .stock-save {
+  .stock-actions {
     grid-column: auto;
   }
 

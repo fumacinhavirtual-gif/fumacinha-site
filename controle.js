@@ -1049,18 +1049,12 @@ function renderStock() {
         <p>Custo: ${currency.format(productCost(product))} | Venda: ${currency.format(product.preco)}</p>
       </div>
       <div class="stock-actions">
-        <button type="button" data-stock-minus="${product.id}">-</button>
-        <button type="button" data-stock-plus="${product.id}">+</button>
-        <input type="number" min="0" step="1" value="${toNumber(product.estoque)}" data-stock-value="${product.id}" />
-        <select data-stock-type="${product.id}">
-          <option>entrada de mercadoria</option>
-          <option>ajuste manual</option>
-          <option>perda</option>
-          <option>avaria</option>
-          <option>devolucao</option>
-          <option>cancelamento</option>
-        </select>
-        <button class="primary-action stock-save" type="button" data-stock-save="${product.id}">Salvar</button>
+        <div class="stock-quantity-control">
+          <button class="stock-minus" type="button" data-stock-minus="${product.id}">−</button>
+          <input class="stock-quantity-input" type="number" min="0" step="1" value="${toNumber(product.estoque)}" data-stock-value="${product.id}" data-stock-original="${toNumber(product.estoque)}" />
+          <button class="stock-plus" type="button" data-stock-plus="${product.id}">+</button>
+        </div>
+        <button class="stock-save-button" type="button" data-stock-save="${product.id}" disabled>Salvar estoque</button>
       </div>
     </article>
   `).join("");
@@ -1083,15 +1077,32 @@ function renderStockHistory() {
 async function saveStock(productId) {
   const product = app.products.find((item) => String(item.id) === String(productId));
   const input = $(`[data-stock-value="${productId}"]`);
-  const type = $(`[data-stock-type="${productId}"]`)?.value || "ajuste manual";
+  const button = $(`[data-stock-save="${productId}"]`);
   if (!product || !input) return;
   try {
-    await updateProductStock(product, toNumber(input.value), type);
+    if (button) {
+      button.disabled = true;
+      button.textContent = "Salvando...";
+    }
+    await updateProductStock(product, toNumber(input.value), "ajuste manual");
     setStatus("Estoque atualizado.", "success");
     await loadAll();
   } catch (error) {
     setStatus(error.message || "Erro ao atualizar estoque.", "error");
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Salvar estoque";
+    }
   }
+}
+
+function updateStockSaveState(productId) {
+  const input = $(`[data-stock-value="${productId}"]`);
+  const button = $(`[data-stock-save="${productId}"]`);
+  if (!input || !button) return;
+  const changed = toNumber(input.value) !== toNumber(input.dataset.stockOriginal);
+  button.disabled = !changed;
+  button.textContent = "Salvar estoque";
 }
 
 function renderFinance() {
@@ -1845,11 +1856,13 @@ document.addEventListener("click", async (event) => {
   if (plus) {
     const input = $(`[data-stock-value="${plus.dataset.stockPlus}"]`);
     if (input) input.value = toNumber(input.value) + 1;
+    updateStockSaveState(plus.dataset.stockPlus);
   }
   const minus = event.target.closest("[data-stock-minus]");
   if (minus) {
     const input = $(`[data-stock-value="${minus.dataset.stockMinus}"]`);
     if (input) input.value = Math.max(0, toNumber(input.value) - 1);
+    updateStockSaveState(minus.dataset.stockMinus);
   }
   const save = event.target.closest("[data-stock-save]");
   if (save) saveStock(save.dataset.stockSave);
@@ -1900,6 +1913,7 @@ document.addEventListener("input", (event) => {
     app.delivererSearch = event.target.value;
     renderTeamLists();
   }
+  if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
   if (event.target.closest("[data-cash-form]")) {
     app.cashEditing = true;
     updateCashPreview();
