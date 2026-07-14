@@ -108,8 +108,8 @@
               </label>
               <label>Vendedora <select name="vendedora_id" required data-seller-select></select></label>
               <label>Entregador <select name="entregador_id" data-deliverer-select></select></label>
-              <label data-sale-delivery-fee>Taxa de entrega <input type="text" name="taxa_entrega" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
-              <label data-sale-cash-only>Valor pago pelo cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <input type="hidden" name="taxa_entrega" value="0" />
+              <label>Valor pago pelo cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
               <label data-sale-cash-only>
                 Teve troco?
                 <select name="teve_troco">
@@ -131,13 +131,13 @@
                 </select>
               </label>
               <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
-              <label>Data e hora <input type="datetime-local" name="data_venda" /></label>
             </div>
             <div class="sale-summary-grid">
               <article><span>Valor dos produtos</span><strong data-sale-products>R$ 0,00</strong></article>
-              <article data-sale-cash-only><span>Valor pago pelo cliente</span><strong data-sale-received>R$ 0,00</strong></article>
+              <article><span>Valor pago pelo cliente</span><strong data-sale-received>R$ 0,00</strong></article>
               <article data-sale-cash-only><span>Troco entregue</span><strong data-sale-change>R$ 0,00</strong></article>
               <article><span>Taxa do entregador</span><strong data-sale-delivery>R$ 0,00</strong></article>
+              <article><span>Forma de pagamento</span><strong data-sale-payment>Pix</strong></article>
               <article><span>Valor liquido dos produtos</span><strong data-sale-net-products>R$ 0,00</strong></article>
               <article><span>Entrega</span><strong data-sale-route-summary>Hoje</strong></article>
               <article class="wide"><span>Comissao da vendedora nesta venda</span><strong data-sale-commission>R$ 0,50</strong></article>

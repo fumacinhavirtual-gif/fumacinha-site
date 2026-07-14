@@ -336,7 +336,7 @@ async function loadAll() {
   setStatus("Carregando controle...", "loading");
   const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
-    supabaseClient.from(TABLES.sales).select("*").order("data_venda", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.stockMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.expenses).select("*").order("data_despesa", { ascending: false }).limit(500),
@@ -546,12 +546,12 @@ function currentSaleDraft() {
   const paidInput = saleForm?.elements.valor_recebido;
   const changeInput = saleForm?.elements.troco;
   const deliveryInput = saleForm?.elements.taxa_entrega;
-  if (cash && paidInput && !app.saleReceivedTouched && productsValue > 0) {
+  if (paidInput && !app.saleReceivedTouched && productsValue > 0) {
     paidInput.value = productsValue.toFixed(2).replace(".", ",");
   }
-  const paidValue = cash ? parseMoney(paidInput?.value) : productsValue + Math.max(0, parseMoney(deliveryInput?.value));
+  const paidValue = parseMoney(paidInput?.value);
   const changeValue = cash && hasChange ? parseMoney(changeInput?.value) : 0;
-  const deliveryValue = cash ? paidValue - productsValue - changeValue : Math.max(0, parseMoney(deliveryInput?.value));
+  const deliveryValue = paidValue - productsValue - changeValue;
   const totalSale = productsValue + Math.max(0, deliveryValue);
   return {
     productsValue,
@@ -577,20 +577,22 @@ function updateSaleTotal() {
   const deliveryInput = saleForm?.elements.taxa_entrega;
   const changeInput = saleForm?.elements.troco;
   if (deliveryInput) {
-    deliveryInput.readOnly = draft.cash;
+    deliveryInput.readOnly = true;
     if (draft.cash) deliveryInput.value = Math.max(0, draft.deliveryValue).toFixed(2).replace(".", ",");
+    else deliveryInput.value = Math.max(0, draft.deliveryValue).toFixed(2).replace(".", ",");
   }
   if (changeInput && !draft.hasChange) changeInput.value = "";
   const commission = commissionForPayment(draft.payment);
-  const receivedInvalid = draft.cash && app.saleReceivedTouched && draft.paidValue < draft.productsValue;
+  const receivedInvalid = app.saleReceivedTouched && draft.paidValue < draft.productsValue;
   const changeInvalid = draft.cash && draft.hasChange && (!String(changeInput?.value || "").trim() || draft.changeValue < 0);
-  const deliveryInvalid = draft.cash && draft.deliveryValue < 0;
+  const deliveryInvalid = draft.deliveryValue < 0;
 
   $("[data-sale-products]").textContent = currency.format(draft.productsValue);
   $("[data-sale-received]").textContent = currency.format(draft.paidValue);
   $("[data-sale-delivery]").textContent = currency.format(Math.max(0, draft.deliveryValue));
   $("[data-sale-net-products]").textContent = currency.format(draft.productsValue);
   $("[data-sale-change]").textContent = currency.format(draft.changeValue);
+  $("[data-sale-payment]").textContent = draft.payment;
   $("[data-sale-commission]").textContent = currency.format(commission.total);
   $("[data-sale-route-summary]").textContent = `${formatDateBR(draft.routeDate)} as ${draft.routeTime}`;
   $$("[data-sale-cash-only]").forEach((element) => element.classList.toggle("hidden", !draft.cash));
@@ -671,14 +673,14 @@ async function registerSale(event) {
     const draft = currentSaleDraft();
     const productsValue = Math.max(0, subtotal - discount);
     if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
-    if (draft.cash && draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
+    if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
     if (draft.cash && draft.hasChange && !String(saleForm.elements.troco.value || "").trim()) throw new Error("Informe o valor do troco entregue.");
     if (draft.cash && draft.changeValue < 0) throw new Error("Troco nao pode ser negativo.");
     if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
     const deliveryValue = Math.max(0, draft.deliveryValue);
     const totalSale = draft.productsValue + deliveryValue;
     const paymentLabel = draft.payment;
-    const deliveredValue = draft.cash ? draft.paidValue : totalSale;
+    const deliveredValue = draft.paidValue;
     const changeValue = draft.cash && draft.hasChange ? draft.changeValue : 0;
     const commission = commissionForPayment(paymentLabel);
     const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
@@ -711,7 +713,6 @@ async function registerSale(event) {
       comissao_total: commission.total,
       cliente_nome: saleForm.elements.cliente.value.trim(),
       observacao: saleForm.elements.observacao.value.trim(),
-      data_venda: routeDateTime,
       data_entrega: draft.routeDate,
       horario_rota: draft.routeTime,
       rota_data_hora: routeDateTime,
@@ -752,7 +753,6 @@ async function registerSale(event) {
     if (deliverer) localStorage.setItem(LAST_DELIVERER_KEY, String(deliverer.id));
     else localStorage.removeItem(LAST_DELIVERER_KEY);
     saleForm.reset();
-    saleForm.elements.data_venda.value = localDateTimeValue();
     saleForm.elements.desconto.value = "0";
     saleForm.elements.valor_recebido.value = "";
     saleForm.elements.troco.value = "";
@@ -766,7 +766,8 @@ async function registerSale(event) {
     updateSaleItemPrices();
     updateSaleTotal();
     await loadAll();
-    const successMessage = `Venda registrada com sucesso. ID ${sale.id} | Total ${currency.format(totalSale)} | ${paymentLabel} | Estoque atualizado.`;
+    const registeredAt = new Date(sale.created_at || Date.now()).toLocaleString("pt-BR");
+    const successMessage = `Venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`;
     setStatus(successMessage, "success");
     if (saleSuccess) {
       saleSuccess.textContent = successMessage;
@@ -814,7 +815,9 @@ function renderSalesHistory() {
     ? app.sales.slice(0, 40).map((sale) => `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
         <strong>${escapeHtml(sale.nome_produto || "Venda")}</strong>
-        <span>${new Date(sale.data_venda || sale.created_at).toLocaleString("pt-BR")} - Produtos ${currency.format(saleTotal(sale))}</span>
+        <span>Venda registrada em: ${new Date(sale.created_at || sale.data_venda || Date.now()).toLocaleString("pt-BR")}</span>
+        <span>Entrega prevista: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}</span>
+        <span>Produtos ${currency.format(saleTotal(sale))} | Valor pago ${currency.format(saleDeliveredValue(sale))}</span>
         <span>Total ${currency.format(saleGrandTotal(sale))} | Entrega ${currency.format(saleDelivery(sale))}</span>
         ${isCashPayment(sale.forma_pagamento) ? `<span>Entregue ${currency.format(saleDeliveredValue(sale))} | Troco ${currency.format(saleChangeValue(sale))}</span>` : ""}
         <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")} | ${escapeHtml(sale.vendedora_nome || "Vendedora nao informada")} ${sale.cancelada ? "- Cancelada" : ""}</span>
@@ -1664,8 +1667,6 @@ function initDefaults() {
   app.routesDate = localDateValue();
   if (cashDateInput) cashDateInput.value = app.cashDate;
   if (routesDateInput) routesDateInput.value = app.routesDate;
-  const saleDateInput = saleForm?.elements.data_venda;
-  if (saleDateInput) saleDateInput.value = localDateTimeValue();
   setSuggestedDeliveryRoute();
   if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "";
   if (saleForm?.elements.taxa_entrega) saleForm.elements.taxa_entrega.value = "";
