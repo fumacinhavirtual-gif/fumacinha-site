@@ -259,10 +259,29 @@
 
             <div class="form-grid">
               <label>Data do fechamento <input type="date" data-cash-date /></label>
-              <button class="ghost-action" type="button" data-use-previous-change>Usar troco de ontem</button>
             </div>
 
             <div class="cash-status" data-cash-status></div>
+
+            <section class="change-box-panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Troco do caixa</p>
+                  <h2>Saldo atual de troco</h2>
+                </div>
+              </div>
+              <div class="cash-grid">
+                <article class="change-current"><span>Saldo atual disponivel</span><strong data-change-current>R$ 0,00</strong></article>
+                <article><span>Saldo inicial do dia</span><strong data-change-initial>R$ 0,00</strong></article>
+                <article><span>Troco usado automaticamente</span><strong data-change-used>R$ 0,00</strong></article>
+                <article><span>Troco adicionado</span><strong data-change-added>R$ 0,00</strong></article>
+                <article><span>Ajustado hoje</span><strong data-change-adjusted>R$ 0,00</strong></article>
+              </div>
+              <div class="cash-actions">
+                <button class="ghost-action" type="button" data-add-change>Adicionar troco</button>
+                <button class="ghost-action" type="button" data-adjust-change>Ajustar saldo</button>
+              </div>
+            </section>
 
             <div class="cash-grid">
               <article><span>Pix</span><strong data-cash-pix>R$ 0,00</strong></article>
@@ -281,8 +300,6 @@
 
             <form data-cash-form>
               <div class="form-grid">
-                <label>Troco inicial <input type="text" name="troco_inicial" inputmode="decimal" placeholder="0,00" /></label>
-                <label>Troco usado <input type="text" name="troco_usado" inputmode="decimal" placeholder="0,00" /></label>
                 <label>Sangrias <input type="text" name="sangrias" inputmode="decimal" placeholder="0,00" /></label>
                 <label>Reforcos de caixa <input type="text" name="reforcos" inputmode="decimal" placeholder="0,00" /></label>
                 <label>Retiradas <input type="text" name="retiradas" inputmode="decimal" placeholder="0,00" /></label>
@@ -301,7 +318,7 @@
 
               <div class="cash-summary" data-cash-summary></div>
               <div class="form-footer">
-                <small>Dinheiro esperado = troco inicial + vendas em dinheiro + reforcos - sangrias - retiradas - pagamentos pelo caixa.</small>
+                <small>Dinheiro esperado = saldo inicial de troco + dinheiro recebido - troco devolvido + reforcos - sangrias - retiradas - pagamentos pelo caixa.</small>
                 <button class="primary-action" type="submit" data-cash-close-button>Conferir e fechar caixa</button>
               </div>
             </form>
@@ -309,6 +326,11 @@
             <div class="cash-actions">
               <button class="ghost-action hidden" type="button" data-reopen-cash>Reabrir fechamento</button>
             </div>
+
+            <section>
+              <h2>Historico do troco</h2>
+              <div data-change-history></div>
+            </section>
 
             <section>
               <h2>Historico de fechamentos</h2>

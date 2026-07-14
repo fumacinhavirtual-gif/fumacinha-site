@@ -12,6 +12,8 @@ const TABLES = {
   deliveryPayouts: "REPASSES_ENTREGADORES",
   cashClosings: "FECHAMENTOS_CAIXA",
   cashMovements: "MOVIMENTACOES_CAIXA",
+  changeBox: "CAIXA_TROCO",
+  changeMoves: "MOVIMENTACOES_TROCO",
 };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -31,6 +33,8 @@ const app = {
   deliveryPayouts: [],
   cashClosings: [],
   cashMovements: [],
+  changeBox: null,
+  changeMoves: [],
   deliveryManuallyEdited: false,
   saleReceivedTouched: false,
   saleSaving: false,
@@ -82,6 +86,7 @@ const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
 const cashHistory = $("[data-cash-history]");
 const cashStatus = $("[data-cash-status]");
+const changeHistory = $("[data-change-history]");
 const routesDateInput = $("[data-routes-date]");
 const routesFilterSelect = $("[data-routes-filter]");
 const routesList = $("[data-routes-list]");
@@ -338,7 +343,7 @@ async function requireAuth() {
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult] = await Promise.allSettled([
+  const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
@@ -349,9 +354,11 @@ async function loadAll() {
     supabaseClient.from(TABLES.deliveryPayouts).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.cashClosings).select("*").order("data_caixa", { ascending: false }).limit(120),
     supabaseClient.from(TABLES.cashMovements).select("*").order("created_at", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
+    supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
   ]);
 
-  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult]
+  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult]
     .filter((result) => result.status === "fulfilled" && result.value.error)
     .map((result) => result.value.error.message);
 
@@ -370,6 +377,8 @@ async function loadAll() {
   app.deliveryPayouts = payoutsResult.value.data || [];
   app.cashClosings = closingsResult.value.data || [];
   app.cashMovements = cashMovesResult.value.data || [];
+  app.changeBox = changeBoxResult.value.data?.[0] || null;
+  app.changeMoves = changeMovesResult.value.data || [];
   setStatus("Controle atualizado.", "success");
   renderAll();
 }
@@ -841,29 +850,17 @@ async function registerSale(event) {
     const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
     const items = collectSaleItems();
     const { payload: salePayload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
-    const { data: sale, error: saleError } = await supabaseClient.from(TABLES.sales).insert(salePayload).select("*").single();
+    const { data: sale, error: saleError } = await supabaseClient.rpc("registrar_venda_troco", {
+      p_venda: salePayload,
+      p_itens: saleItemPayload(items),
+    });
     if (saleError) throw saleError;
-    const itemPayload = saleItemPayload(items).map((item) => ({ ...item, venda_id: sale.id }));
-    const { error: itemError } = await supabaseClient.from(TABLES.saleItems).insert(itemPayload);
-    if (itemError) throw itemError;
-    for (const item of items) {
-      await updateProductStock(item.product, toNumber(item.product.estoque) - item.quantity, "venda", sale.id);
-    }
-    if (deliverer && deliveryValue > 0) {
-      const { error: payoutError } = await supabaseClient.from(TABLES.deliveryPayouts).insert({
-        venda_id: sale.id,
-        entregador_id: deliverer.id,
-        valor: deliveryValue,
-        pago: false,
-      });
-      if (payoutError) throw payoutError;
-    }
     localStorage.setItem(LAST_SELLER_KEY, String(seller.id));
     if (deliverer) localStorage.setItem(LAST_DELIVERER_KEY, String(deliverer.id));
     else localStorage.removeItem(LAST_DELIVERER_KEY);
     await loadAll();
     resetSaleForm();
-    const registeredAt = new Date(sale.created_at || Date.now()).toLocaleString("pt-BR");
+    const registeredAt = new Date(sale?.created_at || Date.now()).toLocaleString("pt-BR");
     const successMessage = `Venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`;
     setStatus(successMessage, "success");
     if (saleSuccess) {
@@ -942,15 +939,10 @@ async function cancelSale(saleId) {
   if (!sale || sale.cancelada) return;
   setStatus("Cancelando venda...", "loading");
   try {
-    const items = app.saleItems.filter((item) => String(item.venda_id) === String(saleId));
-    for (const item of items) {
-      const product = app.products.find((productItem) => String(productItem.id) === String(item.produto_id));
-      if (product) await updateProductStock(product, toNumber(product.estoque) + toNumber(item.quantidade), "cancelamento", sale.id);
-    }
-    const { error } = await supabaseClient
-      .from(TABLES.sales)
-      .update({ cancelada: true, cancelada_em: new Date().toISOString(), status: "cancelada", status_entrega: "Cancelado" })
-      .eq("id", sale.id);
+    const { error } = await supabaseClient.rpc("cancelar_venda_troco", {
+      p_venda_id: Number(sale.id),
+      p_observacao: "Cancelamento pelo painel",
+    });
     if (error) throw error;
     setStatus("Venda cancelada e estoque devolvido.", "success");
     await loadAll();
@@ -1305,6 +1297,39 @@ function cashMovementsForDate(dateKey = app.cashDate) {
   return app.cashMovements.filter((move) => move.data_caixa === dateKey);
 }
 
+function changeMovesForDate(dateKey = app.cashDate) {
+  return app.changeMoves.filter((move) => localDateValue(new Date(move.created_at || Date.now())) === dateKey);
+}
+
+function changeMoveImpact(move) {
+  const value = toNumber(move.valor);
+  if (move.tipo === "uso_venda") return -Math.abs(value);
+  if (move.tipo === "devolucao_cancelamento" || move.tipo === "adicao" || move.tipo === "saldo_inicial") return Math.abs(value);
+  if (move.tipo === "ajuste") return toNumber(move.saldo_posterior) - toNumber(move.saldo_anterior);
+  return 0;
+}
+
+function changeTotalsForDate(dateKey = app.cashDate) {
+  const moves = changeMovesForDate(dateKey);
+  const totals = { usado: 0, adicionado: 0, devolvido: 0, ajustado: 0, saldoInicial: 0, saldoFinal: toNumber(app.changeBox?.saldo_atual || 0) };
+  moves.forEach((move) => {
+    const value = Math.abs(toNumber(move.valor));
+    if (move.tipo === "uso_venda") totals.usado += value;
+    else if (move.tipo === "adicao") totals.adicionado += value;
+    else if (move.tipo === "devolucao_cancelamento") totals.devolvido += value;
+    else if (move.tipo === "ajuste" || move.tipo === "saldo_inicial") totals.ajustado += changeMoveImpact(move);
+  });
+  if (dateKey === localDateValue()) {
+    totals.saldoInicial = totals.saldoFinal - totals.adicionado - totals.devolvido - totals.ajustado + totals.usado;
+  } else {
+    const lastMove = moves[0];
+    const firstMove = moves[moves.length - 1];
+    totals.saldoInicial = firstMove ? toNumber(firstMove.saldo_anterior) : 0;
+    totals.saldoFinal = lastMove ? toNumber(lastMove.saldo_posterior) : 0;
+  }
+  return totals;
+}
+
 function cashPaymentTotals(dateKey = app.cashDate) {
   const totals = {
     pix: 0,
@@ -1342,15 +1367,15 @@ function cashMovementTotals(dateKey = app.cashDate) {
   return totals;
 }
 
-function cashReadFormValues() {
+function cashReadFormValues(dateKey = app.cashDate) {
   const movementTotals = cashMovementTotals();
   const readMoney = (name, fallback = 0) => {
     const input = cashForm?.elements[name];
     return input && String(input.value).trim() ? parseMoney(input.value) : fallback;
   };
   return {
-    trocoInicial: readMoney("troco_inicial"),
-    trocoUsado: readMoney("troco_usado"),
+    trocoInicial: changeTotalsForDate(dateKey).saldoInicial,
+    trocoUsado: changeTotalsForDate(dateKey).usado,
     sangrias: readMoney("sangrias", movementTotals.sangria),
     reforcos: readMoney("reforcos", movementTotals.reforco),
     retiradas: readMoney("retiradas", movementTotals.retirada),
@@ -1362,13 +1387,14 @@ function cashReadFormValues() {
 
 function cashCalculate(dateKey = app.cashDate) {
   const payment = cashPaymentTotals(dateKey);
-  const form = cashReadFormValues();
+  const form = cashReadFormValues(dateKey);
+  const change = changeTotalsForDate(dateKey);
   const activeSales = cashSalesForDate(dateKey);
   const cancelledSales = cashSalesForDate(dateKey, true).filter((sale) => sale.cancelada);
   const totalVendas = payment.pix + payment.dinheiro + payment.debito + payment.credito + payment.outros;
   const eletronicos = payment.pix + payment.debito + payment.credito + payment.outros;
-  const trocoUsadoTotal = form.trocoUsado + payment.trocoDevolvido;
-  const trocoRestante = Math.max(0, form.trocoInicial - trocoUsadoTotal);
+  const trocoUsadoTotal = change.usado;
+  const trocoRestante = Math.max(0, change.saldoFinal);
   const dinheiroEsperado = form.trocoInicial + payment.dinheiroRecebido - payment.trocoDevolvido + form.reforcos - form.sangrias - form.retiradas - form.pagamentosCaixa;
   const diferenca = form.dinheiroContado - dinheiroEsperado;
   return {
@@ -1376,6 +1402,9 @@ function cashCalculate(dateKey = app.cashDate) {
     ...payment,
     trocoUsadoManual: form.trocoUsado,
     trocoUsado: trocoUsadoTotal,
+    trocoAdicionado: change.adicionado,
+    trocoDevolvidoCancelamento: change.devolvido,
+    trocoAjustado: change.ajustado,
     totalVendas,
     eletronicos,
     quantidadeVendas: activeSales.length,
@@ -1395,13 +1424,43 @@ function setMoneyInput(input, value) {
   if (input) input.value = toNumber(value).toFixed(2).replace(".", ",");
 }
 
+function renderChangeBox() {
+  const totals = changeTotalsForDate();
+  const saldo = toNumber(app.changeBox?.saldo_atual || 0);
+  $("[data-change-initial]").textContent = currency.format(totals.saldoInicial);
+  $("[data-change-used]").textContent = currency.format(totals.usado);
+  $("[data-change-added]").textContent = currency.format(totals.adicionado);
+  $("[data-change-current]").textContent = currency.format(saldo);
+  $("[data-change-adjusted]").textContent = currency.format(totals.ajustado);
+  if (!changeHistory) return;
+  changeHistory.innerHTML = app.changeMoves.length
+    ? app.changeMoves.slice(0, 40).map((move) => `
+      <article class="history-row">
+        <strong>${escapeHtml(changeMoveLabel(move.tipo))} - ${currency.format(Math.abs(toNumber(move.valor)))}</strong>
+        <span>Saldo: ${currency.format(move.saldo_anterior || 0)} -> ${currency.format(move.saldo_posterior || 0)}</span>
+        ${move.venda_id ? `<span>Venda #${move.venda_id}</span>` : ""}
+        ${move.observacao ? `<span>${escapeHtml(move.observacao)}</span>` : ""}
+        <span>${new Date(move.created_at || Date.now()).toLocaleString("pt-BR")}</span>
+      </article>
+    `).join("")
+    : "<p>Nenhuma movimentacao de troco registrada.</p>";
+}
+
+function changeMoveLabel(type = "") {
+  const labels = {
+    saldo_inicial: "Saldo inicial",
+    uso_venda: "Uso em venda",
+    devolucao_cancelamento: "Devolucao por cancelamento",
+    adicao: "Adicao de troco",
+    ajuste: "Ajuste manual",
+  };
+  return labels[type] || "Movimentacao";
+}
+
 function populateCashForm() {
   if (!cashForm || app.cashEditing) return;
   const closing = cashClosingForDate();
   const movements = cashMovementTotals();
-  setMoneyInput(cashForm.elements.troco_inicial, closing?.troco_inicial || 0);
-  const autoChange = cashPaymentTotals().trocoDevolvido;
-  setMoneyInput(cashForm.elements.troco_usado, Math.max(0, toNumber(closing?.troco_usado || 0) - autoChange));
   setMoneyInput(cashForm.elements.sangrias, closing?.sangrias || movements.sangria);
   setMoneyInput(cashForm.elements.reforcos, closing?.reforcos || movements.reforco);
   setMoneyInput(cashForm.elements.retiradas, closing?.retiradas || movements.retirada);
@@ -1410,8 +1469,36 @@ function populateCashForm() {
   cashForm.elements.observacao.value = closing?.observacao || "";
 }
 
+async function changeCashBalance(action) {
+  const adding = action === "adicao";
+  const title = adding ? "Adicionar troco" : "Ajustar saldo de troco";
+  const valueLabel = adding ? "Valor adicionado" : "Novo saldo";
+  const rawValue = window.prompt(`${title}\n\n${valueLabel}:`);
+  if (rawValue === null) return;
+  const value = parseMoney(rawValue);
+  if (value < 0 || (!adding && !Number.isFinite(value))) return setStatus("Informe um valor valido.", "error");
+  if (adding && value <= 0) return setStatus("Informe um valor maior que zero.", "error");
+  const observation = window.prompt(adding ? "Observacao:" : "Motivo do ajuste:");
+  if (!adding && !String(observation || "").trim()) return setStatus("Informe o motivo do ajuste.", "error");
+  setStatus(adding ? "Adicionando troco..." : "Ajustando saldo...", "loading");
+  try {
+    const { error } = await supabaseClient.rpc("movimentar_troco_caixa", {
+      p_tipo: adding ? "adicao" : "ajuste",
+      p_valor: value,
+      p_observacao: observation || "",
+      p_venda_id: null,
+    });
+    if (error) throw error;
+    setStatus(adding ? "Troco adicionado." : "Saldo de troco ajustado.", "success");
+    await loadAll();
+  } catch (error) {
+    setStatus(error.message || "Erro ao atualizar troco.", "error");
+  }
+}
+
 function updateCashPreview() {
   const values = cashCalculate();
+  renderChangeBox();
   $("[data-cash-change-left]").textContent = currency.format(values.trocoRestante);
   $("[data-cash-expected]").textContent = currency.format(values.dinheiroEsperado);
   $("[data-cash-counted]").textContent = currency.format(values.dinheiroContado);
@@ -1429,6 +1516,8 @@ function updateCashPreview() {
       <span>Total vendido: ${currency.format(values.totalVendas)}</span>
       <span>Troco inicial: ${currency.format(values.trocoInicial)}</span>
       <span>Troco usado: ${currency.format(values.trocoUsado)}</span>
+      <span>Troco adicionado: ${currency.format(values.trocoAdicionado)}</span>
+      <span>Ajustes do troco: ${currency.format(values.trocoAjustado)}</span>
       <span>Troco restante: ${currency.format(values.trocoRestante)}</span>
       <span>Dinheiro recebido: ${currency.format(values.dinheiroRecebido)}</span>
       <span>Troco devolvido: ${currency.format(values.trocoDevolvido)}</span>
@@ -1745,7 +1834,8 @@ document.addEventListener("click", async (event) => {
     app.cashEditing = false;
     renderCashClosing();
   }
-  if (event.target.closest("[data-use-previous-change]")) usePreviousChange();
+  if (event.target.closest("[data-add-change]")) changeCashBalance("adicao");
+  if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
   if (event.target.closest("[data-reopen-cash]")) reopenCash();
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();

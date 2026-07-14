@@ -411,6 +411,25 @@ textarea {
   font-size: 1.02rem;
 }
 
+.change-box-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.change-current {
+  border-color: rgba(25, 135, 84, 0.28) !important;
+  background: rgba(25, 135, 84, 0.08) !important;
+}
+
+.change-current strong {
+  color: var(--green);
+  font-size: 1.55rem;
+}
+
 .cash-actions {
   display: grid;
   gap: 10px;
