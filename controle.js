@@ -90,6 +90,7 @@ const changeHistory = $("[data-change-history]");
 const routesDateInput = $("[data-routes-date]");
 const routesFilterSelect = $("[data-routes-filter]");
 const routesList = $("[data-routes-list]");
+let toastTimer = null;
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -101,6 +102,21 @@ function setLoginStatus(message = "", type = "") {
   if (!loginStatus) return;
   loginStatus.textContent = message;
   loginStatus.className = `form-status ${type}`.trim();
+}
+
+function showToast(message, type = "success") {
+  let toast = $("[data-control-toast]");
+  if (!toast) {
+    toast = document.createElement("div");
+    toast.dataset.controlToast = "";
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.className = `control-toast ${type} visible`;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => {
+    toast.classList.remove("visible");
+  }, 3000);
 }
 
 function escapeHtml(value = "") {
@@ -1055,6 +1071,7 @@ function renderStock() {
           <button class="stock-plus" type="button" data-stock-plus="${product.id}">+</button>
         </div>
         <button class="stock-save-button" type="button" data-stock-save="${product.id}" disabled>Salvar estoque</button>
+        <span class="stock-save-status" data-stock-save-status="${product.id}">Estoque atualizado</span>
       </div>
     </article>
   `).join("");
@@ -1085,10 +1102,14 @@ async function saveStock(productId) {
       button.textContent = "Salvando...";
     }
     await updateProductStock(product, toNumber(input.value), "ajuste manual");
+    const successMessage = `✅ Estoque de “${product.nome}” salvo com sucesso!`;
     setStatus("Estoque atualizado.", "success");
+    showToast(successMessage, "success");
     await loadAll();
   } catch (error) {
-    setStatus(error.message || "Erro ao atualizar estoque.", "error");
+    console.error("Erro ao salvar estoque:", error);
+    setStatus("Não foi possível salvar o estoque.", "error");
+    showToast("❌ Não foi possível salvar o estoque.", "error");
     if (button) {
       button.disabled = false;
       button.textContent = "Salvar estoque";
@@ -1099,10 +1120,15 @@ async function saveStock(productId) {
 function updateStockSaveState(productId) {
   const input = $(`[data-stock-value="${productId}"]`);
   const button = $(`[data-stock-save="${productId}"]`);
+  const status = $(`[data-stock-save-status="${productId}"]`);
   if (!input || !button) return;
   const changed = toNumber(input.value) !== toNumber(input.dataset.stockOriginal);
   button.disabled = !changed;
   button.textContent = "Salvar estoque";
+  if (status) {
+    status.textContent = changed ? "Alteração não salva" : "Estoque atualizado";
+    status.classList.toggle("unsaved", changed);
+  }
 }
 
 function renderFinance() {

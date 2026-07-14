@@ -238,6 +238,34 @@ textarea {
   color: var(--red);
 }
 
+.control-toast {
+  position: fixed;
+  right: 18px;
+  top: 86px;
+  z-index: 80;
+  width: min(420px, calc(100vw - 32px));
+  padding: 14px 16px;
+  border-radius: 14px;
+  color: #ffffff;
+  background: #198754;
+  box-shadow: 0 18px 45px rgba(17, 17, 17, 0.18);
+  font-weight: 900;
+  line-height: 1.25;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.control-toast.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.control-toast.error {
+  background: #d32f2f;
+}
+
 .tab-panel {
   display: grid;
   gap: 14px;
@@ -625,7 +653,25 @@ textarea {
   opacity: 1;
 }
 
+.stock-save-status {
+  color: var(--green);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.stock-save-status.unsaved {
+  color: #b45309;
+}
+
 @media (max-width: 767px) {
+  .control-toast {
+    top: auto;
+    right: 14px;
+    bottom: 92px;
+    left: 14px;
+    width: auto;
+  }
+
   .stock-actions {
     align-items: stretch;
   }
@@ -646,6 +692,10 @@ textarea {
   }
 
   .stock-save-button {
+    width: 100%;
+  }
+
+  .stock-save-status {
     width: 100%;
   }
 }
