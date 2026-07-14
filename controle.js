@@ -15,6 +15,8 @@ const TABLES = {
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const COMMISSION_BASE = 0.5;
 const COMMISSION_CARD_EXTRA = 1;
+const LAST_SELLER_KEY = "fumacinha:lastSellerId";
+const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
 const app = {
   products: [],
   sales: [],
@@ -25,6 +27,9 @@ const app = {
   sellers: [],
   deliveryPayouts: [],
   deliveryManuallyEdited: false,
+  saleReceivedTouched: false,
+  sellerSearch: "",
+  delivererSearch: "",
   period: "today",
   activeTab: "home",
   stockSearch: "",
@@ -50,8 +55,13 @@ const stockHistory = $("[data-stock-history]");
 const salesHistory = $("[data-sales-history]");
 const expenseForm = $("[data-expense-form]");
 const expenseList = $("[data-expense-list]");
-const sellersList = $("[data-sellers-list]");
-const deliverersList = $("[data-deliverers-list]");
+const sellerSelect = $("[data-seller-select]");
+const delivererSelect = $("[data-deliverer-select]");
+const saleWarning = $("[data-sale-warning]");
+const sellerForm = $("[data-seller-form]");
+const delivererForm = $("[data-deliverer-form]");
+const sellerList = $("[data-seller-list]");
+const delivererList = $("[data-deliverer-list]");
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -76,6 +86,21 @@ function escapeHtml(value = "") {
 
 function toNumber(value) {
   return Number(value || 0);
+}
+
+function parseMoney(value) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  const clean = String(value || "")
+    .replace(/[^\d,.-]/g, "")
+    .replace(/\.(?=\d{3}(?:\D|$))/g, "")
+    .replace(",", ".");
+  const parsed = Number(clean);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatMoneyInput(input) {
+  if (!input || !String(input.value).trim()) return;
+  input.value = parseMoney(input.value).toFixed(2).replace(".", ",");
 }
 
 function dateValue(date = new Date()) {
@@ -297,18 +322,23 @@ function renderPeriods() {
 }
 
 function renderPeopleOptions() {
-  if (sellersList) {
-    sellersList.innerHTML = app.sellers
-      .filter((seller) => seller.ativo !== false)
-      .map((seller) => `<option value="${escapeHtml(seller.nome)}"></option>`)
-      .join("");
+  if (sellerSelect) {
+    const activeSellers = app.sellers.filter((seller) => seller.ativo !== false);
+    const stored = localStorage.getItem(LAST_SELLER_KEY) || "";
+    sellerSelect.innerHTML = `<option value="">Selecione a vendedora</option>${activeSellers
+      .map((seller) => `<option value="${seller.id}">${escapeHtml(seller.nome)}</option>`)
+      .join("")}`;
+    if (activeSellers.some((seller) => String(seller.id) === String(stored))) sellerSelect.value = stored;
   }
-  if (deliverersList) {
-    deliverersList.innerHTML = app.deliverers
-      .filter((deliverer) => deliverer.ativo !== false)
-      .map((deliverer) => `<option value="${escapeHtml(deliverer.nome)}"></option>`)
-      .join("");
+  if (delivererSelect) {
+    const activeDeliverers = app.deliverers.filter((deliverer) => deliverer.ativo !== false);
+    const stored = localStorage.getItem(LAST_DELIVERER_KEY) || "";
+    delivererSelect.innerHTML = `<option value="">Sem entregador</option>${activeDeliverers
+      .map((deliverer) => `<option value="${deliverer.id}">${escapeHtml(deliverer.nome)}</option>`)
+      .join("")}`;
+    if (activeDeliverers.some((deliverer) => String(deliverer.id) === String(stored))) delivererSelect.value = stored;
   }
+  renderTeamLists();
 }
 
 function todaySales() {
@@ -419,7 +449,7 @@ function updateSaleItemPrices() {
 
 function updateSaleItemPreview(row, product) {
   const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
-  const unitValue = toNumber(row.querySelector('[name="valor_unitario"]')?.value);
+  const unitValue = parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
   const subtotal = row.querySelector("[data-item-subtotal]");
   const preview = row.querySelector("[data-sale-product-preview]");
   if (subtotal) subtotal.textContent = currency.format(quantity * unitValue);
@@ -434,9 +464,9 @@ function updateSaleItemPreview(row, product) {
 }
 
 function currentProductTotal() {
-  const discount = toNumber(saleForm?.elements.desconto?.value);
+  const discount = parseMoney(saleForm?.elements.desconto?.value);
   const subtotal = $$(".sale-item").reduce((sum, row) => {
-    return sum + toNumber(row.querySelector('[name="quantidade"]')?.value) * toNumber(row.querySelector('[name="valor_unitario"]')?.value);
+    return sum + toNumber(row.querySelector('[name="quantidade"]')?.value) * parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
   }, 0);
   return Math.max(0, subtotal - discount);
 }
@@ -450,26 +480,27 @@ function updateSaleTotal() {
   const productsValue = currentProductTotal();
   const receivedInput = saleForm?.elements.valor_recebido;
   const deliveryInput = saleForm?.elements.taxa_entrega;
-  if (receivedInput && (!receivedInput.value || toNumber(receivedInput.value) < productsValue)) {
-    receivedInput.value = productsValue.toFixed(2);
+  if (receivedInput && !app.saleReceivedTouched && !String(receivedInput.value).trim() && productsValue > 0) {
+    receivedInput.value = productsValue.toFixed(2).replace(".", ",");
   }
-  const preliminaryReceived = Math.max(productsValue, toNumber(receivedInput?.value));
+  const receivedValue = parseMoney(receivedInput?.value);
   if (deliveryInput && !app.deliveryManuallyEdited) {
-    deliveryInput.value = Math.max(0, preliminaryReceived - productsValue).toFixed(2);
+    deliveryInput.value = Math.max(0, receivedValue - productsValue).toFixed(2).replace(".", ",");
   }
-  const deliveryValue = Math.max(0, toNumber(deliveryInput?.value));
-  const receivedValue = Math.max(productsValue + deliveryValue, preliminaryReceived);
-  if (receivedInput && toNumber(receivedInput.value) < receivedValue) {
-    receivedInput.value = receivedValue.toFixed(2);
-  }
+  const deliveryValue = Math.max(0, parseMoney(deliveryInput?.value));
   const totalValue = productsValue + deliveryValue;
   const commission = commissionForPayment(saleForm?.elements.forma_pagamento?.value);
+  const receivedInvalid = app.saleReceivedTouched && receivedValue < productsValue;
 
   $("[data-sale-products]").textContent = currency.format(productsValue);
   $("[data-sale-received]").textContent = currency.format(receivedValue);
   $("[data-sale-delivery]").textContent = currency.format(deliveryValue);
   $("[data-sale-total]").textContent = currency.format(totalValue);
   $("[data-sale-commission]").textContent = currency.format(commission.total);
+  if (saleWarning) {
+    saleWarning.textContent = receivedInvalid ? "Valor recebido menor que o valor dos produtos. Corrija antes de salvar." : "";
+    saleWarning.className = `form-status ${receivedInvalid ? "error" : ""}`.trim();
+  }
 }
 
 async function insertStockMove(product, previous, next, type, saleId = null) {
@@ -513,22 +544,23 @@ async function registerSale(event) {
   if (!rows.length) return;
   setStatus("Registrando venda...", "loading");
   try {
-    const seller = await getOrCreatePerson(TABLES.sellers, app.sellers, saleForm.elements.vendedora_nome.value);
+    const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
     if (!seller) throw new Error("Informe a vendedora.");
-    const deliverer = await getOrCreatePerson(TABLES.deliverers, app.deliverers, saleForm.elements.entregador_nome.value);
+    const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
     const items = rows.map((row) => {
       const product = app.products.find((item) => String(item.id) === String(row.querySelector('[name="produto_id"]')?.value));
       const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
-      const unitValue = toNumber(row.querySelector('[name="valor_unitario"]')?.value);
+      const unitValue = parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
       if (!product || quantity <= 0 || unitValue <= 0) throw new Error("Revise os produtos da venda.");
       if (quantity > toNumber(product.estoque)) throw new Error(`Estoque insuficiente para ${product.nome}.`);
       return { product, quantity, unitValue };
     });
-    const discount = toNumber(saleForm.elements.desconto.value);
+    const discount = parseMoney(saleForm.elements.desconto.value);
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
     const productsValue = Math.max(0, subtotal - discount);
-    const deliveryValue = Math.max(0, toNumber(saleForm.elements.taxa_entrega.value));
-    const receivedValue = Math.max(productsValue, toNumber(saleForm.elements.valor_recebido.value), productsValue + deliveryValue);
+    const receivedValue = parseMoney(saleForm.elements.valor_recebido.value);
+    if (receivedValue < productsValue) throw new Error("Valor recebido menor que o valor dos produtos.");
+    const deliveryValue = Math.max(0, app.deliveryManuallyEdited ? parseMoney(saleForm.elements.taxa_entrega.value) : receivedValue - productsValue);
     const commission = commissionForPayment(saleForm.elements.forma_pagamento.value);
     const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
     const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -586,13 +618,18 @@ async function registerSale(event) {
       });
       if (payoutError) throw payoutError;
     }
+    localStorage.setItem(LAST_SELLER_KEY, String(seller.id));
+    if (deliverer) localStorage.setItem(LAST_DELIVERER_KEY, String(deliverer.id));
+    else localStorage.removeItem(LAST_DELIVERER_KEY);
     saleForm.reset();
     saleForm.elements.data_venda.value = localDateTimeValue();
     saleForm.elements.desconto.value = "0";
-    saleForm.elements.valor_recebido.value = "0";
-    saleForm.elements.taxa_entrega.value = "0";
+    saleForm.elements.valor_recebido.value = "";
+    saleForm.elements.taxa_entrega.value = "";
     app.deliveryManuallyEdited = false;
+    app.saleReceivedTouched = false;
     saleItemsRoot.innerHTML = saleItemTemplate();
+    renderPeopleOptions();
     updateSaleItemPrices();
     updateSaleTotal();
     setStatus("Venda registrada com sucesso.", "success");
@@ -837,6 +874,94 @@ function renderCommissionReport(sales) {
   );
 }
 
+function filteredTeam(rows, search) {
+  const term = search.trim().toLowerCase();
+  return rows
+    .filter((row) => !term || row.nome.toLowerCase().includes(term))
+    .sort((a, b) => a.nome.localeCompare(b.nome));
+}
+
+function renderTeamList(root, rows, type) {
+  if (!root) return;
+  root.innerHTML = rows.length
+    ? rows.map((person) => `
+      <article class="team-row">
+        <div>
+          <strong>${escapeHtml(person.nome)}</strong>
+          <span>${person.ativo === false ? "Inativo" : "Ativo"}</span>
+        </div>
+        <div class="team-actions">
+          <button type="button" data-team-edit="${type}" data-team-id="${person.id}">Editar</button>
+          <button type="button" data-team-toggle="${type}" data-team-id="${person.id}">${person.ativo === false ? "Ativar" : "Inativar"}</button>
+          <button type="button" data-team-delete="${type}" data-team-id="${person.id}">Excluir</button>
+        </div>
+      </article>
+    `).join("")
+    : "<p>Nenhum cadastro encontrado.</p>";
+}
+
+function renderTeamLists() {
+  renderTeamList(sellerList, filteredTeam(app.sellers, app.sellerSearch), "seller");
+  renderTeamList(delivererList, filteredTeam(app.deliverers, app.delivererSearch), "deliverer");
+}
+
+async function addTeamMember(type, form) {
+  const table = type === "seller" ? TABLES.sellers : TABLES.deliverers;
+  const rows = type === "seller" ? app.sellers : app.deliverers;
+  const name = form.elements.nome.value.trim();
+  if (!name) return setStatus("Informe o nome.", "error");
+  if (rows.some((row) => row.nome.toLowerCase() === name.toLowerCase())) return setStatus("Esse nome ja esta cadastrado.", "error");
+  const { data, error } = await supabaseClient.from(table).insert({ nome: name, ativo: true }).select("*").single();
+  if (error) return setStatus(error.message, "error");
+  rows.push(data);
+  form.reset();
+  setStatus(type === "seller" ? "Vendedora cadastrada." : "Entregador cadastrado.", "success");
+  renderPeopleOptions();
+}
+
+async function editTeamMember(type, id) {
+  const table = type === "seller" ? TABLES.sellers : TABLES.deliverers;
+  const rows = type === "seller" ? app.sellers : app.deliverers;
+  const person = rows.find((row) => String(row.id) === String(id));
+  if (!person) return;
+  const name = window.prompt("Novo nome:", person.nome);
+  if (!name || !name.trim()) return;
+  const { error } = await supabaseClient.from(table).update({ nome: name.trim() }).eq("id", id);
+  if (error) return setStatus(error.message, "error");
+  person.nome = name.trim();
+  setStatus("Nome atualizado.", "success");
+  renderPeopleOptions();
+}
+
+async function toggleTeamMember(type, id) {
+  const table = type === "seller" ? TABLES.sellers : TABLES.deliverers;
+  const rows = type === "seller" ? app.sellers : app.deliverers;
+  const person = rows.find((row) => String(row.id) === String(id));
+  if (!person) return;
+  const next = person.ativo === false;
+  const { error } = await supabaseClient.from(table).update({ ativo: next }).eq("id", id);
+  if (error) return setStatus(error.message, "error");
+  person.ativo = next;
+  setStatus(next ? "Cadastro ativado." : "Cadastro inativado.", "success");
+  renderPeopleOptions();
+}
+
+async function deleteTeamMember(type, id) {
+  const table = type === "seller" ? TABLES.sellers : TABLES.deliverers;
+  const rows = type === "seller" ? app.sellers : app.deliverers;
+  const hasHistory = type === "seller"
+    ? app.sales.some((sale) => String(sale.vendedora_id) === String(id))
+    : app.sales.some((sale) => String(sale.entregador_id) === String(id)) || app.deliveryPayouts.some((payout) => String(payout.entregador_id) === String(id));
+  if (hasHistory) return setStatus("Nao e possivel excluir: existe historico relacionado. Use inativar.", "error");
+  if (!window.confirm("Excluir este cadastro?")) return;
+  const { error } = await supabaseClient.from(table).delete().eq("id", id);
+  if (error) return setStatus(error.message, "error");
+  const index = rows.findIndex((row) => String(row.id) === String(id));
+  if (index >= 0) rows.splice(index, 1);
+  setStatus("Cadastro excluido.", "success");
+  renderPeopleOptions();
+}
+
 function switchTab(tab) {
   app.activeTab = tab;
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
@@ -858,6 +983,14 @@ loginForm?.addEventListener("submit", async (event) => {
 
 saleForm?.addEventListener("submit", registerSale);
 expenseForm?.addEventListener("submit", saveExpense);
+sellerForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  addTeamMember("seller", event.currentTarget);
+});
+delivererForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  addTeamMember("deliverer", event.currentTarget);
+});
 
 document.addEventListener("click", async (event) => {
   const tab = event.target.closest("[data-tab]");
@@ -892,6 +1025,12 @@ document.addEventListener("click", async (event) => {
   if (save) saveStock(save.dataset.stockSave);
   const cancel = event.target.closest("[data-cancel-sale]");
   if (cancel) cancelSale(cancel.dataset.cancelSale);
+  const editTeam = event.target.closest("[data-team-edit]");
+  if (editTeam) editTeamMember(editTeam.dataset.teamEdit, editTeam.dataset.teamId);
+  const toggleTeam = event.target.closest("[data-team-toggle]");
+  if (toggleTeam) toggleTeamMember(toggleTeam.dataset.teamToggle, toggleTeam.dataset.teamId);
+  const deleteTeam = event.target.closest("[data-team-delete]");
+  if (deleteTeam) deleteTeamMember(deleteTeam.dataset.teamDelete, deleteTeam.dataset.teamId);
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();
     renderAuth(false);
@@ -900,11 +1039,22 @@ document.addEventListener("click", async (event) => {
 
 document.addEventListener("input", (event) => {
   if (event.target.name === "taxa_entrega") app.deliveryManuallyEdited = true;
-  if (event.target.name === "valor_recebido") app.deliveryManuallyEdited = false;
+  if (event.target.name === "valor_recebido") {
+    app.deliveryManuallyEdited = false;
+    app.saleReceivedTouched = true;
+  }
   if (event.target.closest(".sale-item") || ["desconto", "valor_recebido", "taxa_entrega"].includes(event.target.name)) updateSaleTotal();
   if (event.target.matches("[data-stock-search]")) {
     app.stockSearch = event.target.value;
     renderStock();
+  }
+  if (event.target.matches("[data-seller-search]")) {
+    app.sellerSearch = event.target.value;
+    renderTeamLists();
+  }
+  if (event.target.matches("[data-deliverer-search]")) {
+    app.delivererSearch = event.target.value;
+    renderTeamLists();
   }
 });
 
@@ -919,6 +1069,15 @@ document.addEventListener("change", (event) => {
     updateSaleTotal();
   }
   if (event.target.name === "forma_pagamento") updateSaleTotal();
+  if (event.target.name === "valor_recebido" || event.target.name === "taxa_entrega") {
+    formatMoneyInput(event.target);
+    updateSaleTotal();
+  }
+  if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
+  if (event.target.name === "entregador_id") {
+    if (event.target.value) localStorage.setItem(LAST_DELIVERER_KEY, event.target.value);
+    else localStorage.removeItem(LAST_DELIVERER_KEY);
+  }
   if (event.target.matches("[data-stock-category]")) {
     app.stockCategory = event.target.value;
     renderStock();
@@ -937,8 +1096,8 @@ document.addEventListener("change", (event) => {
 function initDefaults() {
   const saleDateInput = saleForm?.elements.data_venda;
   if (saleDateInput) saleDateInput.value = localDateTimeValue();
-  if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "0";
-  if (saleForm?.elements.taxa_entrega) saleForm.elements.taxa_entrega.value = "0";
+  if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "";
+  if (saleForm?.elements.taxa_entrega) saleForm.elements.taxa_entrega.value = "";
   const expenseDateInput = expenseForm?.elements.data_despesa;
   if (expenseDateInput) expenseDateInput.value = dateValue();
   updateSaleTotal();

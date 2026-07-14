@@ -364,6 +364,56 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.team-grid,
+.team-list {
+  display: grid;
+  gap: 12px;
+}
+
+.team-grid form {
+  align-content: start;
+}
+
+.team-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--white);
+}
+
+.team-row strong {
+  color: var(--black);
+}
+
+.team-row span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.team-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.team-actions button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 10px;
+  background: var(--soft);
+  font-weight: 900;
+}
+
+.team-actions button:last-child {
+  color: var(--white);
+  background: var(--black);
+}
+
 .form-footer {
   display: grid;
   gap: 10px;
@@ -512,6 +562,10 @@ textarea {
 
   .sale-summary-grid .wide {
     grid-column: auto;
+  }
+
+  .team-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .stock-row {

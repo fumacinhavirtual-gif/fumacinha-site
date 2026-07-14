@@ -106,15 +106,13 @@
                   <option value="Outros">Outros</option>
                 </select>
               </label>
-              <label>Vendedora <input type="text" name="vendedora_nome" list="vendedoras-list" required placeholder="Selecione ou cadastre" /></label>
-              <label>Entregador <input type="text" name="entregador_nome" list="entregadores-list" placeholder="Selecione ou cadastre" /></label>
-              <label>Valor recebido do cliente <input type="number" name="valor_recebido" min="0" step="0.01" value="0" /></label>
-              <label>Taxa de entrega <input type="number" name="taxa_entrega" min="0" step="0.01" value="0" /></label>
+              <label>Vendedora <select name="vendedora_id" required data-seller-select></select></label>
+              <label>Entregador <select name="entregador_id" data-deliverer-select></select></label>
+              <label>Valor recebido do cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label>Taxa de entrega <input type="text" name="taxa_entrega" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
               <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
               <label>Data e hora <input type="datetime-local" name="data_venda" /></label>
             </div>
-            <datalist id="vendedoras-list" data-sellers-list></datalist>
-            <datalist id="entregadores-list" data-deliverers-list></datalist>
             <div class="sale-summary-grid">
               <article><span>Valor dos produtos</span><strong data-sale-products>R$ 0,00</strong></article>
               <article><span>Valor recebido</span><strong data-sale-received>R$ 0,00</strong></article>
@@ -122,6 +120,7 @@
               <article><span>Total da venda</span><strong data-sale-total>R$ 0,00</strong></article>
               <article class="wide"><span>Comissao da vendedora nesta venda</span><strong data-sale-commission>R$ 0,50</strong></article>
             </div>
+            <p class="form-status" data-sale-warning></p>
             <label>Observacao <textarea name="observacao" rows="3"></textarea></label>
             <div class="form-footer">
               <small>A taxa de entrega pertence ao entregador e nao entra no faturamento dos produtos.</small>
@@ -237,6 +236,30 @@
             <section><h2>Entregadores</h2><div data-report-deliverers></div></section>
             <section><h2>Comissoes</h2><div data-report-commissions></div></section>
           </div>
+          <section class="panel-card team-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Equipe</p>
+                <h2>Vendedoras e entregadores</h2>
+              </div>
+            </div>
+            <div class="team-grid">
+              <form data-seller-form>
+                <h3>Vendedoras</h3>
+                <label>Buscar <input type="search" data-seller-search placeholder="Buscar por nome" /></label>
+                <label>Novo nome <input type="text" name="nome" placeholder="Nome da vendedora" /></label>
+                <button class="primary-action" type="submit">Adicionar vendedora</button>
+                <div class="team-list" data-seller-list></div>
+              </form>
+              <form data-deliverer-form>
+                <h3>Entregadores</h3>
+                <label>Buscar <input type="search" data-deliverer-search placeholder="Buscar por nome" /></label>
+                <label>Novo nome <input type="text" name="nome" placeholder="Nome do entregador" /></label>
+                <button class="primary-action" type="submit">Adicionar entregador</button>
+                <div class="team-list" data-deliverer-list></div>
+              </form>
+            </div>
+          </section>
           <button class="danger-action" type="button" data-logout>Sair</button>
         </section>
       </section>
