@@ -108,23 +108,25 @@
               </label>
               <label>Vendedora <select name="vendedora_id" required data-seller-select></select></label>
               <label>Entregador <select name="entregador_id" data-deliverer-select></select></label>
-              <label>Valor recebido do cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
               <label>Taxa de entrega <input type="text" name="taxa_entrega" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label data-sale-cash-only>Valor entregue pelo cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
               <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
               <label>Data e hora <input type="datetime-local" name="data_venda" /></label>
             </div>
             <div class="sale-summary-grid">
               <article><span>Valor dos produtos</span><strong data-sale-products>R$ 0,00</strong></article>
-              <article><span>Valor recebido</span><strong data-sale-received>R$ 0,00</strong></article>
               <article><span>Taxa do entregador</span><strong data-sale-delivery>R$ 0,00</strong></article>
               <article><span>Total da venda</span><strong data-sale-total>R$ 0,00</strong></article>
+              <article data-sale-cash-only><span>Valor entregue</span><strong data-sale-received>R$ 0,00</strong></article>
+              <article data-sale-cash-only><span>Troco a devolver</span><strong data-sale-change>R$ 0,00</strong></article>
               <article class="wide"><span>Comissao da vendedora nesta venda</span><strong data-sale-commission>R$ 0,50</strong></article>
             </div>
             <p class="form-status" data-sale-warning></p>
+            <p class="form-status" data-sale-success></p>
             <label>Observacao <textarea name="observacao" rows="3"></textarea></label>
             <div class="form-footer">
               <small>A taxa de entrega pertence ao entregador e nao entra no faturamento dos produtos.</small>
-              <button class="primary-action" type="submit">Registrar venda</button>
+              <button class="primary-action" type="submit" data-sale-submit>Registrar venda</button>
             </div>
           </form>
 
@@ -219,23 +221,7 @@
           </section>
         </section>
 
-        <section class="tab-panel hidden" data-panel="more">
-          <div class="section-head">
-            <div>
-              <p class="eyebrow">Relatorios</p>
-              <h2>Indicadores da loja</h2>
-            </div>
-          </div>
-          <div class="report-grid">
-            <section><h2>Menos vendidos</h2><div data-report-low-products></div></section>
-            <section><h2>Sem venda</h2><div data-report-no-sales></div></section>
-            <section><h2>Estoque baixo</h2><div data-report-low-stock></div></section>
-            <section><h2>Pagamento</h2><div data-report-payments></div></section>
-            <section><h2>Lucro por produto</h2><div data-report-profit-product></div></section>
-            <section><h2>Valor total do estoque</h2><div data-report-stock-value></div></section>
-            <section><h2>Entregadores</h2><div data-report-deliverers></div></section>
-            <section><h2>Comissoes</h2><div data-report-commissions></div></section>
-          </div>
+        <section class="tab-panel hidden" data-panel="cash">
           <section class="panel-card cash-panel">
             <div class="section-head">
               <div>
@@ -259,6 +245,9 @@
               <article><span>Outros</span><strong data-cash-other>R$ 0,00</strong></article>
               <article><span>Total vendido</span><strong data-cash-total>R$ 0,00</strong></article>
               <article><span>Pagamentos eletronicos</span><strong data-cash-electronic>R$ 0,00</strong></article>
+              <article><span>Dinheiro recebido</span><strong data-cash-money-received>R$ 0,00</strong></article>
+              <article><span>Troco devolvido</span><strong data-cash-change-given>R$ 0,00</strong></article>
+              <article><span>Dinheiro liquido</span><strong data-cash-money-net>R$ 0,00</strong></article>
               <article><span>Quantidade de vendas</span><strong data-cash-count>0</strong></article>
               <article><span>Vendas canceladas</span><strong data-cash-cancelled>0</strong></article>
             </div>
@@ -299,6 +288,26 @@
               <div data-cash-history></div>
             </section>
           </section>
+
+        </section>
+
+        <section class="tab-panel hidden" data-panel="more">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Relatorios</p>
+              <h2>Indicadores da loja</h2>
+            </div>
+          </div>
+          <div class="report-grid">
+            <section><h2>Menos vendidos</h2><div data-report-low-products></div></section>
+            <section><h2>Sem venda</h2><div data-report-no-sales></div></section>
+            <section><h2>Estoque baixo</h2><div data-report-low-stock></div></section>
+            <section><h2>Pagamento</h2><div data-report-payments></div></section>
+            <section><h2>Lucro por produto</h2><div data-report-profit-product></div></section>
+            <section><h2>Valor total do estoque</h2><div data-report-stock-value></div></section>
+            <section><h2>Entregadores</h2><div data-report-deliverers></div></section>
+            <section><h2>Comissoes</h2><div data-report-commissions></div></section>
+          </div>
           <section class="panel-card team-panel">
             <div class="section-head">
               <div>
@@ -333,6 +342,7 @@
       <button type="button" data-tab="sales">Vendas</button>
       <button type="button" data-tab="stock">Estoque</button>
       <button type="button" data-tab="finance">Financeiro</button>
+      <button type="button" data-tab="cash">Caixa</button>
       <button type="button" data-tab="more">Mais</button>
     </nav>
 

@@ -553,7 +553,7 @@ textarea {
   bottom: 0;
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 6px;
   padding: 10px 8px max(10px, env(safe-area-inset-bottom));
   background: rgba(255, 255, 255, 0.96);
@@ -563,8 +563,8 @@ textarea {
 .bottom-nav button {
   min-height: 46px;
   border-radius: 14px;
-  padding: 0 6px;
-  font-size: 0.78rem;
+  padding: 0 4px;
+  font-size: 0.7rem;
 }
 
 @media (min-width: 760px) {

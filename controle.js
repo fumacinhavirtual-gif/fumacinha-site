@@ -32,6 +32,7 @@ const app = {
   cashMovements: [],
   deliveryManuallyEdited: false,
   saleReceivedTouched: false,
+  saleSaving: false,
   cashDate: "",
   cashEditing: false,
   sellerSearch: "",
@@ -68,6 +69,8 @@ const sellerForm = $("[data-seller-form]");
 const delivererForm = $("[data-deliverer-form]");
 const sellerList = $("[data-seller-list]");
 const delivererList = $("[data-deliverer-list]");
+const saleSuccess = $("[data-sale-success]");
+const saleSubmit = $("[data-sale-submit]");
 const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
 const cashHistory = $("[data-cash-history]");
@@ -197,8 +200,20 @@ function saleTotal(sale) {
   return toNumber(sale.valor_produtos || sale.valor_total || 0);
 }
 
+function saleGrandTotal(sale) {
+  return toNumber(sale.total_venda || sale.valor_recebido || saleTotal(sale) + saleDelivery(sale));
+}
+
+function saleDeliveredValue(sale) {
+  return toNumber(sale.valor_entregue || sale.valor_recebido || saleGrandTotal(sale));
+}
+
+function saleChangeValue(sale) {
+  return toNumber(sale.troco || 0);
+}
+
 function saleReceived(sale) {
-  return toNumber(sale.valor_recebido || saleTotal(sale) + toNumber(sale.taxa_entrega));
+  return saleGrandTotal(sale);
 }
 
 function saleDelivery(sale) {
@@ -214,6 +229,10 @@ function normalizePayment(value = "") {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function isCashPayment(payment) {
+  return normalizePayment(payment) === "dinheiro";
 }
 
 function commissionForPayment(payment) {
@@ -500,25 +519,27 @@ function updateSaleTotal() {
   const productsValue = currentProductTotal();
   const receivedInput = saleForm?.elements.valor_recebido;
   const deliveryInput = saleForm?.elements.taxa_entrega;
-  if (receivedInput && !app.saleReceivedTouched && !String(receivedInput.value).trim() && productsValue > 0) {
-    receivedInput.value = productsValue.toFixed(2).replace(".", ",");
-  }
-  const receivedValue = parseMoney(receivedInput?.value);
-  if (deliveryInput && !app.deliveryManuallyEdited) {
-    deliveryInput.value = Math.max(0, receivedValue - productsValue).toFixed(2).replace(".", ",");
-  }
+  const payment = saleForm?.elements.forma_pagamento?.value;
+  const isCash = isCashPayment(payment);
   const deliveryValue = Math.max(0, parseMoney(deliveryInput?.value));
   const totalValue = productsValue + deliveryValue;
+  if (receivedInput && !app.saleReceivedTouched && totalValue > 0) {
+    receivedInput.value = totalValue.toFixed(2).replace(".", ",");
+  }
+  const deliveredValue = isCash ? parseMoney(receivedInput?.value) : totalValue;
+  const changeValue = isCash ? Math.max(0, deliveredValue - totalValue) : 0;
   const commission = commissionForPayment(saleForm?.elements.forma_pagamento?.value);
-  const receivedInvalid = app.saleReceivedTouched && receivedValue < productsValue;
+  const receivedInvalid = isCash && app.saleReceivedTouched && deliveredValue < totalValue;
 
   $("[data-sale-products]").textContent = currency.format(productsValue);
-  $("[data-sale-received]").textContent = currency.format(receivedValue);
+  $("[data-sale-received]").textContent = currency.format(deliveredValue);
   $("[data-sale-delivery]").textContent = currency.format(deliveryValue);
   $("[data-sale-total]").textContent = currency.format(totalValue);
+  $("[data-sale-change]").textContent = currency.format(changeValue);
   $("[data-sale-commission]").textContent = currency.format(commission.total);
+  $$("[data-sale-cash-only]").forEach((element) => element.classList.toggle("hidden", !isCash));
   if (saleWarning) {
-    saleWarning.textContent = receivedInvalid ? "Valor recebido menor que o valor dos produtos. Corrija antes de salvar." : "";
+    saleWarning.textContent = receivedInvalid ? "Valor entregue menor que o total da venda. Corrija antes de salvar." : "";
     saleWarning.className = `form-status ${receivedInvalid ? "error" : ""}`.trim();
   }
 }
@@ -560,8 +581,15 @@ async function getOrCreatePerson(tableName, rows, name) {
 
 async function registerSale(event) {
   event.preventDefault();
+  if (app.saleSaving) return;
   const rows = $$(".sale-item");
   if (!rows.length) return;
+  app.saleSaving = true;
+  if (saleSubmit) {
+    saleSubmit.disabled = true;
+    saleSubmit.textContent = "Registrando venda...";
+  }
+  if (saleSuccess) saleSuccess.textContent = "";
   setStatus("Registrando venda...", "loading");
   try {
     const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
@@ -578,9 +606,13 @@ async function registerSale(event) {
     const discount = parseMoney(saleForm.elements.desconto.value);
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
     const productsValue = Math.max(0, subtotal - discount);
-    const receivedValue = parseMoney(saleForm.elements.valor_recebido.value);
-    if (receivedValue < productsValue) throw new Error("Valor recebido menor que o valor dos produtos.");
-    const deliveryValue = Math.max(0, app.deliveryManuallyEdited ? parseMoney(saleForm.elements.taxa_entrega.value) : receivedValue - productsValue);
+    const deliveryValue = Math.max(0, parseMoney(saleForm.elements.taxa_entrega.value));
+    const totalSale = productsValue + deliveryValue;
+    const paymentLabel = saleForm.elements.forma_pagamento.value;
+    const cashPayment = isCashPayment(paymentLabel);
+    const deliveredValue = cashPayment ? parseMoney(saleForm.elements.valor_recebido.value) : totalSale;
+    if (cashPayment && deliveredValue < totalSale) throw new Error("Valor entregue menor que o total da venda.");
+    const changeValue = cashPayment ? Math.max(0, deliveredValue - totalSale) : 0;
     const commission = commissionForPayment(saleForm.elements.forma_pagamento.value);
     const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
     const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
@@ -593,10 +625,13 @@ async function registerSale(event) {
       valor_unitario: first.unitValue,
       valor_total: productsValue,
       valor_produtos: productsValue,
-      valor_recebido: receivedValue,
+      total_venda: totalSale,
+      valor_recebido: totalSale,
+      valor_entregue: deliveredValue,
+      troco: changeValue,
       taxa_entrega: deliveryValue,
       desconto: discount,
-      forma_pagamento: saleForm.elements.forma_pagamento.value,
+      forma_pagamento: paymentLabel,
       entregador_id: deliverer?.id || null,
       entregador_nome: deliverer?.nome || "",
       vendedora_id: seller.id,
@@ -652,10 +687,24 @@ async function registerSale(event) {
     renderPeopleOptions();
     updateSaleItemPrices();
     updateSaleTotal();
-    setStatus("Venda registrada com sucesso.", "success");
     await loadAll();
+    const successMessage = `Venda registrada com sucesso. ID ${sale.id} | Total ${currency.format(totalSale)} | ${paymentLabel} | Estoque atualizado.`;
+    setStatus(successMessage, "success");
+    if (saleSuccess) {
+      saleSuccess.textContent = successMessage;
+      saleSuccess.className = "form-status success";
+      window.setTimeout(() => {
+        saleSuccess.textContent = "";
+      }, 8000);
+    }
   } catch (error) {
     setStatus(error.message || "Erro ao registrar venda.", "error");
+  } finally {
+    app.saleSaving = false;
+    if (saleSubmit) {
+      saleSubmit.disabled = false;
+      saleSubmit.textContent = "Registrar venda";
+    }
   }
 }
 
@@ -685,7 +734,8 @@ function renderSalesHistory() {
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
         <strong>${escapeHtml(sale.nome_produto || "Venda")}</strong>
         <span>${new Date(sale.data_venda || sale.created_at).toLocaleString("pt-BR")} - Produtos ${currency.format(saleTotal(sale))}</span>
-        <span>Recebido ${currency.format(saleReceived(sale))} | Entrega ${currency.format(saleDelivery(sale))}</span>
+        <span>Total ${currency.format(saleGrandTotal(sale))} | Entrega ${currency.format(saleDelivery(sale))}</span>
+        ${isCashPayment(sale.forma_pagamento) ? `<span>Entregue ${currency.format(saleDeliveredValue(sale))} | Troco ${currency.format(saleChangeValue(sale))}</span>` : ""}
         <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")} | ${escapeHtml(sale.vendedora_nome || "Vendedora nao informada")} ${sale.cancelada ? "- Cancelada" : ""}</span>
         ${sale.cancelada ? "" : `<button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
       </article>
@@ -1002,16 +1052,29 @@ function cashMovementsForDate(dateKey = app.cashDate) {
 }
 
 function cashPaymentTotals(dateKey = app.cashDate) {
-  const totals = { pix: 0, dinheiro: 0, debito: 0, credito: 0, outros: 0 };
+  const totals = {
+    pix: 0,
+    dinheiro: 0,
+    debito: 0,
+    credito: 0,
+    outros: 0,
+    dinheiroRecebido: 0,
+    trocoDevolvido: 0,
+    dinheiroLiquido: 0,
+  };
   cashSalesForDate(dateKey).forEach((sale) => {
     const payment = normalizePayment(sale.forma_pagamento);
-    const value = saleTotal(sale);
+    const value = saleGrandTotal(sale);
     if (payment === "pix") totals.pix += value;
-    else if (payment === "dinheiro") totals.dinheiro += value;
-    else if (payment === "debito") totals.debito += value;
+    else if (payment === "dinheiro") {
+      totals.dinheiro += value;
+      totals.dinheiroRecebido += saleDeliveredValue(sale);
+      totals.trocoDevolvido += saleChangeValue(sale);
+    } else if (payment === "debito") totals.debito += value;
     else if (payment === "credito") totals.credito += value;
     else totals.outros += value;
   });
+  totals.dinheiroLiquido = totals.dinheiroRecebido - totals.trocoDevolvido;
   return totals;
 }
 
@@ -1051,7 +1114,7 @@ function cashCalculate(dateKey = app.cashDate) {
   const totalVendas = payment.pix + payment.dinheiro + payment.debito + payment.credito + payment.outros;
   const eletronicos = payment.pix + payment.debito + payment.credito + payment.outros;
   const trocoRestante = Math.max(0, form.trocoInicial - form.trocoUsado);
-  const dinheiroEsperado = form.trocoInicial + payment.dinheiro + form.reforcos - form.sangrias - form.retiradas - form.pagamentosCaixa;
+  const dinheiroEsperado = form.trocoInicial + payment.dinheiroRecebido - payment.trocoDevolvido + form.reforcos - form.sangrias - form.retiradas - form.pagamentosCaixa;
   const diferenca = form.dinheiroContado - dinheiroEsperado;
   return {
     ...form,
@@ -1109,6 +1172,9 @@ function updateCashPreview() {
       <span>Troco inicial: ${currency.format(values.trocoInicial)}</span>
       <span>Troco usado: ${currency.format(values.trocoUsado)}</span>
       <span>Troco restante: ${currency.format(values.trocoRestante)}</span>
+      <span>Dinheiro recebido: ${currency.format(values.dinheiroRecebido)}</span>
+      <span>Troco devolvido: ${currency.format(values.trocoDevolvido)}</span>
+      <span>Dinheiro liquido: ${currency.format(values.dinheiroLiquido)}</span>
       <span>Dinheiro esperado: ${currency.format(values.dinheiroEsperado)}</span>
       <span>Dinheiro contado: ${currency.format(values.dinheiroContado)}</span>
       <span>Diferenca: ${currency.format(values.diferenca)}</span>
@@ -1145,6 +1211,9 @@ function renderCashClosing() {
   $("[data-cash-other]").textContent = currency.format(values.outros);
   $("[data-cash-total]").textContent = currency.format(values.totalVendas);
   $("[data-cash-electronic]").textContent = currency.format(values.eletronicos);
+  $("[data-cash-money-received]").textContent = currency.format(values.dinheiroRecebido);
+  $("[data-cash-change-given]").textContent = currency.format(values.trocoDevolvido);
+  $("[data-cash-money-net]").textContent = currency.format(values.dinheiroLiquido);
   $("[data-cash-count]").textContent = String(values.quantidadeVendas);
   $("[data-cash-cancelled]").textContent = String(values.vendasCanceladas);
   if (cashStatus) {
@@ -1179,6 +1248,9 @@ function cashPayload(status = "fechado") {
     vendas_credito: values.credito,
     vendas_outros: values.outros,
     total_vendas: values.totalVendas,
+    total_dinheiro_recebido: values.dinheiroRecebido,
+    total_troco_devolvido: values.trocoDevolvido,
+    dinheiro_liquido: values.dinheiroLiquido,
     quantidade_vendas: values.quantidadeVendas,
     vendas_canceladas: values.vendasCanceladas,
     sangrias: values.sangrias,
@@ -1272,6 +1344,15 @@ loginForm?.addEventListener("submit", async (event) => {
 });
 
 saleForm?.addEventListener("submit", registerSale);
+saleForm?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
+  event.preventDefault();
+  if (event.target.name === "valor_recebido" || event.target.name === "taxa_entrega") {
+    formatMoneyInput(event.target);
+    app.saleReceivedTouched = event.target.name === "valor_recebido" ? true : app.saleReceivedTouched;
+    updateSaleTotal();
+  }
+});
 expenseForm?.addEventListener("submit", saveExpense);
 cashForm?.addEventListener("submit", closeCash);
 sellerForm?.addEventListener("submit", (event) => {
@@ -1371,7 +1452,10 @@ document.addEventListener("change", (event) => {
     }
     updateSaleTotal();
   }
-  if (event.target.name === "forma_pagamento") updateSaleTotal();
+  if (event.target.name === "forma_pagamento") {
+    if (!isCashPayment(event.target.value)) app.saleReceivedTouched = false;
+    updateSaleTotal();
+  }
   if (event.target.name === "valor_recebido" || event.target.name === "taxa_entrega") {
     formatMoneyInput(event.target);
     updateSaleTotal();
