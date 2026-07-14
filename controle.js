@@ -34,6 +34,7 @@ const app = {
   deliveryManuallyEdited: false,
   saleReceivedTouched: false,
   saleSaving: false,
+  editingSaleId: null,
   cashDate: "",
   cashEditing: false,
   routesDate: "",
@@ -74,6 +75,9 @@ const sellerList = $("[data-seller-list]");
 const delivererList = $("[data-deliverer-list]");
 const saleSuccess = $("[data-sale-success]");
 const saleSubmit = $("[data-sale-submit]");
+const saleEditBanner = $("[data-sale-edit-banner]");
+const saleEditLabel = $("[data-sale-edit-label]");
+const saleEditMotive = $("[data-sale-edit-motive]");
 const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
 const cashHistory = $("[data-cash-history]");
@@ -375,6 +379,8 @@ function renderAll() {
   renderPeopleOptions();
   renderDashboard();
   renderSaleItems();
+  updateSaleItemPrices();
+  updateSaleTotal();
   renderSalesHistory();
   renderStock();
   renderFinance();
@@ -473,12 +479,28 @@ function renderRevenueReport(sales) {
   renderList("[data-report-revenue]", rows, "Sem faturamento no periodo.");
 }
 
-function productOptions(selected = "") {
-  return app.products.map((product) => `<option value="${product.id}" ${String(product.id) === String(selected) ? "selected" : ""}>${escapeHtml(product.nome)}</option>`).join("");
+function isProductAvailable(product) {
+  return product && toNumber(product.estoque) > 0 && product.ativo !== false;
 }
 
-function saleItemTemplate() {
-  const firstProduct = app.products[0];
+function saleProducts(selected = "") {
+  const selectedText = String(selected || "");
+  return app.products.filter((product) => isProductAvailable(product) || (app.editingSaleId && String(product.id) === selectedText));
+}
+
+function productOptions(selected = "") {
+  const rows = saleProducts(selected);
+  return rows.length
+    ? rows.map((product) => `<option value="${product.id}" ${String(product.id) === String(selected) ? "selected" : ""}>${escapeHtml(product.nome)} (${toNumber(product.estoque)} un)</option>`).join("")
+    : '<option value="">Sem produtos em estoque</option>';
+}
+
+function firstAvailableProduct() {
+  return saleProducts()[0] || null;
+}
+
+function saleItemTemplate(item = {}) {
+  const firstProduct = item.product || app.products.find((product) => String(product.id) === String(item.produto_id)) || firstAvailableProduct();
   return `
     <article class="sale-item">
       <div class="sale-product-preview" data-sale-product-preview>
@@ -488,9 +510,9 @@ function saleItemTemplate() {
           <span>${escapeHtml(firstProduct?.categoria || "Produto")}</span>
         </div>
       </div>
-      <label>Produto <select name="produto_id">${productOptions()}</select></label>
-      <label>Qtd <input type="number" name="quantidade" min="1" step="1" value="1" /></label>
-      <label>Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" /></label>
+      <label>Produto <select name="produto_id">${productOptions(firstProduct?.id || "")}</select></label>
+      <label>Qtd <input type="number" name="quantidade" min="1" step="1" value="${toNumber(item.quantidade || 1)}" /></label>
+      <label>Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" value="${item.valor_unitario !== undefined ? toNumber(item.valor_unitario).toFixed(2) : ""}" /></label>
       <div class="sale-line-total"><span>Subtotal</span><strong data-item-subtotal>R$ 0,00</strong></div>
       <button class="ghost-action" type="button" data-remove-sale-item>Remover</button>
     </article>
@@ -509,6 +531,9 @@ function updateSaleItemPrices() {
     const select = row.querySelector('[name="produto_id"]');
     const price = row.querySelector('[name="valor_unitario"]');
     const product = app.products.find((item) => String(item.id) === String(select?.value));
+    if (select) select.innerHTML = productOptions(select.value);
+    const quantityInput = row.querySelector('[name="quantidade"]');
+    if (quantityInput && product) quantityInput.max = Math.max(1, toNumber(product.estoque));
     if (product && price && !price.value) price.value = toNumber(product.preco).toFixed(2);
     updateSaleItemPreview(row, product);
   });
@@ -525,7 +550,7 @@ function updateSaleItemPreview(row, product) {
     <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product?.nome || "Produto")}" loading="lazy" decoding="async" />
     <div>
       <strong>${escapeHtml(product?.nome || "Selecione um produto")}</strong>
-      <span>${escapeHtml(product?.categoria || "Produto")}</span>
+      <span>${escapeHtml(product?.categoria || "Produto")} | Estoque: ${toNumber(product?.estoque || 0)}</span>
     </div>
   `;
 }
@@ -609,6 +634,30 @@ function updateSaleTotal() {
   }
 }
 
+function collectSaleItems({ allowEditing = false } = {}) {
+  const rows = $$(".sale-item");
+  const items = rows.map((row) => {
+    const product = app.products.find((item) => String(item.id) === String(row.querySelector('[name="produto_id"]')?.value));
+    const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
+    const unitValue = parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
+    if (!product || quantity <= 0 || unitValue <= 0) throw new Error("Revise os produtos da venda.");
+    if (!allowEditing && !isProductAvailable(product)) throw new Error(`${product.nome} esta sem estoque para novas vendas.`);
+    return { product, quantity, unitValue };
+  });
+  const totals = new Map();
+  items.forEach((item) => {
+    const key = String(item.product.id);
+    totals.set(key, (totals.get(key) || 0) + item.quantity);
+  });
+  if (!allowEditing) {
+    totals.forEach((quantity, productId) => {
+      const product = app.products.find((item) => String(item.id) === productId);
+      if (quantity > toNumber(product?.estoque)) throw new Error(`Estoque insuficiente para ${product?.nome || "produto"}.`);
+    });
+  }
+  return items;
+}
+
 async function insertStockMove(product, previous, next, type, saleId = null) {
   const payload = {
     produto_id: String(product.id),
@@ -644,50 +693,46 @@ async function getOrCreatePerson(tableName, rows, name) {
   return data;
 }
 
-async function registerSale(event) {
-  event.preventDefault();
-  if (app.saleSaving) return;
-  const rows = $$(".sale-item");
-  if (!rows.length) return;
-  app.saleSaving = true;
-  if (saleSubmit) {
-    saleSubmit.disabled = true;
-    saleSubmit.textContent = "Registrando venda...";
-  }
-  if (saleSuccess) saleSuccess.textContent = "";
-  setStatus("Registrando venda...", "loading");
-  try {
-    const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
-    if (!seller) throw new Error("Informe a vendedora.");
-    const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
-    const items = rows.map((row) => {
-      const product = app.products.find((item) => String(item.id) === String(row.querySelector('[name="produto_id"]')?.value));
-      const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
-      const unitValue = parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
-      if (!product || quantity <= 0 || unitValue <= 0) throw new Error("Revise os produtos da venda.");
-      if (quantity > toNumber(product.estoque)) throw new Error(`Estoque insuficiente para ${product.nome}.`);
-      return { product, quantity, unitValue };
-    });
-    const discount = parseMoney(saleForm.elements.desconto.value);
-    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
-    const draft = currentSaleDraft();
-    const productsValue = Math.max(0, subtotal - discount);
-    if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
-    if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
-    if (draft.cash && draft.hasChange && !String(saleForm.elements.troco.value || "").trim()) throw new Error("Informe o valor do troco entregue.");
-    if (draft.cash && draft.changeValue < 0) throw new Error("Troco nao pode ser negativo.");
-    if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
-    const deliveryValue = Math.max(0, draft.deliveryValue);
-    const totalSale = draft.productsValue + deliveryValue;
-    const paymentLabel = draft.payment;
-    const deliveredValue = draft.paidValue;
-    const changeValue = draft.cash && draft.hasChange ? draft.changeValue : 0;
-    const commission = commissionForPayment(paymentLabel);
-    const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
-    const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
-    const first = items[0];
-    const routeDateTime = routeIso(draft.routeDate, draft.routeTime);
-    const salePayload = {
+function saleItemPayload(items) {
+  return items.map((item) => ({
+    produto_id: String(item.product.id),
+    nome_produto: item.product.nome,
+    quantidade: item.quantity,
+    valor_unitario: item.unitValue,
+    valor_total: item.quantity * item.unitValue,
+    custo_unitario: productCost(item.product),
+    custo_total: item.quantity * productCost(item.product),
+  }));
+}
+
+function buildSalePayload(items, seller, deliverer) {
+  const discount = parseMoney(saleForm.elements.desconto.value);
+  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+  const draft = currentSaleDraft();
+  const productsValue = Math.max(0, subtotal - discount);
+  if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
+  if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
+  if (draft.cash && draft.hasChange && !String(saleForm.elements.troco.value || "").trim()) throw new Error("Informe o valor do troco entregue.");
+  if (draft.cash && draft.changeValue < 0) throw new Error("Troco nao pode ser negativo.");
+  if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
+  const deliveryValue = Math.max(0, draft.deliveryValue);
+  const totalSale = draft.productsValue + deliveryValue;
+  const paymentLabel = draft.payment;
+  const deliveredValue = draft.paidValue;
+  const changeValue = draft.cash && draft.hasChange ? draft.changeValue : 0;
+  const commission = commissionForPayment(paymentLabel);
+  const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
+  const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
+  const first = items[0];
+  const routeDateTime = routeIso(draft.routeDate, draft.routeTime);
+  return {
+    draft,
+    totalSale,
+    productsValue,
+    deliveryValue,
+    deliveredValue,
+    paymentLabel,
+    payload: {
       produto_id: String(first.product.id),
       nome_produto: first.product.nome,
       quantidade: quantityTotal,
@@ -722,19 +767,83 @@ async function registerSale(event) {
       custo_total: cost,
       cancelada: false,
       usuario_id: app.user?.id || null,
-    };
+    },
+  };
+}
+
+function resetSaleForm() {
+  app.editingSaleId = null;
+  saleForm.reset();
+  saleForm.elements.desconto.value = "0";
+  saleForm.elements.valor_recebido.value = "";
+  saleForm.elements.troco.value = "";
+  saleForm.elements.teve_troco.value = "nao";
+  saleForm.elements.taxa_entrega.value = "";
+  saleForm.elements.motivo_alteracao.value = "";
+  app.deliveryManuallyEdited = false;
+  app.saleReceivedTouched = false;
+  setSuggestedDeliveryRoute();
+  saleItemsRoot.innerHTML = saleItemTemplate();
+  renderPeopleOptions();
+  saleEditBanner?.classList.add("hidden");
+  saleEditMotive?.classList.add("hidden");
+  if (saleSubmit) saleSubmit.textContent = "Registrar venda";
+  updateSaleItemPrices();
+  updateSaleTotal();
+}
+
+function loadSaleForEdit(saleId) {
+  const sale = app.sales.find((item) => String(item.id) === String(saleId));
+  if (!sale || sale.cancelada) return setStatus("Venda cancelada nao pode ser editada.", "error");
+  const items = app.saleItems.filter((item) => String(item.venda_id) === String(saleId));
+  if (!items.length) return setStatus("Venda sem itens para editar.", "error");
+  app.editingSaleId = sale.id;
+  switchTab("sales");
+  saleItemsRoot.innerHTML = items.map((item) => saleItemTemplate(item)).join("");
+  saleForm.elements.desconto.value = toNumber(sale.desconto).toFixed(2);
+  saleForm.elements.forma_pagamento.value = sale.forma_pagamento || "Pix";
+  renderPeopleOptions();
+  saleForm.elements.vendedora_id.value = sale.vendedora_id || "";
+  saleForm.elements.entregador_id.value = sale.entregador_id || "";
+  saleForm.elements.valor_recebido.value = saleDeliveredValue(sale).toFixed(2).replace(".", ",");
+  saleForm.elements.teve_troco.value = sale.teve_troco || saleChangeValue(sale) > 0 ? "sim" : "nao";
+  saleForm.elements.troco.value = saleChangeValue(sale).toFixed(2).replace(".", ",");
+  saleForm.elements.data_entrega.value = saleRouteDate(sale);
+  saleForm.elements.horario_rota.value = saleRouteTime(sale) || "11:00";
+  saleForm.elements.cliente.value = sale.cliente_nome || "";
+  saleForm.elements.observacao.value = sale.observacao || "";
+  saleForm.elements.motivo_alteracao.value = "";
+  saleEditBanner?.classList.remove("hidden");
+  saleEditMotive?.classList.remove("hidden");
+  if (saleEditLabel) saleEditLabel.textContent = `Venda #${sale.id}`;
+  if (saleSubmit) saleSubmit.textContent = "Salvar alteracoes";
+  app.saleReceivedTouched = true;
+  updateSaleItemPrices();
+  updateSaleTotal();
+  saleForm.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+async function registerSale(event) {
+  event.preventDefault();
+  if (app.saleSaving) return;
+  const rows = $$(".sale-item");
+  if (!rows.length) return;
+  app.saleSaving = true;
+  if (saleSubmit) {
+    saleSubmit.disabled = true;
+    saleSubmit.textContent = "Registrando venda...";
+  }
+  if (saleSuccess) saleSuccess.textContent = "";
+  setStatus("Registrando venda...", "loading");
+  try {
+    const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
+    if (!seller) throw new Error("Informe a vendedora.");
+    const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
+    const items = collectSaleItems();
+    const { payload: salePayload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
     const { data: sale, error: saleError } = await supabaseClient.from(TABLES.sales).insert(salePayload).select("*").single();
     if (saleError) throw saleError;
-    const itemPayload = items.map((item) => ({
-      venda_id: sale.id,
-      produto_id: String(item.product.id),
-      nome_produto: item.product.nome,
-      quantidade: item.quantity,
-      valor_unitario: item.unitValue,
-      valor_total: item.quantity * item.unitValue,
-      custo_unitario: productCost(item.product),
-      custo_total: item.quantity * productCost(item.product),
-    }));
+    const itemPayload = saleItemPayload(items).map((item) => ({ ...item, venda_id: sale.id }));
     const { error: itemError } = await supabaseClient.from(TABLES.saleItems).insert(itemPayload);
     if (itemError) throw itemError;
     for (const item of items) {
@@ -752,20 +861,8 @@ async function registerSale(event) {
     localStorage.setItem(LAST_SELLER_KEY, String(seller.id));
     if (deliverer) localStorage.setItem(LAST_DELIVERER_KEY, String(deliverer.id));
     else localStorage.removeItem(LAST_DELIVERER_KEY);
-    saleForm.reset();
-    saleForm.elements.desconto.value = "0";
-    saleForm.elements.valor_recebido.value = "";
-    saleForm.elements.troco.value = "";
-    saleForm.elements.teve_troco.value = "nao";
-    saleForm.elements.taxa_entrega.value = "";
-    app.deliveryManuallyEdited = false;
-    app.saleReceivedTouched = false;
-    setSuggestedDeliveryRoute();
-    saleItemsRoot.innerHTML = saleItemTemplate();
-    renderPeopleOptions();
-    updateSaleItemPrices();
-    updateSaleTotal();
     await loadAll();
+    resetSaleForm();
     const registeredAt = new Date(sale.created_at || Date.now()).toLocaleString("pt-BR");
     const successMessage = `Venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`;
     setStatus(successMessage, "success");
@@ -785,6 +882,59 @@ async function registerSale(event) {
       saleSubmit.textContent = "Registrar venda";
     }
   }
+}
+
+async function updateEditedSale(event) {
+  event.preventDefault();
+  if (app.saleSaving || !app.editingSaleId) return;
+  const sale = app.sales.find((item) => String(item.id) === String(app.editingSaleId));
+  if (!sale || sale.cancelada) return setStatus("Venda cancelada nao pode ser editada.", "error");
+  const motive = saleForm.elements.motivo_alteracao.value.trim();
+  if (!motive) return setStatus("Informe o motivo da alteracao.", "error");
+  app.saleSaving = true;
+  if (saleSubmit) {
+    saleSubmit.disabled = true;
+    saleSubmit.textContent = "Salvando alteracoes...";
+  }
+  setStatus("Salvando alteracoes...", "loading");
+  try {
+    const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
+    if (!seller) throw new Error("Informe a vendedora.");
+    const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
+    const items = collectSaleItems({ allowEditing: true });
+    const { payload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
+    if (!window.confirm(`Salvar alteracoes da venda #${app.editingSaleId}?`)) return;
+    const { error } = await supabaseClient.rpc("editar_venda_estoque", {
+      p_venda_id: Number(app.editingSaleId),
+      p_venda: payload,
+      p_itens: saleItemPayload(items),
+      p_motivo: motive,
+    });
+    if (error) throw error;
+    await loadAll();
+    resetSaleForm();
+    const successMessage = `Venda atualizada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime}.`;
+    setStatus(successMessage, "success");
+    if (saleSuccess) {
+      saleSuccess.textContent = successMessage;
+      saleSuccess.className = "form-status success";
+      window.setTimeout(() => {
+        saleSuccess.textContent = "";
+      }, 8000);
+    }
+  } catch (error) {
+    setStatus(error.message || "Erro ao editar venda.", "error");
+  } finally {
+    app.saleSaving = false;
+    if (saleSubmit) {
+      saleSubmit.disabled = false;
+      saleSubmit.textContent = app.editingSaleId ? "Salvar alteracoes" : "Registrar venda";
+    }
+  }
+}
+
+function saveSale(event) {
+  return app.editingSaleId ? updateEditedSale(event) : registerSale(event);
 }
 
 async function cancelSale(saleId) {
@@ -821,10 +971,30 @@ function renderSalesHistory() {
         <span>Total ${currency.format(saleGrandTotal(sale))} | Entrega ${currency.format(saleDelivery(sale))}</span>
         ${isCashPayment(sale.forma_pagamento) ? `<span>Entregue ${currency.format(saleDeliveredValue(sale))} | Troco ${currency.format(saleChangeValue(sale))}</span>` : ""}
         <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")} | ${escapeHtml(sale.vendedora_nome || "Vendedora nao informada")} ${sale.cancelada ? "- Cancelada" : ""}</span>
-        ${sale.cancelada ? "" : `<button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
+        <div class="history-actions">
+          <button type="button" data-view-sale="${sale.id}">Ver detalhes</button>
+          ${sale.cancelada ? "" : `<button type="button" data-edit-sale="${sale.id}">Editar venda</button><button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
+        </div>
       </article>
     `).join("")
     : "<p>Nenhuma venda registrada.</p>";
+}
+
+function viewSaleDetails(saleId) {
+  const sale = app.sales.find((item) => String(item.id) === String(saleId));
+  if (!sale) return;
+  const items = app.saleItems.filter((item) => String(item.venda_id) === String(saleId));
+  window.alert([
+    `Venda #${sale.id}`,
+    `Cliente: ${sale.cliente_nome || "Nao informado"}`,
+    `Produtos: ${items.map((item) => `${item.quantidade}x ${item.nome_produto}`).join(", ") || sale.nome_produto}`,
+    `Valor produtos: ${currency.format(saleTotal(sale))}`,
+    `Valor pago: ${currency.format(saleDeliveredValue(sale))}`,
+    `Taxa entrega: ${currency.format(saleDelivery(sale))}`,
+    `Pagamento: ${sale.forma_pagamento || "Nao informado"}`,
+    `Entrega: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}`,
+    `Status: ${sale.status_entrega || sale.status || "Nao informado"}`,
+  ].join("\n"));
 }
 
 function renderStockFilters() {
@@ -1504,7 +1674,7 @@ loginForm?.addEventListener("submit", async (event) => {
   await loadAll();
 });
 
-saleForm?.addEventListener("submit", registerSale);
+saleForm?.addEventListener("submit", saveSale);
 saleForm?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
   event.preventDefault();
@@ -1558,6 +1728,11 @@ document.addEventListener("click", async (event) => {
   if (save) saveStock(save.dataset.stockSave);
   const cancel = event.target.closest("[data-cancel-sale]");
   if (cancel) cancelSale(cancel.dataset.cancelSale);
+  const viewSale = event.target.closest("[data-view-sale]");
+  if (viewSale) viewSaleDetails(viewSale.dataset.viewSale);
+  const editSale = event.target.closest("[data-edit-sale]");
+  if (editSale) loadSaleForEdit(editSale.dataset.editSale);
+  if (event.target.closest("[data-cancel-edit-sale]")) resetSaleForm();
   const editTeam = event.target.closest("[data-team-edit]");
   if (editTeam) editTeamMember(editTeam.dataset.teamEdit, editTeam.dataset.teamId);
   const toggleTeam = event.target.closest("[data-team-toggle]");
