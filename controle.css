@@ -245,7 +245,8 @@ textarea {
 
 .kpi-grid,
 .finance-grid,
-.sale-summary-grid {
+.sale-summary-grid,
+.cash-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
@@ -253,13 +254,15 @@ textarea {
 
 .kpi-grid article,
 .finance-grid article,
-.sale-summary-grid article {
+.sale-summary-grid article,
+.cash-grid article {
   padding: 16px;
 }
 
 .kpi-grid span,
 .finance-grid span,
-.sale-summary-grid span {
+.sale-summary-grid span,
+.cash-grid span {
   display: block;
   margin-bottom: 8px;
   color: var(--muted);
@@ -269,7 +272,8 @@ textarea {
 
 .kpi-grid strong,
 .finance-grid strong,
-.sale-summary-grid strong {
+.sale-summary-grid strong,
+.cash-grid strong {
   color: var(--black);
   font-size: 1.25rem;
   line-height: 1.05;
@@ -362,6 +366,54 @@ textarea {
 
 .sale-summary-grid .wide {
   grid-column: 1 / -1;
+}
+
+.cash-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.cash-grid article {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--soft);
+}
+
+.cash-grid .wide {
+  grid-column: 1 / -1;
+}
+
+.cash-status {
+  display: grid;
+  gap: 4px;
+  min-height: 22px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.cash-status strong {
+  color: var(--green);
+}
+
+.cash-summary {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--soft);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.cash-summary strong {
+  color: var(--black);
+  font-size: 1.02rem;
+}
+
+.cash-actions {
+  display: grid;
+  gap: 10px;
 }
 
 .team-grid,
@@ -561,6 +613,18 @@ textarea {
   }
 
   .sale-summary-grid .wide {
+    grid-column: auto;
+  }
+
+  .cash-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .cash-result-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .cash-grid .wide {
     grid-column: auto;
   }
 

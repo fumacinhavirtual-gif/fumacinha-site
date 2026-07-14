@@ -10,6 +10,8 @@ const TABLES = {
   deliverers: "ENTREGADORES",
   sellers: "VENDEDORAS",
   deliveryPayouts: "REPASSES_ENTREGADORES",
+  cashClosings: "FECHAMENTOS_CAIXA",
+  cashMovements: "MOVIMENTACOES_CAIXA",
 };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -26,8 +28,12 @@ const app = {
   deliverers: [],
   sellers: [],
   deliveryPayouts: [],
+  cashClosings: [],
+  cashMovements: [],
   deliveryManuallyEdited: false,
   saleReceivedTouched: false,
+  cashDate: "",
+  cashEditing: false,
   sellerSearch: "",
   delivererSearch: "",
   period: "today",
@@ -62,6 +68,10 @@ const sellerForm = $("[data-seller-form]");
 const delivererForm = $("[data-deliverer-form]");
 const sellerList = $("[data-seller-list]");
 const delivererList = $("[data-deliverer-list]");
+const cashDateInput = $("[data-cash-date]");
+const cashForm = $("[data-cash-form]");
+const cashHistory = $("[data-cash-history]");
+const cashStatus = $("[data-cash-status]");
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -105,6 +115,11 @@ function formatMoneyInput(input) {
 
 function dateValue(date = new Date()) {
   return date.toISOString().slice(0, 10);
+}
+
+function localDateValue(date = new Date()) {
+  const offset = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 10);
 }
 
 function localDateTimeValue(date = new Date()) {
@@ -273,7 +288,7 @@ async function requireAuth() {
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult] = await Promise.allSettled([
+  const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sales).select("*").order("data_venda", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
@@ -282,9 +297,11 @@ async function loadAll() {
     supabaseClient.from(TABLES.deliverers).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sellers).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.deliveryPayouts).select("*").order("created_at", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.cashClosings).select("*").order("data_caixa", { ascending: false }).limit(120),
+    supabaseClient.from(TABLES.cashMovements).select("*").order("created_at", { ascending: false }).limit(500),
   ]);
 
-  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult]
+  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult]
     .filter((result) => result.status === "fulfilled" && result.value.error)
     .map((result) => result.value.error.message);
 
@@ -301,6 +318,8 @@ async function loadAll() {
   app.deliverers = deliverersResult.value.data || [];
   app.sellers = sellersResult.value.data || [];
   app.deliveryPayouts = payoutsResult.value.data || [];
+  app.cashClosings = closingsResult.value.data || [];
+  app.cashMovements = cashMovesResult.value.data || [];
   setStatus("Controle atualizado.", "success");
   renderAll();
 }
@@ -314,6 +333,7 @@ function renderAll() {
   renderStock();
   renderFinance();
   renderReports();
+  renderCashClosing();
 }
 
 function renderPeriods() {
@@ -962,6 +982,276 @@ async function deleteTeamMember(type, id) {
   renderPeopleOptions();
 }
 
+function saleDateKey(sale) {
+  return localDateValue(saleDate(sale));
+}
+
+function cashClosingForDate(dateKey = app.cashDate) {
+  return app.cashClosings.find((closing) => closing.data_caixa === dateKey);
+}
+
+function cashSalesForDate(dateKey = app.cashDate, includeCancelled = false) {
+  return app.sales.filter((sale) => {
+    if (!includeCancelled && sale.cancelada) return false;
+    return saleDateKey(sale) === dateKey;
+  });
+}
+
+function cashMovementsForDate(dateKey = app.cashDate) {
+  return app.cashMovements.filter((move) => move.data_caixa === dateKey);
+}
+
+function cashPaymentTotals(dateKey = app.cashDate) {
+  const totals = { pix: 0, dinheiro: 0, debito: 0, credito: 0, outros: 0 };
+  cashSalesForDate(dateKey).forEach((sale) => {
+    const payment = normalizePayment(sale.forma_pagamento);
+    const value = saleTotal(sale);
+    if (payment === "pix") totals.pix += value;
+    else if (payment === "dinheiro") totals.dinheiro += value;
+    else if (payment === "debito") totals.debito += value;
+    else if (payment === "credito") totals.credito += value;
+    else totals.outros += value;
+  });
+  return totals;
+}
+
+function cashMovementTotals(dateKey = app.cashDate) {
+  const totals = { sangria: 0, reforco: 0, retirada: 0, pagamento: 0, ajuste: 0 };
+  cashMovementsForDate(dateKey).forEach((move) => {
+    const type = normalizePayment(move.tipo);
+    const value = toNumber(move.valor);
+    if (type in totals) totals[type] += value;
+  });
+  return totals;
+}
+
+function cashReadFormValues() {
+  const movementTotals = cashMovementTotals();
+  const readMoney = (name, fallback = 0) => {
+    const input = cashForm?.elements[name];
+    return input && String(input.value).trim() ? parseMoney(input.value) : fallback;
+  };
+  return {
+    trocoInicial: readMoney("troco_inicial"),
+    trocoUsado: readMoney("troco_usado"),
+    sangrias: readMoney("sangrias", movementTotals.sangria),
+    reforcos: readMoney("reforcos", movementTotals.reforco),
+    retiradas: readMoney("retiradas", movementTotals.retirada),
+    pagamentosCaixa: readMoney("pagamentos_caixa", movementTotals.pagamento),
+    dinheiroContado: readMoney("dinheiro_contado"),
+    observacao: cashForm?.elements.observacao?.value.trim() || "",
+  };
+}
+
+function cashCalculate(dateKey = app.cashDate) {
+  const payment = cashPaymentTotals(dateKey);
+  const form = cashReadFormValues();
+  const activeSales = cashSalesForDate(dateKey);
+  const cancelledSales = cashSalesForDate(dateKey, true).filter((sale) => sale.cancelada);
+  const totalVendas = payment.pix + payment.dinheiro + payment.debito + payment.credito + payment.outros;
+  const eletronicos = payment.pix + payment.debito + payment.credito + payment.outros;
+  const trocoRestante = Math.max(0, form.trocoInicial - form.trocoUsado);
+  const dinheiroEsperado = form.trocoInicial + payment.dinheiro + form.reforcos - form.sangrias - form.retiradas - form.pagamentosCaixa;
+  const diferenca = form.dinheiroContado - dinheiroEsperado;
+  return {
+    ...form,
+    ...payment,
+    totalVendas,
+    eletronicos,
+    quantidadeVendas: activeSales.length,
+    vendasCanceladas: cancelledSales.length,
+    trocoRestante,
+    dinheiroEsperado,
+    diferenca,
+  };
+}
+
+function cashDifferenceLabel(difference) {
+  if (Math.abs(difference) < 0.005) return "Caixa correto";
+  return difference > 0 ? "Sobra de caixa" : "Falta de caixa";
+}
+
+function setMoneyInput(input, value) {
+  if (input) input.value = toNumber(value).toFixed(2).replace(".", ",");
+}
+
+function populateCashForm() {
+  if (!cashForm || app.cashEditing) return;
+  const closing = cashClosingForDate();
+  const movements = cashMovementTotals();
+  setMoneyInput(cashForm.elements.troco_inicial, closing?.troco_inicial || 0);
+  setMoneyInput(cashForm.elements.troco_usado, closing?.troco_usado || 0);
+  setMoneyInput(cashForm.elements.sangrias, closing?.sangrias || movements.sangria);
+  setMoneyInput(cashForm.elements.reforcos, closing?.reforcos || movements.reforco);
+  setMoneyInput(cashForm.elements.retiradas, closing?.retiradas || movements.retirada);
+  setMoneyInput(cashForm.elements.pagamentos_caixa, closing?.pagamentos_caixa || movements.pagamento);
+  setMoneyInput(cashForm.elements.dinheiro_contado, closing?.dinheiro_contado || 0);
+  cashForm.elements.observacao.value = closing?.observacao || "";
+}
+
+function updateCashPreview() {
+  const values = cashCalculate();
+  $("[data-cash-change-left]").textContent = currency.format(values.trocoRestante);
+  $("[data-cash-expected]").textContent = currency.format(values.dinheiroEsperado);
+  $("[data-cash-counted]").textContent = currency.format(values.dinheiroContado);
+  $("[data-cash-difference]").textContent = currency.format(values.diferenca);
+  $("[data-cash-difference-status]").textContent = cashDifferenceLabel(values.diferenca);
+  const summary = $("[data-cash-summary]");
+  if (summary) {
+    summary.innerHTML = `
+      <strong>Resumo do dia</strong>
+      <span>Pix: ${currency.format(values.pix)}</span>
+      <span>Dinheiro: ${currency.format(values.dinheiro)}</span>
+      <span>Credito: ${currency.format(values.credito)}</span>
+      <span>Debito: ${currency.format(values.debito)}</span>
+      <span>Outros: ${currency.format(values.outros)}</span>
+      <span>Total vendido: ${currency.format(values.totalVendas)}</span>
+      <span>Troco inicial: ${currency.format(values.trocoInicial)}</span>
+      <span>Troco usado: ${currency.format(values.trocoUsado)}</span>
+      <span>Troco restante: ${currency.format(values.trocoRestante)}</span>
+      <span>Dinheiro esperado: ${currency.format(values.dinheiroEsperado)}</span>
+      <span>Dinheiro contado: ${currency.format(values.dinheiroContado)}</span>
+      <span>Diferenca: ${currency.format(values.diferenca)}</span>
+      <span>Status: ${cashDifferenceLabel(values.diferenca)}</span>
+    `;
+  }
+}
+
+function renderCashHistory() {
+  if (!cashHistory) return;
+  cashHistory.innerHTML = app.cashClosings.length
+    ? app.cashClosings.slice(0, 30).map((closing) => `
+      <article class="history-row">
+        <strong>${new Date(`${closing.data_caixa}T12:00:00`).toLocaleDateString("pt-BR")} - ${escapeHtml(closing.status || "Aberto")}</strong>
+        <span>Total vendido ${currency.format(closing.total_vendas || 0)} | Esperado ${currency.format(closing.dinheiro_esperado || 0)}</span>
+        <span>Contado ${currency.format(closing.dinheiro_contado || 0)} | Diferenca ${currency.format(closing.diferenca || 0)}</span>
+        <button type="button" data-open-cash-date="${closing.data_caixa}">Abrir fechamento</button>
+      </article>
+    `).join("")
+    : "<p>Nenhum fechamento registrado.</p>";
+}
+
+function renderCashClosing() {
+  if (!cashForm || !cashDateInput) return;
+  if (!app.cashDate) app.cashDate = localDateValue();
+  cashDateInput.value = app.cashDate;
+  populateCashForm();
+  const values = cashCalculate();
+  const closing = cashClosingForDate();
+  $("[data-cash-pix]").textContent = currency.format(values.pix);
+  $("[data-cash-money]").textContent = currency.format(values.dinheiro);
+  $("[data-cash-debit]").textContent = currency.format(values.debito);
+  $("[data-cash-credit]").textContent = currency.format(values.credito);
+  $("[data-cash-other]").textContent = currency.format(values.outros);
+  $("[data-cash-total]").textContent = currency.format(values.totalVendas);
+  $("[data-cash-electronic]").textContent = currency.format(values.eletronicos);
+  $("[data-cash-count]").textContent = String(values.quantidadeVendas);
+  $("[data-cash-cancelled]").textContent = String(values.vendasCanceladas);
+  if (cashStatus) {
+    cashStatus.innerHTML = closing?.status === "fechado"
+      ? `<strong>Caixa conferido</strong><span>${new Date(closing.fechado_em || closing.updated_at).toLocaleString("pt-BR")}</span><span>Responsavel: ${escapeHtml(closing.fechado_por || "Usuario autenticado")}</span><span>Diferenca: ${currency.format(closing.diferenca || 0)}</span>`
+      : "<span>Fechamento aberto para conferencia.</span>";
+  }
+  const isClosed = closing?.status === "fechado";
+  $$("[data-reopen-cash]").forEach((button) => button.classList.toggle("hidden", !isClosed));
+  const closeButton = $("[data-cash-close-button]");
+  if (closeButton) {
+    closeButton.classList.toggle("hidden", isClosed);
+    closeButton.disabled = isClosed;
+  }
+  [...cashForm.elements].forEach((field) => {
+    if (field.matches("input, textarea, select")) field.disabled = isClosed;
+  });
+  updateCashPreview();
+  renderCashHistory();
+}
+
+function cashPayload(status = "fechado") {
+  const values = cashCalculate();
+  return {
+    data_caixa: app.cashDate,
+    troco_inicial: values.trocoInicial,
+    troco_usado: values.trocoUsado,
+    troco_restante: values.trocoRestante,
+    vendas_pix: values.pix,
+    vendas_dinheiro: values.dinheiro,
+    vendas_debito: values.debito,
+    vendas_credito: values.credito,
+    vendas_outros: values.outros,
+    total_vendas: values.totalVendas,
+    quantidade_vendas: values.quantidadeVendas,
+    vendas_canceladas: values.vendasCanceladas,
+    sangrias: values.sangrias,
+    reforcos: values.reforcos,
+    retiradas: values.retiradas,
+    pagamentos_caixa: values.pagamentosCaixa,
+    dinheiro_esperado: values.dinheiroEsperado,
+    dinheiro_contado: values.dinheiroContado,
+    diferenca: values.diferenca,
+    status,
+    observacao: values.observacao,
+    fechado_por: app.user?.email || app.user?.id || "",
+    fechado_em: new Date().toISOString(),
+  };
+}
+
+async function closeCash(event) {
+  event.preventDefault();
+  if (!cashForm) return;
+  const values = cashCalculate();
+  const confirmed = window.confirm(`Conferir e fechar caixa de ${new Date(`${app.cashDate}T12:00:00`).toLocaleDateString("pt-BR")}?\n\nDinheiro esperado: ${currency.format(values.dinheiroEsperado)}\nDinheiro contado: ${currency.format(values.dinheiroContado)}\nDiferenca: ${currency.format(values.diferenca)}`);
+  if (!confirmed) return;
+  setStatus("Fechando caixa...", "loading");
+  try {
+    const payload = cashPayload("fechado");
+    const { data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(payload, { onConflict: "data_caixa" }).select("*").single();
+    if (error) throw error;
+    app.cashClosings = [data, ...app.cashClosings.filter((closing) => closing.data_caixa !== data.data_caixa)];
+    app.cashEditing = false;
+    setStatus("Caixa conferido e fechado.", "success");
+    renderCashClosing();
+  } catch (error) {
+    setStatus(error.message || "Erro ao fechar caixa.", "error");
+  }
+}
+
+async function reopenCash() {
+  const closing = cashClosingForDate();
+  if (!closing) return;
+  if (!window.confirm("Reabrir este fechamento? O historico sera mantido.")) return;
+  setStatus("Reabrindo caixa...", "loading");
+  try {
+    const { data, error } = await supabaseClient
+      .from(TABLES.cashClosings)
+      .update({
+        status: "reaberto",
+        reaberto_por: app.user?.email || app.user?.id || "",
+        reaberto_em: new Date().toISOString(),
+      })
+      .eq("id", closing.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    Object.assign(closing, data);
+    setStatus("Fechamento reaberto.", "success");
+    renderCashClosing();
+  } catch (error) {
+    setStatus(error.message || "Erro ao reabrir fechamento.", "error");
+  }
+}
+
+function usePreviousChange() {
+  if (!cashForm) return;
+  const previous = app.cashClosings
+    .filter((closing) => closing.data_caixa < app.cashDate)
+    .sort((a, b) => b.data_caixa.localeCompare(a.data_caixa))[0];
+  if (!previous) return setStatus("Nenhum fechamento anterior encontrado.", "error");
+  if (!window.confirm(`Usar ${currency.format(previous.troco_restante || 0)} como troco inicial?`)) return;
+  setMoneyInput(cashForm.elements.troco_inicial, previous.troco_restante || 0);
+  app.cashEditing = true;
+  updateCashPreview();
+}
+
 function switchTab(tab) {
   app.activeTab = tab;
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
@@ -983,6 +1273,7 @@ loginForm?.addEventListener("submit", async (event) => {
 
 saleForm?.addEventListener("submit", registerSale);
 expenseForm?.addEventListener("submit", saveExpense);
+cashForm?.addEventListener("submit", closeCash);
 sellerForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   addTeamMember("seller", event.currentTarget);
@@ -1031,6 +1322,14 @@ document.addEventListener("click", async (event) => {
   if (toggleTeam) toggleTeamMember(toggleTeam.dataset.teamToggle, toggleTeam.dataset.teamId);
   const deleteTeam = event.target.closest("[data-team-delete]");
   if (deleteTeam) deleteTeamMember(deleteTeam.dataset.teamDelete, deleteTeam.dataset.teamId);
+  const openCashDate = event.target.closest("[data-open-cash-date]");
+  if (openCashDate) {
+    app.cashDate = openCashDate.dataset.openCashDate;
+    app.cashEditing = false;
+    renderCashClosing();
+  }
+  if (event.target.closest("[data-use-previous-change]")) usePreviousChange();
+  if (event.target.closest("[data-reopen-cash]")) reopenCash();
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();
     renderAuth(false);
@@ -1055,6 +1354,10 @@ document.addEventListener("input", (event) => {
   if (event.target.matches("[data-deliverer-search]")) {
     app.delivererSearch = event.target.value;
     renderTeamLists();
+  }
+  if (event.target.closest("[data-cash-form]")) {
+    app.cashEditing = true;
+    updateCashPreview();
   }
 });
 
@@ -1091,9 +1394,20 @@ document.addEventListener("change", (event) => {
     renderStock();
   }
   if (event.target.matches("[data-date-start], [data-date-end]")) renderAll();
+  if (event.target.matches("[data-cash-date]")) {
+    app.cashDate = event.target.value || localDateValue();
+    app.cashEditing = false;
+    renderCashClosing();
+  }
+  if (event.target.closest("[data-cash-form]") && event.target.tagName === "INPUT") {
+    formatMoneyInput(event.target);
+    updateCashPreview();
+  }
 });
 
 function initDefaults() {
+  app.cashDate = localDateValue();
+  if (cashDateInput) cashDateInput.value = app.cashDate;
   const saleDateInput = saleForm?.elements.data_venda;
   if (saleDateInput) saleDateInput.value = localDateTimeValue();
   if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "";

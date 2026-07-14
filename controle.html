@@ -236,6 +236,69 @@
             <section><h2>Entregadores</h2><div data-report-deliverers></div></section>
             <section><h2>Comissoes</h2><div data-report-commissions></div></section>
           </div>
+          <section class="panel-card cash-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Fechamento de Caixa</p>
+                <h2>Conferencia do dia</h2>
+              </div>
+            </div>
+
+            <div class="form-grid">
+              <label>Data do fechamento <input type="date" data-cash-date /></label>
+              <button class="ghost-action" type="button" data-use-previous-change>Usar troco de ontem</button>
+            </div>
+
+            <div class="cash-status" data-cash-status></div>
+
+            <div class="cash-grid">
+              <article><span>Pix</span><strong data-cash-pix>R$ 0,00</strong></article>
+              <article><span>Dinheiro</span><strong data-cash-money>R$ 0,00</strong></article>
+              <article><span>Debito</span><strong data-cash-debit>R$ 0,00</strong></article>
+              <article><span>Credito</span><strong data-cash-credit>R$ 0,00</strong></article>
+              <article><span>Outros</span><strong data-cash-other>R$ 0,00</strong></article>
+              <article><span>Total vendido</span><strong data-cash-total>R$ 0,00</strong></article>
+              <article><span>Pagamentos eletronicos</span><strong data-cash-electronic>R$ 0,00</strong></article>
+              <article><span>Quantidade de vendas</span><strong data-cash-count>0</strong></article>
+              <article><span>Vendas canceladas</span><strong data-cash-cancelled>0</strong></article>
+            </div>
+
+            <form data-cash-form>
+              <div class="form-grid">
+                <label>Troco inicial <input type="text" name="troco_inicial" inputmode="decimal" placeholder="0,00" /></label>
+                <label>Troco usado <input type="text" name="troco_usado" inputmode="decimal" placeholder="0,00" /></label>
+                <label>Sangrias <input type="text" name="sangrias" inputmode="decimal" placeholder="0,00" /></label>
+                <label>Reforcos de caixa <input type="text" name="reforcos" inputmode="decimal" placeholder="0,00" /></label>
+                <label>Retiradas <input type="text" name="retiradas" inputmode="decimal" placeholder="0,00" /></label>
+                <label>Pagamentos pelo caixa <input type="text" name="pagamentos_caixa" inputmode="decimal" placeholder="0,00" /></label>
+                <label>Dinheiro contado manualmente <input type="text" name="dinheiro_contado" inputmode="decimal" placeholder="0,00" required /></label>
+              </div>
+              <label>Observacao <textarea name="observacao" rows="3"></textarea></label>
+
+              <div class="cash-grid cash-result-grid">
+                <article><span>Troco restante</span><strong data-cash-change-left>R$ 0,00</strong></article>
+                <article><span>Dinheiro esperado</span><strong data-cash-expected>R$ 0,00</strong></article>
+                <article><span>Dinheiro contado</span><strong data-cash-counted>R$ 0,00</strong></article>
+                <article><span>Diferenca</span><strong data-cash-difference>R$ 0,00</strong></article>
+                <article class="wide"><span>Status</span><strong data-cash-difference-status>Caixa correto</strong></article>
+              </div>
+
+              <div class="cash-summary" data-cash-summary></div>
+              <div class="form-footer">
+                <small>Dinheiro esperado = troco inicial + vendas em dinheiro + reforcos - sangrias - retiradas - pagamentos pelo caixa.</small>
+                <button class="primary-action" type="submit" data-cash-close-button>Conferir e fechar caixa</button>
+              </div>
+            </form>
+
+            <div class="cash-actions">
+              <button class="ghost-action hidden" type="button" data-reopen-cash>Reabrir fechamento</button>
+            </div>
+
+            <section>
+              <h2>Historico de fechamentos</h2>
+              <div data-cash-history></div>
+            </section>
+          </section>
           <section class="panel-card team-panel">
             <div class="section-head">
               <div>
