@@ -108,17 +108,38 @@
               </label>
               <label>Vendedora <select name="vendedora_id" required data-seller-select></select></label>
               <label>Entregador <select name="entregador_id" data-deliverer-select></select></label>
-              <label>Taxa de entrega <input type="text" name="taxa_entrega" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
-              <label data-sale-cash-only>Valor entregue pelo cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label data-sale-delivery-fee>Taxa de entrega <input type="text" name="taxa_entrega" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label data-sale-cash-only>Valor pago pelo cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label data-sale-cash-only>
+                Teve troco?
+                <select name="teve_troco">
+                  <option value="nao">Nao</option>
+                  <option value="sim">Sim</option>
+                </select>
+              </label>
+              <label data-sale-change-field>Valor do troco entregue <input type="text" name="troco" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label>Data da entrega <input type="date" name="data_entrega" required /></label>
+              <label>
+                Horario da rota
+                <select name="horario_rota" required>
+                  <option value="11:00">11:00</option>
+                  <option value="13:00">13:00</option>
+                  <option value="15:00">15:00</option>
+                  <option value="17:00">17:00</option>
+                  <option value="19:00">19:00</option>
+                  <option value="21:00">21:00</option>
+                </select>
+              </label>
               <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
               <label>Data e hora <input type="datetime-local" name="data_venda" /></label>
             </div>
             <div class="sale-summary-grid">
               <article><span>Valor dos produtos</span><strong data-sale-products>R$ 0,00</strong></article>
+              <article data-sale-cash-only><span>Valor pago pelo cliente</span><strong data-sale-received>R$ 0,00</strong></article>
+              <article data-sale-cash-only><span>Troco entregue</span><strong data-sale-change>R$ 0,00</strong></article>
               <article><span>Taxa do entregador</span><strong data-sale-delivery>R$ 0,00</strong></article>
-              <article><span>Total da venda</span><strong data-sale-total>R$ 0,00</strong></article>
-              <article data-sale-cash-only><span>Valor entregue</span><strong data-sale-received>R$ 0,00</strong></article>
-              <article data-sale-cash-only><span>Troco a devolver</span><strong data-sale-change>R$ 0,00</strong></article>
+              <article><span>Valor liquido dos produtos</span><strong data-sale-net-products>R$ 0,00</strong></article>
+              <article><span>Entrega</span><strong data-sale-route-summary>Hoje</strong></article>
               <article class="wide"><span>Comissao da vendedora nesta venda</span><strong data-sale-commission>R$ 0,50</strong></article>
             </div>
             <p class="form-status" data-sale-warning></p>
@@ -292,6 +313,31 @@
         </section>
 
         <section class="tab-panel hidden" data-panel="more">
+          <section class="panel-card routes-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Rotas do dia</p>
+                <h2>Pedidos por horario</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>Data <input type="date" data-routes-date /></label>
+              <label>
+                Rota
+                <select data-routes-filter>
+                  <option value="todas">Todas</option>
+                  <option value="11:00">11:00</option>
+                  <option value="13:00">13:00</option>
+                  <option value="15:00">15:00</option>
+                  <option value="17:00">17:00</option>
+                  <option value="19:00">19:00</option>
+                  <option value="21:00">21:00</option>
+                </select>
+              </label>
+            </div>
+            <div data-routes-list></div>
+          </section>
+
           <div class="section-head">
             <div>
               <p class="eyebrow">Relatorios</p>

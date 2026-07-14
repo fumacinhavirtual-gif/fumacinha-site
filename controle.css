@@ -416,6 +416,26 @@ textarea {
   gap: 10px;
 }
 
+.routes-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.route-group {
+  display: grid;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.route-group h3 {
+  margin: 0;
+  color: var(--black);
+}
+
+.route-sale label {
+  margin-top: 6px;
+}
+
 .team-grid,
 .team-list {
   display: grid;

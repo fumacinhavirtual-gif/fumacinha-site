@@ -17,6 +17,7 @@ const TABLES = {
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const COMMISSION_BASE = 0.5;
 const COMMISSION_CARD_EXTRA = 1;
+const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
 const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
 const app = {
@@ -35,6 +36,8 @@ const app = {
   saleSaving: false,
   cashDate: "",
   cashEditing: false,
+  routesDate: "",
+  routesFilter: "todas",
   sellerSearch: "",
   delivererSearch: "",
   period: "today",
@@ -75,6 +78,9 @@ const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
 const cashHistory = $("[data-cash-history]");
 const cashStatus = $("[data-cash-status]");
+const routesDateInput = $("[data-routes-date]");
+const routesFilterSelect = $("[data-routes-filter]");
+const routesList = $("[data-routes-list]");
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -128,6 +134,27 @@ function localDateValue(date = new Date()) {
 function localDateTimeValue(date = new Date()) {
   const offset = date.getTimezoneOffset() * 60000;
   return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function formatDateBR(dateKey) {
+  return dateKey ? new Date(`${dateKey}T12:00:00`).toLocaleDateString("pt-BR") : "";
+}
+
+function nextRouteSuggestion(now = new Date()) {
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  for (const route of ROUTE_TIMES) {
+    const [hour, minute] = route.split(":").map(Number);
+    if (minutes < hour * 60 + minute) {
+      return { date: localDateValue(now), time: route };
+    }
+  }
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return { date: localDateValue(tomorrow), time: "11:00" };
+}
+
+function routeIso(dateKey, routeTime) {
+  return dateKey && routeTime ? new Date(`${dateKey}T${routeTime}:00`).toISOString() : null;
 }
 
 function startOfDay(date) {
@@ -205,7 +232,7 @@ function saleGrandTotal(sale) {
 }
 
 function saleDeliveredValue(sale) {
-  return toNumber(sale.valor_entregue || sale.valor_recebido || saleGrandTotal(sale));
+  return toNumber(sale.valor_pago_cliente || sale.valor_entregue || sale.valor_recebido || saleGrandTotal(sale));
 }
 
 function saleChangeValue(sale) {
@@ -353,6 +380,7 @@ function renderAll() {
   renderFinance();
   renderReports();
   renderCashClosing();
+  renderRoutes();
 }
 
 function renderPeriods() {
@@ -510,37 +538,72 @@ function currentProductTotal() {
   return Math.max(0, subtotal - discount);
 }
 
+function currentSaleDraft() {
+  const productsValue = currentProductTotal();
+  const payment = saleForm?.elements.forma_pagamento?.value || "Pix";
+  const cash = isCashPayment(payment);
+  const hasChange = saleForm?.elements.teve_troco?.value === "sim";
+  const paidInput = saleForm?.elements.valor_recebido;
+  const changeInput = saleForm?.elements.troco;
+  const deliveryInput = saleForm?.elements.taxa_entrega;
+  if (cash && paidInput && !app.saleReceivedTouched && productsValue > 0) {
+    paidInput.value = productsValue.toFixed(2).replace(".", ",");
+  }
+  const paidValue = cash ? parseMoney(paidInput?.value) : productsValue + Math.max(0, parseMoney(deliveryInput?.value));
+  const changeValue = cash && hasChange ? parseMoney(changeInput?.value) : 0;
+  const deliveryValue = cash ? paidValue - productsValue - changeValue : Math.max(0, parseMoney(deliveryInput?.value));
+  const totalSale = productsValue + Math.max(0, deliveryValue);
+  return {
+    productsValue,
+    payment,
+    cash,
+    hasChange,
+    paidValue,
+    changeValue,
+    deliveryValue,
+    totalSale,
+    routeDate: saleForm?.elements.data_entrega?.value || localDateValue(),
+    routeTime: saleForm?.elements.horario_rota?.value || "11:00",
+  };
+}
+
 function updateSaleTotal() {
   $$(".sale-item").forEach((row) => {
     const product = app.products.find((item) => String(item.id) === String(row.querySelector('[name="produto_id"]')?.value));
     updateSaleItemPreview(row, product);
   });
 
-  const productsValue = currentProductTotal();
-  const receivedInput = saleForm?.elements.valor_recebido;
+  const draft = currentSaleDraft();
   const deliveryInput = saleForm?.elements.taxa_entrega;
-  const payment = saleForm?.elements.forma_pagamento?.value;
-  const isCash = isCashPayment(payment);
-  const deliveryValue = Math.max(0, parseMoney(deliveryInput?.value));
-  const totalValue = productsValue + deliveryValue;
-  if (receivedInput && !app.saleReceivedTouched && totalValue > 0) {
-    receivedInput.value = totalValue.toFixed(2).replace(".", ",");
+  const changeInput = saleForm?.elements.troco;
+  if (deliveryInput) {
+    deliveryInput.readOnly = draft.cash;
+    if (draft.cash) deliveryInput.value = Math.max(0, draft.deliveryValue).toFixed(2).replace(".", ",");
   }
-  const deliveredValue = isCash ? parseMoney(receivedInput?.value) : totalValue;
-  const changeValue = isCash ? Math.max(0, deliveredValue - totalValue) : 0;
-  const commission = commissionForPayment(saleForm?.elements.forma_pagamento?.value);
-  const receivedInvalid = isCash && app.saleReceivedTouched && deliveredValue < totalValue;
+  if (changeInput && !draft.hasChange) changeInput.value = "";
+  const commission = commissionForPayment(draft.payment);
+  const receivedInvalid = draft.cash && app.saleReceivedTouched && draft.paidValue < draft.productsValue;
+  const changeInvalid = draft.cash && draft.hasChange && (!String(changeInput?.value || "").trim() || draft.changeValue < 0);
+  const deliveryInvalid = draft.cash && draft.deliveryValue < 0;
 
-  $("[data-sale-products]").textContent = currency.format(productsValue);
-  $("[data-sale-received]").textContent = currency.format(deliveredValue);
-  $("[data-sale-delivery]").textContent = currency.format(deliveryValue);
-  $("[data-sale-total]").textContent = currency.format(totalValue);
-  $("[data-sale-change]").textContent = currency.format(changeValue);
+  $("[data-sale-products]").textContent = currency.format(draft.productsValue);
+  $("[data-sale-received]").textContent = currency.format(draft.paidValue);
+  $("[data-sale-delivery]").textContent = currency.format(Math.max(0, draft.deliveryValue));
+  $("[data-sale-net-products]").textContent = currency.format(draft.productsValue);
+  $("[data-sale-change]").textContent = currency.format(draft.changeValue);
   $("[data-sale-commission]").textContent = currency.format(commission.total);
-  $$("[data-sale-cash-only]").forEach((element) => element.classList.toggle("hidden", !isCash));
+  $("[data-sale-route-summary]").textContent = `${formatDateBR(draft.routeDate)} as ${draft.routeTime}`;
+  $$("[data-sale-cash-only]").forEach((element) => element.classList.toggle("hidden", !draft.cash));
+  $$("[data-sale-change-field]").forEach((element) => element.classList.toggle("hidden", !draft.cash || !draft.hasChange));
   if (saleWarning) {
-    saleWarning.textContent = receivedInvalid ? "Valor entregue menor que o total da venda. Corrija antes de salvar." : "";
-    saleWarning.className = `form-status ${receivedInvalid ? "error" : ""}`.trim();
+    saleWarning.textContent = receivedInvalid
+      ? "Valor pago menor que o valor dos produtos."
+      : changeInvalid
+        ? "Informe o valor do troco entregue."
+        : deliveryInvalid
+          ? "A taxa de entrega ficou negativa. Corrija o valor pago ou o troco."
+          : "";
+    saleWarning.className = `form-status ${receivedInvalid || changeInvalid || deliveryInvalid ? "error" : ""}`.trim();
   }
 }
 
@@ -605,18 +668,23 @@ async function registerSale(event) {
     });
     const discount = parseMoney(saleForm.elements.desconto.value);
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+    const draft = currentSaleDraft();
     const productsValue = Math.max(0, subtotal - discount);
-    const deliveryValue = Math.max(0, parseMoney(saleForm.elements.taxa_entrega.value));
-    const totalSale = productsValue + deliveryValue;
-    const paymentLabel = saleForm.elements.forma_pagamento.value;
-    const cashPayment = isCashPayment(paymentLabel);
-    const deliveredValue = cashPayment ? parseMoney(saleForm.elements.valor_recebido.value) : totalSale;
-    if (cashPayment && deliveredValue < totalSale) throw new Error("Valor entregue menor que o total da venda.");
-    const changeValue = cashPayment ? Math.max(0, deliveredValue - totalSale) : 0;
-    const commission = commissionForPayment(saleForm.elements.forma_pagamento.value);
+    if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
+    if (draft.cash && draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
+    if (draft.cash && draft.hasChange && !String(saleForm.elements.troco.value || "").trim()) throw new Error("Informe o valor do troco entregue.");
+    if (draft.cash && draft.changeValue < 0) throw new Error("Troco nao pode ser negativo.");
+    if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
+    const deliveryValue = Math.max(0, draft.deliveryValue);
+    const totalSale = draft.productsValue + deliveryValue;
+    const paymentLabel = draft.payment;
+    const deliveredValue = draft.cash ? draft.paidValue : totalSale;
+    const changeValue = draft.cash && draft.hasChange ? draft.changeValue : 0;
+    const commission = commissionForPayment(paymentLabel);
     const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
     const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
     const first = items[0];
+    const routeDateTime = routeIso(draft.routeDate, draft.routeTime);
     const salePayload = {
       produto_id: String(first.product.id),
       nome_produto: first.product.nome,
@@ -627,7 +695,9 @@ async function registerSale(event) {
       valor_produtos: productsValue,
       total_venda: totalSale,
       valor_recebido: totalSale,
+      valor_pago_cliente: deliveredValue,
       valor_entregue: deliveredValue,
+      teve_troco: draft.cash && draft.hasChange,
       troco: changeValue,
       taxa_entrega: deliveryValue,
       desconto: discount,
@@ -641,7 +711,12 @@ async function registerSale(event) {
       comissao_total: commission.total,
       cliente_nome: saleForm.elements.cliente.value.trim(),
       observacao: saleForm.elements.observacao.value.trim(),
-      data_venda: saleForm.elements.data_venda.value ? new Date(saleForm.elements.data_venda.value).toISOString() : new Date().toISOString(),
+      data_venda: routeDateTime,
+      data_entrega: draft.routeDate,
+      horario_rota: draft.routeTime,
+      rota_data_hora: routeDateTime,
+      status_entrega: "Aguardando",
+      status: "concluida",
       custo_unitario: productCost(first.product),
       custo_total: cost,
       cancelada: false,
@@ -680,9 +755,12 @@ async function registerSale(event) {
     saleForm.elements.data_venda.value = localDateTimeValue();
     saleForm.elements.desconto.value = "0";
     saleForm.elements.valor_recebido.value = "";
+    saleForm.elements.troco.value = "";
+    saleForm.elements.teve_troco.value = "nao";
     saleForm.elements.taxa_entrega.value = "";
     app.deliveryManuallyEdited = false;
     app.saleReceivedTouched = false;
+    setSuggestedDeliveryRoute();
     saleItemsRoot.innerHTML = saleItemTemplate();
     renderPeopleOptions();
     updateSaleItemPrices();
@@ -718,7 +796,10 @@ async function cancelSale(saleId) {
       const product = app.products.find((productItem) => String(productItem.id) === String(item.produto_id));
       if (product) await updateProductStock(product, toNumber(product.estoque) + toNumber(item.quantidade), "cancelamento", sale.id);
     }
-    const { error } = await supabaseClient.from(TABLES.sales).update({ cancelada: true, cancelada_em: new Date().toISOString() }).eq("id", sale.id);
+    const { error } = await supabaseClient
+      .from(TABLES.sales)
+      .update({ cancelada: true, cancelada_em: new Date().toISOString(), status: "cancelada", status_entrega: "Cancelado" })
+      .eq("id", sale.id);
     if (error) throw error;
     setStatus("Venda cancelada e estoque devolvido.", "success");
     await loadAll();
@@ -1113,12 +1194,15 @@ function cashCalculate(dateKey = app.cashDate) {
   const cancelledSales = cashSalesForDate(dateKey, true).filter((sale) => sale.cancelada);
   const totalVendas = payment.pix + payment.dinheiro + payment.debito + payment.credito + payment.outros;
   const eletronicos = payment.pix + payment.debito + payment.credito + payment.outros;
-  const trocoRestante = Math.max(0, form.trocoInicial - form.trocoUsado);
+  const trocoUsadoTotal = form.trocoUsado + payment.trocoDevolvido;
+  const trocoRestante = Math.max(0, form.trocoInicial - trocoUsadoTotal);
   const dinheiroEsperado = form.trocoInicial + payment.dinheiroRecebido - payment.trocoDevolvido + form.reforcos - form.sangrias - form.retiradas - form.pagamentosCaixa;
   const diferenca = form.dinheiroContado - dinheiroEsperado;
   return {
     ...form,
     ...payment,
+    trocoUsadoManual: form.trocoUsado,
+    trocoUsado: trocoUsadoTotal,
     totalVendas,
     eletronicos,
     quantidadeVendas: activeSales.length,
@@ -1143,7 +1227,8 @@ function populateCashForm() {
   const closing = cashClosingForDate();
   const movements = cashMovementTotals();
   setMoneyInput(cashForm.elements.troco_inicial, closing?.troco_inicial || 0);
-  setMoneyInput(cashForm.elements.troco_usado, closing?.troco_usado || 0);
+  const autoChange = cashPaymentTotals().trocoDevolvido;
+  setMoneyInput(cashForm.elements.troco_usado, Math.max(0, toNumber(closing?.troco_usado || 0) - autoChange));
   setMoneyInput(cashForm.elements.sangrias, closing?.sangrias || movements.sangria);
   setMoneyInput(cashForm.elements.reforcos, closing?.reforcos || movements.reforco);
   setMoneyInput(cashForm.elements.retiradas, closing?.retiradas || movements.retirada);
@@ -1324,6 +1409,79 @@ function usePreviousChange() {
   updateCashPreview();
 }
 
+function setSuggestedDeliveryRoute() {
+  if (!saleForm?.elements.data_entrega || !saleForm?.elements.horario_rota) return;
+  const suggestion = nextRouteSuggestion();
+  saleForm.elements.data_entrega.value = suggestion.date;
+  saleForm.elements.horario_rota.value = suggestion.time;
+}
+
+function saleRouteDate(sale) {
+  return sale.data_entrega || saleDateKey(sale);
+}
+
+function saleRouteTime(sale) {
+  return sale.horario_rota || "";
+}
+
+function saleProductsLabel(sale) {
+  const items = app.saleItems.filter((item) => String(item.venda_id) === String(sale.id));
+  return items.length
+    ? items.map((item) => `${item.quantidade}x ${item.nome_produto}`).join(", ")
+    : sale.nome_produto || "Venda";
+}
+
+function routeStatusOptions(selected = "Aguardando") {
+  return ["Aguardando", "Em rota", "Entregue", "Nao recebido", "Cancelado"]
+    .map((status) => `<option value="${status}" ${status === selected ? "selected" : ""}>${status}</option>`)
+    .join("");
+}
+
+function renderRoutes() {
+  if (!routesList) return;
+  if (!app.routesDate) app.routesDate = localDateValue();
+  if (routesDateInput) routesDateInput.value = app.routesDate;
+  if (routesFilterSelect) routesFilterSelect.value = app.routesFilter;
+  const sales = app.sales
+    .filter((sale) => !sale.cancelada)
+    .filter((sale) => saleRouteDate(sale) === app.routesDate)
+    .filter((sale) => app.routesFilter === "todas" || saleRouteTime(sale) === app.routesFilter);
+  const groups = ROUTE_TIMES.map((time) => ({
+    time,
+    sales: sales.filter((sale) => saleRouteTime(sale) === time),
+  })).filter((group) => app.routesFilter === "todas" || group.time === app.routesFilter);
+
+  routesList.innerHTML = groups.map((group) => `
+    <section class="route-group">
+      <h3>${group.time}</h3>
+      ${group.sales.length ? group.sales.map((sale) => `
+        <article class="history-row route-sale">
+          <strong>${escapeHtml(sale.cliente_nome || "Cliente nao informado")}</strong>
+          <span>Entregador: ${escapeHtml(sale.entregador_nome || "Sem entregador")}</span>
+          <span>Produtos: ${escapeHtml(saleProductsLabel(sale))}</span>
+          <span>Valor: ${currency.format(saleGrandTotal(sale))} | Taxa: ${currency.format(saleDelivery(sale))}</span>
+          <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")}</span>
+          <label>Status
+            <select data-route-status="${sale.id}">
+              ${routeStatusOptions(sale.status_entrega || "Aguardando")}
+            </select>
+          </label>
+        </article>
+      `).join("") : "<p>Nenhum pedido nesta rota.</p>"}
+    </section>
+  `).join("");
+}
+
+async function updateDeliveryStatus(saleId, status) {
+  const sale = app.sales.find((item) => String(item.id) === String(saleId));
+  if (!sale) return;
+  const { error } = await supabaseClient.from(TABLES.sales).update({ status_entrega: status }).eq("id", saleId);
+  if (error) return setStatus(error.message, "error");
+  sale.status_entrega = status;
+  setStatus("Status da entrega atualizado.", "success");
+  renderRoutes();
+}
+
 function switchTab(tab) {
   app.activeTab = tab;
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
@@ -1347,7 +1505,7 @@ saleForm?.addEventListener("submit", registerSale);
 saleForm?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
   event.preventDefault();
-  if (event.target.name === "valor_recebido" || event.target.name === "taxa_entrega") {
+  if (["valor_recebido", "taxa_entrega", "troco"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     app.saleReceivedTouched = event.target.name === "valor_recebido" ? true : app.saleReceivedTouched;
     updateSaleTotal();
@@ -1423,7 +1581,7 @@ document.addEventListener("input", (event) => {
     app.deliveryManuallyEdited = false;
     app.saleReceivedTouched = true;
   }
-  if (event.target.closest(".sale-item") || ["desconto", "valor_recebido", "taxa_entrega"].includes(event.target.name)) updateSaleTotal();
+  if (event.target.closest(".sale-item") || ["desconto", "valor_recebido", "taxa_entrega", "troco"].includes(event.target.name)) updateSaleTotal();
   if (event.target.matches("[data-stock-search]")) {
     app.stockSearch = event.target.value;
     renderStock();
@@ -1456,9 +1614,21 @@ document.addEventListener("change", (event) => {
     if (!isCashPayment(event.target.value)) app.saleReceivedTouched = false;
     updateSaleTotal();
   }
-  if (event.target.name === "valor_recebido" || event.target.name === "taxa_entrega") {
+  if (event.target.name === "teve_troco") updateSaleTotal();
+  if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
+  if (["valor_recebido", "taxa_entrega", "troco"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     updateSaleTotal();
+  }
+  const routeStatus = event.target.closest("[data-route-status]");
+  if (routeStatus) updateDeliveryStatus(routeStatus.dataset.routeStatus, routeStatus.value);
+  if (event.target.matches("[data-routes-date]")) {
+    app.routesDate = event.target.value || localDateValue();
+    renderRoutes();
+  }
+  if (event.target.matches("[data-routes-filter]")) {
+    app.routesFilter = event.target.value;
+    renderRoutes();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
   if (event.target.name === "entregador_id") {
@@ -1491,11 +1661,15 @@ document.addEventListener("change", (event) => {
 
 function initDefaults() {
   app.cashDate = localDateValue();
+  app.routesDate = localDateValue();
   if (cashDateInput) cashDateInput.value = app.cashDate;
+  if (routesDateInput) routesDateInput.value = app.routesDate;
   const saleDateInput = saleForm?.elements.data_venda;
   if (saleDateInput) saleDateInput.value = localDateTimeValue();
+  setSuggestedDeliveryRoute();
   if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "";
   if (saleForm?.elements.taxa_entrega) saleForm.elements.taxa_entrega.value = "";
+  if (saleForm?.elements.troco) saleForm.elements.troco.value = "";
   const expenseDateInput = expenseForm?.elements.data_despesa;
   if (expenseDateInput) expenseDateInput.value = dateValue();
   updateSaleTotal();
