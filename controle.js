@@ -7,15 +7,24 @@ const TABLES = {
   saleItems: "ITENS_VENDA",
   stockMoves: "MOVIMENTACOES_ESTOQUE",
   expenses: "DESPESAS",
+  deliverers: "ENTREGADORES",
+  sellers: "VENDEDORAS",
+  deliveryPayouts: "REPASSES_ENTREGADORES",
 };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
+const COMMISSION_BASE = 0.5;
+const COMMISSION_CARD_EXTRA = 1;
 const app = {
   products: [],
   sales: [],
   saleItems: [],
   stockMoves: [],
   expenses: [],
+  deliverers: [],
+  sellers: [],
+  deliveryPayouts: [],
+  deliveryManuallyEdited: false,
   period: "today",
   activeTab: "home",
   stockSearch: "",
@@ -41,6 +50,8 @@ const stockHistory = $("[data-stock-history]");
 const salesHistory = $("[data-sales-history]");
 const expenseForm = $("[data-expense-form]");
 const expenseList = $("[data-expense-list]");
+const sellersList = $("[data-sellers-list]");
+const deliverersList = $("[data-deliverers-list]");
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -143,18 +154,63 @@ function saleCost(sale) {
 }
 
 function saleTotal(sale) {
-  return toNumber(sale.valor_total || 0);
+  return toNumber(sale.valor_produtos || sale.valor_total || 0);
+}
+
+function saleReceived(sale) {
+  return toNumber(sale.valor_recebido || saleTotal(sale) + toNumber(sale.taxa_entrega));
+}
+
+function saleDelivery(sale) {
+  return toNumber(sale.taxa_entrega || 0);
+}
+
+function saleCommission(sale) {
+  return toNumber(sale.comissao_total || commissionForPayment(sale.forma_pagamento).total);
+}
+
+function normalizePayment(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function commissionForPayment(payment) {
+  const normalized = normalizePayment(payment);
+  const card = normalized === "debito" || normalized === "credito";
+  const cardExtra = card ? COMMISSION_CARD_EXTRA : 0;
+  return {
+    base: COMMISSION_BASE,
+    card: cardExtra,
+    total: COMMISSION_BASE + cardExtra,
+  };
+}
+
+function productImage(product) {
+  return product?.imagem || "./assets/fumacinha-logo.png";
+}
+
+function personNameById(rows, id) {
+  const row = rows.find((item) => String(item.id) === String(id));
+  return row?.nome || "";
 }
 
 function summaryFor(sales = filteredSales(), expenses = filteredExpenses()) {
   const revenue = sales.reduce((sum, sale) => sum + saleTotal(sale), 0);
+  const received = sales.reduce((sum, sale) => sum + saleReceived(sale), 0);
+  const delivery = sales.reduce((sum, sale) => sum + saleDelivery(sale), 0);
+  const commission = sales.reduce((sum, sale) => sum + saleCommission(sale), 0);
   const cost = sales.reduce((sum, sale) => sum + saleCost(sale), 0);
   const expenseTotal = expenses.reduce((sum, expense) => sum + toNumber(expense.valor), 0);
   const gross = revenue - cost;
-  const net = gross - expenseTotal;
+  const net = gross - expenseTotal - commission;
   const quantity = sales.reduce((sum, sale) => sum + toNumber(sale.quantidade || sale.quantidade_total), 0);
   return {
     revenue,
+    received,
+    delivery,
+    commission,
     cost,
     expenses: expenseTotal,
     gross,
@@ -192,15 +248,18 @@ async function requireAuth() {
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, movesResult, expensesResult] = await Promise.allSettled([
+  const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sales).select("*").order("data_venda", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.stockMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.expenses).select("*").order("data_despesa", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.deliverers).select("*").order("nome", { ascending: true }),
+    supabaseClient.from(TABLES.sellers).select("*").order("nome", { ascending: true }),
+    supabaseClient.from(TABLES.deliveryPayouts).select("*").order("created_at", { ascending: false }).limit(1000),
   ]);
 
-  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult]
+  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult]
     .filter((result) => result.status === "fulfilled" && result.value.error)
     .map((result) => result.value.error.message);
 
@@ -214,12 +273,16 @@ async function loadAll() {
   app.saleItems = itemsResult.value.data || [];
   app.stockMoves = movesResult.value.data || [];
   app.expenses = expensesResult.value.data || [];
+  app.deliverers = deliverersResult.value.data || [];
+  app.sellers = sellersResult.value.data || [];
+  app.deliveryPayouts = payoutsResult.value.data || [];
   setStatus("Controle atualizado.", "success");
   renderAll();
 }
 
 function renderAll() {
   renderPeriods();
+  renderPeopleOptions();
   renderDashboard();
   renderSaleItems();
   renderSalesHistory();
@@ -231,6 +294,21 @@ function renderAll() {
 function renderPeriods() {
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", app.period !== "custom");
+}
+
+function renderPeopleOptions() {
+  if (sellersList) {
+    sellersList.innerHTML = app.sellers
+      .filter((seller) => seller.ativo !== false)
+      .map((seller) => `<option value="${escapeHtml(seller.nome)}"></option>`)
+      .join("");
+  }
+  if (deliverersList) {
+    deliverersList.innerHTML = app.deliverers
+      .filter((deliverer) => deliverer.ativo !== false)
+      .map((deliverer) => `<option value="${escapeHtml(deliverer.nome)}"></option>`)
+      .join("");
+  }
 }
 
 function todaySales() {
@@ -252,6 +330,9 @@ function renderDashboard() {
   $("[data-kpi-sales-today]").textContent = String(today.count);
   $("[data-kpi-revenue-today]").textContent = currency.format(today.revenue);
   $("[data-kpi-ticket]").textContent = currency.format(selectedSummary.ticket);
+  $("[data-kpi-received]").textContent = currency.format(selectedSummary.received);
+  $("[data-kpi-delivery]").textContent = currency.format(selectedSummary.delivery);
+  $("[data-kpi-commission]").textContent = currency.format(selectedSummary.commission);
   $("[data-kpi-profit]").textContent = currency.format(selectedSummary.net);
   $("[data-kpi-sales-count]").textContent = String(selectedSummary.count);
   $("[data-kpi-low-stock]").textContent = String(lowStock);
@@ -300,11 +381,20 @@ function productOptions(selected = "") {
 }
 
 function saleItemTemplate() {
+  const firstProduct = app.products[0];
   return `
     <article class="sale-item">
+      <div class="sale-product-preview" data-sale-product-preview>
+        <img src="${escapeHtml(productImage(firstProduct))}" alt="${escapeHtml(firstProduct?.nome || "Produto")}" loading="lazy" decoding="async" />
+        <div>
+          <strong>${escapeHtml(firstProduct?.nome || "Selecione um produto")}</strong>
+          <span>${escapeHtml(firstProduct?.categoria || "Produto")}</span>
+        </div>
+      </div>
       <label>Produto <select name="produto_id">${productOptions()}</select></label>
       <label>Qtd <input type="number" name="quantidade" min="1" step="1" value="1" /></label>
       <label>Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" /></label>
+      <div class="sale-line-total"><span>Subtotal</span><strong data-item-subtotal>R$ 0,00</strong></div>
       <button class="ghost-action" type="button" data-remove-sale-item>Remover</button>
     </article>
   `;
@@ -323,16 +413,63 @@ function updateSaleItemPrices() {
     const price = row.querySelector('[name="valor_unitario"]');
     const product = app.products.find((item) => String(item.id) === String(select?.value));
     if (product && price && !price.value) price.value = toNumber(product.preco).toFixed(2);
+    updateSaleItemPreview(row, product);
   });
 }
 
-function updateSaleTotal() {
+function updateSaleItemPreview(row, product) {
+  const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
+  const unitValue = toNumber(row.querySelector('[name="valor_unitario"]')?.value);
+  const subtotal = row.querySelector("[data-item-subtotal]");
+  const preview = row.querySelector("[data-sale-product-preview]");
+  if (subtotal) subtotal.textContent = currency.format(quantity * unitValue);
+  if (!preview) return;
+  preview.innerHTML = `
+    <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product?.nome || "Produto")}" loading="lazy" decoding="async" />
+    <div>
+      <strong>${escapeHtml(product?.nome || "Selecione um produto")}</strong>
+      <span>${escapeHtml(product?.categoria || "Produto")}</span>
+    </div>
+  `;
+}
+
+function currentProductTotal() {
   const discount = toNumber(saleForm?.elements.desconto?.value);
-  const total = $$(".sale-item").reduce((sum, row) => {
+  const subtotal = $$(".sale-item").reduce((sum, row) => {
     return sum + toNumber(row.querySelector('[name="quantidade"]')?.value) * toNumber(row.querySelector('[name="valor_unitario"]')?.value);
-  }, 0) - discount;
-  const label = $("[data-sale-total]");
-  if (label) label.textContent = `Total: ${currency.format(Math.max(0, total))}`;
+  }, 0);
+  return Math.max(0, subtotal - discount);
+}
+
+function updateSaleTotal() {
+  $$(".sale-item").forEach((row) => {
+    const product = app.products.find((item) => String(item.id) === String(row.querySelector('[name="produto_id"]')?.value));
+    updateSaleItemPreview(row, product);
+  });
+
+  const productsValue = currentProductTotal();
+  const receivedInput = saleForm?.elements.valor_recebido;
+  const deliveryInput = saleForm?.elements.taxa_entrega;
+  if (receivedInput && (!receivedInput.value || toNumber(receivedInput.value) < productsValue)) {
+    receivedInput.value = productsValue.toFixed(2);
+  }
+  const preliminaryReceived = Math.max(productsValue, toNumber(receivedInput?.value));
+  if (deliveryInput && !app.deliveryManuallyEdited) {
+    deliveryInput.value = Math.max(0, preliminaryReceived - productsValue).toFixed(2);
+  }
+  const deliveryValue = Math.max(0, toNumber(deliveryInput?.value));
+  const receivedValue = Math.max(productsValue + deliveryValue, preliminaryReceived);
+  if (receivedInput && toNumber(receivedInput.value) < receivedValue) {
+    receivedInput.value = receivedValue.toFixed(2);
+  }
+  const totalValue = productsValue + deliveryValue;
+  const commission = commissionForPayment(saleForm?.elements.forma_pagamento?.value);
+
+  $("[data-sale-products]").textContent = currency.format(productsValue);
+  $("[data-sale-received]").textContent = currency.format(receivedValue);
+  $("[data-sale-delivery]").textContent = currency.format(deliveryValue);
+  $("[data-sale-total]").textContent = currency.format(totalValue);
+  $("[data-sale-commission]").textContent = currency.format(commission.total);
 }
 
 async function insertStockMove(product, previous, next, type, saleId = null) {
@@ -359,12 +496,26 @@ async function updateProductStock(product, nextStock, type = "ajuste manual", sa
   product.ativo = next > 0;
 }
 
+async function getOrCreatePerson(tableName, rows, name) {
+  const cleanName = String(name || "").trim();
+  if (!cleanName) return null;
+  const existing = rows.find((item) => item.nome?.toLowerCase() === cleanName.toLowerCase());
+  if (existing) return existing;
+  const { data, error } = await supabaseClient.from(tableName).insert({ nome: cleanName, ativo: true }).select("*").single();
+  if (error) throw error;
+  rows.push(data);
+  return data;
+}
+
 async function registerSale(event) {
   event.preventDefault();
   const rows = $$(".sale-item");
   if (!rows.length) return;
   setStatus("Registrando venda...", "loading");
   try {
+    const seller = await getOrCreatePerson(TABLES.sellers, app.sellers, saleForm.elements.vendedora_nome.value);
+    if (!seller) throw new Error("Informe a vendedora.");
+    const deliverer = await getOrCreatePerson(TABLES.deliverers, app.deliverers, saleForm.elements.entregador_nome.value);
     const items = rows.map((row) => {
       const product = app.products.find((item) => String(item.id) === String(row.querySelector('[name="produto_id"]')?.value));
       const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
@@ -375,7 +526,10 @@ async function registerSale(event) {
     });
     const discount = toNumber(saleForm.elements.desconto.value);
     const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
-    const total = Math.max(0, subtotal - discount);
+    const productsValue = Math.max(0, subtotal - discount);
+    const deliveryValue = Math.max(0, toNumber(saleForm.elements.taxa_entrega.value));
+    const receivedValue = Math.max(productsValue, toNumber(saleForm.elements.valor_recebido.value), productsValue + deliveryValue);
+    const commission = commissionForPayment(saleForm.elements.forma_pagamento.value);
     const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
     const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
     const first = items[0];
@@ -385,9 +539,19 @@ async function registerSale(event) {
       quantidade: quantityTotal,
       quantidade_total: quantityTotal,
       valor_unitario: first.unitValue,
-      valor_total: total,
+      valor_total: productsValue,
+      valor_produtos: productsValue,
+      valor_recebido: receivedValue,
+      taxa_entrega: deliveryValue,
       desconto: discount,
       forma_pagamento: saleForm.elements.forma_pagamento.value,
+      entregador_id: deliverer?.id || null,
+      entregador_nome: deliverer?.nome || "",
+      vendedora_id: seller.id,
+      vendedora_nome: seller.nome,
+      comissao_base: commission.base,
+      comissao_cartao: commission.card,
+      comissao_total: commission.total,
       cliente_nome: saleForm.elements.cliente.value.trim(),
       observacao: saleForm.elements.observacao.value.trim(),
       data_venda: saleForm.elements.data_venda.value ? new Date(saleForm.elements.data_venda.value).toISOString() : new Date().toISOString(),
@@ -413,9 +577,24 @@ async function registerSale(event) {
     for (const item of items) {
       await updateProductStock(item.product, toNumber(item.product.estoque) - item.quantity, "venda", sale.id);
     }
+    if (deliverer && deliveryValue > 0) {
+      const { error: payoutError } = await supabaseClient.from(TABLES.deliveryPayouts).insert({
+        venda_id: sale.id,
+        entregador_id: deliverer.id,
+        valor: deliveryValue,
+        pago: false,
+      });
+      if (payoutError) throw payoutError;
+    }
     saleForm.reset();
     saleForm.elements.data_venda.value = localDateTimeValue();
+    saleForm.elements.desconto.value = "0";
+    saleForm.elements.valor_recebido.value = "0";
+    saleForm.elements.taxa_entrega.value = "0";
+    app.deliveryManuallyEdited = false;
     saleItemsRoot.innerHTML = saleItemTemplate();
+    updateSaleItemPrices();
+    updateSaleTotal();
     setStatus("Venda registrada com sucesso.", "success");
     await loadAll();
   } catch (error) {
@@ -448,8 +627,9 @@ function renderSalesHistory() {
     ? app.sales.slice(0, 40).map((sale) => `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
         <strong>${escapeHtml(sale.nome_produto || "Venda")}</strong>
-        <span>${new Date(sale.data_venda || sale.created_at).toLocaleString("pt-BR")} - ${currency.format(saleTotal(sale))}</span>
-        <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")} ${sale.cancelada ? "- Cancelada" : ""}</span>
+        <span>${new Date(sale.data_venda || sale.created_at).toLocaleString("pt-BR")} - Produtos ${currency.format(saleTotal(sale))}</span>
+        <span>Recebido ${currency.format(saleReceived(sale))} | Entrega ${currency.format(saleDelivery(sale))}</span>
+        <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")} | ${escapeHtml(sale.vendedora_nome || "Vendedora nao informada")} ${sale.cancelada ? "- Cancelada" : ""}</span>
         ${sale.cancelada ? "" : `<button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
       </article>
     `).join("")
@@ -538,7 +718,10 @@ async function saveStock(productId) {
 function renderFinance() {
   const summary = summaryFor();
   $("[data-finance-revenue]").textContent = currency.format(summary.revenue);
+  $("[data-finance-received]").textContent = currency.format(summary.received);
+  $("[data-finance-delivery]").textContent = currency.format(summary.delivery);
   $("[data-finance-cost]").textContent = currency.format(summary.cost);
+  $("[data-finance-commission]").textContent = currency.format(summary.commission);
   $("[data-finance-gross]").textContent = currency.format(summary.gross);
   $("[data-finance-expenses]").textContent = currency.format(summary.expenses);
   $("[data-finance-net]").textContent = currency.format(summary.net);
@@ -606,6 +789,52 @@ function renderReports() {
   renderList("[data-report-profit-product]", ranked.map((row) => ({ label: row.label, total: row.profit })), "Sem lucro por produto.");
   const stockTotal = app.products.reduce((sum, product) => sum + toNumber(product.estoque) * productCost(product), 0);
   renderList("[data-report-stock-value]", [{ label: "Valor em custo no estoque", total: stockTotal }], "Sem produtos em estoque.");
+  renderDelivererReport(sales);
+  renderCommissionReport(sales);
+}
+
+function renderDelivererReport(sales) {
+  const groups = new Map();
+  sales.forEach((sale) => {
+    const name = sale.entregador_nome || personNameById(app.deliverers, sale.entregador_id) || "Sem entregador";
+    const current = groups.get(name) || { label: name, quantity: 0, total: 0 };
+    current.quantity += saleDelivery(sale) > 0 ? 1 : 0;
+    current.total += saleDelivery(sale);
+    groups.set(name, current);
+  });
+  renderList(
+    "[data-report-deliverers]",
+    [...groups.values()].filter((row) => row.total > 0).map((row) => ({ label: row.label, quantity: `${row.quantity} entregas`, total: row.total })),
+    "Sem taxas de entrega no periodo."
+  );
+}
+
+function renderCommissionReport(sales) {
+  const groups = new Map();
+  sales.forEach((sale) => {
+    const name = sale.vendedora_nome || personNameById(app.sellers, sale.vendedora_id) || "Sem vendedora";
+    const normalized = normalizePayment(sale.forma_pagamento);
+    const isCard = normalized === "debito" || normalized === "credito";
+    const current = groups.get(name) || { label: name, quantity: 0, pix: 0, cash: 0, debit: 0, credit: 0, base: 0, card: 0, total: 0 };
+    current.quantity += 1;
+    current.pix += normalized === "pix" ? 1 : 0;
+    current.cash += normalized === "dinheiro" ? 1 : 0;
+    current.debit += normalized === "debito" ? 1 : 0;
+    current.credit += normalized === "credito" ? 1 : 0;
+    current.base += toNumber(sale.comissao_base || COMMISSION_BASE);
+    current.card += toNumber(sale.comissao_cartao || (isCard ? COMMISSION_CARD_EXTRA : 0));
+    current.total += saleCommission(sale);
+    groups.set(name, current);
+  });
+  renderList(
+    "[data-report-commissions]",
+    [...groups.values()].map((row) => ({
+      label: `${row.label} - ${row.quantity} vendas (${row.pix} Pix, ${row.cash} dinheiro, ${row.debit} debito, ${row.credit} credito)`,
+      quantity: `Base ${currency.format(row.base)} | Cartao ${currency.format(row.card)}`,
+      total: row.total,
+    })),
+    "Sem comissoes no periodo."
+  );
 }
 
 function switchTab(tab) {
@@ -670,7 +899,9 @@ document.addEventListener("click", async (event) => {
 });
 
 document.addEventListener("input", (event) => {
-  if (event.target.closest(".sale-item") || event.target.name === "desconto") updateSaleTotal();
+  if (event.target.name === "taxa_entrega") app.deliveryManuallyEdited = true;
+  if (event.target.name === "valor_recebido") app.deliveryManuallyEdited = false;
+  if (event.target.closest(".sale-item") || ["desconto", "valor_recebido", "taxa_entrega"].includes(event.target.name)) updateSaleTotal();
   if (event.target.matches("[data-stock-search]")) {
     app.stockSearch = event.target.value;
     renderStock();
@@ -687,6 +918,7 @@ document.addEventListener("change", (event) => {
     }
     updateSaleTotal();
   }
+  if (event.target.name === "forma_pagamento") updateSaleTotal();
   if (event.target.matches("[data-stock-category]")) {
     app.stockCategory = event.target.value;
     renderStock();
@@ -705,8 +937,11 @@ document.addEventListener("change", (event) => {
 function initDefaults() {
   const saleDateInput = saleForm?.elements.data_venda;
   if (saleDateInput) saleDateInput.value = localDateTimeValue();
+  if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "0";
+  if (saleForm?.elements.taxa_entrega) saleForm.elements.taxa_entrega.value = "0";
   const expenseDateInput = expenseForm?.elements.data_despesa;
   if (expenseDateInput) expenseDateInput.value = dateValue();
+  updateSaleTotal();
 }
 
 initDefaults();

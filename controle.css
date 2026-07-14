@@ -244,19 +244,22 @@ textarea {
 }
 
 .kpi-grid,
-.finance-grid {
+.finance-grid,
+.sale-summary-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .kpi-grid article,
-.finance-grid article {
+.finance-grid article,
+.sale-summary-grid article {
   padding: 16px;
 }
 
 .kpi-grid span,
-.finance-grid span {
+.finance-grid span,
+.sale-summary-grid span {
   display: block;
   margin-bottom: 8px;
   color: var(--muted);
@@ -265,7 +268,8 @@ textarea {
 }
 
 .kpi-grid strong,
-.finance-grid strong {
+.finance-grid strong,
+.sale-summary-grid strong {
   color: var(--black);
   font-size: 1.25rem;
   line-height: 1.05;
@@ -303,6 +307,61 @@ textarea {
 
 .sale-item {
   grid-template-columns: 1fr;
+}
+
+.sale-product-preview {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.sale-product-preview img {
+  width: 72px;
+  height: 72px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  object-fit: contain;
+  background: #fff;
+}
+
+.sale-product-preview strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--black);
+  line-height: 1.2;
+}
+
+.sale-product-preview span,
+.form-footer small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sale-line-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--soft);
+  font-weight: 900;
+}
+
+.sale-summary-grid {
+  margin-top: 4px;
+}
+
+.sale-summary-grid article {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--soft);
+}
+
+.sale-summary-grid .wide {
+  grid-column: 1 / -1;
 }
 
 .form-footer {
@@ -425,7 +484,7 @@ textarea {
   }
 
   .finance-grid {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .form-grid,
@@ -435,8 +494,24 @@ textarea {
   }
 
   .sale-item {
-    grid-template-columns: 2fr 0.7fr 0.9fr 44px;
+    grid-template-columns: 1.3fr 0.8fr 0.7fr 0.9fr 0.7fr 44px;
     align-items: end;
+  }
+
+  .sale-product-preview {
+    grid-column: 1 / -1;
+  }
+
+  .sale-line-total {
+    min-height: 46px;
+  }
+
+  .sale-summary-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .sale-summary-grid .wide {
+    grid-column: auto;
   }
 
   .stock-row {
