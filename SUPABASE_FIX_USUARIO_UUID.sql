@@ -1,6 +1,6 @@
--- Fumacinha Controle - saldo permanente de troco do caixa
+-- Fumacinha Controle - correcao de usuario_id uuid nas RPCs
 -- Execute no SQL Editor do Supabase da Fumacinha.
--- Idempotente: cria/ajusta sem apagar dados existentes.
+-- Idempotente: cria/ajusta sem apagar dados existentes e recria as funcoes corrigidas.
 
 alter table public."VENDAS" add column if not exists quantidade_total integer not null default 1;
 alter table public."VENDAS" add column if not exists valor_produtos numeric(12, 2) not null default 0;

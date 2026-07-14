@@ -340,6 +340,18 @@ async function requireAuth() {
   return true;
 }
 
+async function requireUserId() {
+  if (!supabaseClient) throw new Error("Configure o Supabase da Fumacinha antes de acessar.");
+  const { data, error } = await supabaseClient.auth.getUser();
+  if (error || !data.user?.id) {
+    app.user = null;
+    renderAuth(false);
+    throw new Error("Sessao expirada. Entre novamente.");
+  }
+  app.user = data.user;
+  return data.user.id;
+}
+
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
@@ -668,6 +680,7 @@ function collectSaleItems({ allowEditing = false } = {}) {
 }
 
 async function insertStockMove(product, previous, next, type, saleId = null) {
+  const usuarioId = await requireUserId();
   const payload = {
     produto_id: String(product.id),
     nome_produto: product.nome,
@@ -676,7 +689,7 @@ async function insertStockMove(product, previous, next, type, saleId = null) {
     diferenca: next - previous,
     tipo: type,
     venda_id: saleId,
-    usuario_id: app.user?.id || null,
+    usuario_id: usuarioId,
   };
   return supabaseClient.from(TABLES.stockMoves).insert(payload);
 }
@@ -845,11 +858,13 @@ async function registerSale(event) {
   if (saleSuccess) saleSuccess.textContent = "";
   setStatus("Registrando venda...", "loading");
   try {
+    const usuarioId = await requireUserId();
     const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
     if (!seller) throw new Error("Informe a vendedora.");
     const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
     const items = collectSaleItems();
     const { payload: salePayload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
+    salePayload.usuario_id = usuarioId;
     const { data: sale, error: saleError } = await supabaseClient.rpc("registrar_venda_troco", {
       p_venda: salePayload,
       p_itens: saleItemPayload(items),
@@ -895,11 +910,13 @@ async function updateEditedSale(event) {
   }
   setStatus("Salvando alteracoes...", "loading");
   try {
+    const usuarioId = await requireUserId();
     const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
     if (!seller) throw new Error("Informe a vendedora.");
     const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
     const items = collectSaleItems({ allowEditing: true });
     const { payload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
+    payload.usuario_id = usuarioId;
     if (!window.confirm(`Salvar alteracoes da venda #${app.editingSaleId}?`)) return;
     const { error } = await supabaseClient.rpc("editar_venda_estoque", {
       p_venda_id: Number(app.editingSaleId),
@@ -939,6 +956,7 @@ async function cancelSale(saleId) {
   if (!sale || sale.cancelada) return;
   setStatus("Cancelando venda...", "loading");
   try {
+    await requireUserId();
     const { error } = await supabaseClient.rpc("cancelar_venda_troco", {
       p_venda_id: Number(sale.id),
       p_observacao: "Cancelamento pelo painel",
@@ -1083,6 +1101,12 @@ function renderFinance() {
 
 async function saveExpense(event) {
   event.preventDefault();
+  let usuarioId = "";
+  try {
+    usuarioId = await requireUserId();
+  } catch (error) {
+    return setStatus(error.message, "error");
+  }
   const form = event.currentTarget;
   const payload = {
     descricao: form.elements.descricao.value.trim(),
@@ -1091,7 +1115,7 @@ async function saveExpense(event) {
     data_despesa: form.elements.data_despesa.value || dateValue(),
     forma_pagamento: form.elements.forma_pagamento.value,
     observacao: form.elements.observacao.value.trim(),
-    usuario_id: app.user?.id || null,
+    usuario_id: usuarioId,
   };
   if (!payload.descricao || payload.valor <= 0) return setStatus("Preencha a despesa corretamente.", "error");
   const { error } = await supabaseClient.from(TABLES.expenses).insert(payload);
@@ -1482,6 +1506,7 @@ async function changeCashBalance(action) {
   if (!adding && !String(observation || "").trim()) return setStatus("Informe o motivo do ajuste.", "error");
   setStatus(adding ? "Adicionando troco..." : "Ajustando saldo...", "loading");
   try {
+    await requireUserId();
     const { error } = await supabaseClient.rpc("movimentar_troco_caixa", {
       p_tipo: adding ? "adicao" : "ajuste",
       p_valor: value,
@@ -1584,6 +1609,7 @@ function renderCashClosing() {
 
 function cashPayload(status = "fechado") {
   const values = cashCalculate();
+  const usuarioId = app.user?.id || null;
   return {
     data_caixa: app.cashDate,
     troco_inicial: values.trocoInicial,
@@ -1609,7 +1635,8 @@ function cashPayload(status = "fechado") {
     diferenca: values.diferenca,
     status,
     observacao: values.observacao,
-    fechado_por: app.user?.email || app.user?.id || "",
+    fechado_por: usuarioId || "",
+    fechado_por_id: usuarioId,
     fechado_em: new Date().toISOString(),
   };
 }
@@ -1622,6 +1649,7 @@ async function closeCash(event) {
   if (!confirmed) return;
   setStatus("Fechando caixa...", "loading");
   try {
+    await requireUserId();
     const payload = cashPayload("fechado");
     const { data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(payload, { onConflict: "data_caixa" }).select("*").single();
     if (error) throw error;
@@ -1640,11 +1668,13 @@ async function reopenCash() {
   if (!window.confirm("Reabrir este fechamento? O historico sera mantido.")) return;
   setStatus("Reabrindo caixa...", "loading");
   try {
+    const usuarioId = await requireUserId();
     const { data, error } = await supabaseClient
       .from(TABLES.cashClosings)
       .update({
         status: "reaberto",
-        reaberto_por: app.user?.email || app.user?.id || "",
+        reaberto_por: usuarioId,
+        reaberto_por_id: usuarioId,
         reaberto_em: new Date().toISOString(),
       })
       .eq("id", closing.id)
