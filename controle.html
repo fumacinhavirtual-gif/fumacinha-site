@@ -158,7 +158,24 @@
           </form>
 
           <section class="panel-card">
-            <h2>Historico de vendas</h2>
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Pedidos e vendas</p>
+                <h2>Fluxo de atendimento</h2>
+              </div>
+              <select data-sales-status-filter>
+                <option value="all">Todos</option>
+                <option value="pending" selected>Pedidos pendentes</option>
+                <option value="confirmed">Confirmados</option>
+                <option value="separation">Em separacao</option>
+                <option value="route">Em rota</option>
+                <option value="delivered">Entregues</option>
+                <option value="cancelled">Cancelados</option>
+              </select>
+            </div>
+            <h3>Pedidos pendentes</h3>
+            <div data-pending-orders></div>
+            <h3>Vendas confirmadas</h3>
             <div data-sales-history></div>
           </section>
         </section>
@@ -198,6 +215,10 @@
             </div>
           </div>
           <div class="finance-grid">
+            <article><span>Pedidos recebidos</span><strong data-finance-orders-received>0</strong></article>
+            <article><span>Pedidos pendentes</span><strong data-finance-orders-pending>0</strong></article>
+            <article><span>Vendas confirmadas</span><strong data-finance-sales-confirmed>0</strong></article>
+            <article><span>Valor potencial pendente</span><strong data-finance-pending-potential>R$ 0,00</strong></article>
             <article><span>Faturamento produtos</span><strong data-finance-revenue>R$ 0,00</strong></article>
             <article><span>Valor recebido</span><strong data-finance-received>R$ 0,00</strong></article>
             <article><span>Taxas entregadores</span><strong data-finance-delivery>R$ 0,00</strong></article>

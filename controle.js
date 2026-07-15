@@ -5,6 +5,8 @@ const TABLES = {
   products: "PRODUTOS",
   sales: "VENDAS",
   saleItems: "ITENS_VENDA",
+  orders: "PEDIDOS",
+  orderItems: "ITENS_PEDIDO",
   stockMoves: "MOVIMENTACOES_ESTOQUE",
   expenses: "DESPESAS",
   deliverers: "ENTREGADORES",
@@ -26,6 +28,8 @@ const app = {
   products: [],
   sales: [],
   saleItems: [],
+  orders: [],
+  orderItems: [],
   stockMoves: [],
   expenses: [],
   deliverers: [],
@@ -39,6 +43,8 @@ const app = {
   saleReceivedTouched: false,
   saleSaving: false,
   editingSaleId: null,
+  confirmingOrderId: null,
+  orderStatusFilter: "pending",
   cashDate: "",
   cashEditing: false,
   routesDate: "",
@@ -68,6 +74,8 @@ const saleItemsRoot = $("[data-sale-items]");
 const stockList = $("[data-stock-list]");
 const stockHistory = $("[data-stock-history]");
 const salesHistory = $("[data-sales-history]");
+const pendingOrdersRoot = $("[data-pending-orders]");
+const salesStatusFilter = $("[data-sales-status-filter]");
 const expenseForm = $("[data-expense-form]");
 const expenseList = $("[data-expense-list]");
 const sellerSelect = $("[data-seller-select]");
@@ -240,6 +248,14 @@ function filteredExpenses() {
   });
 }
 
+function filteredOrders() {
+  const { start, end } = periodRange();
+  return app.orders.filter((order) => {
+    const date = new Date(order.created_at || Date.now());
+    return date >= start && date <= end;
+  });
+}
+
 function productCost(product) {
   return toNumber(product.custo || product.custo_unitario || 0);
 }
@@ -371,10 +387,12 @@ async function requireUserId() {
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult] = await Promise.allSettled([
+  const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.orderItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.stockMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.expenses).select("*").order("data_despesa", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.deliverers).select("*").order("nome", { ascending: true }),
@@ -386,7 +404,7 @@ async function loadAll() {
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
   ]);
 
-  const errors = [productsResult, salesResult, itemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult]
+  const errors = [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult]
     .filter((result) => result.status === "fulfilled" && result.value.error)
     .map((result) => result.value.error.message);
 
@@ -398,6 +416,8 @@ async function loadAll() {
   app.products = productsResult.value.data || [];
   app.sales = salesResult.value.data || [];
   app.saleItems = itemsResult.value.data || [];
+  app.orders = ordersResult.value.data || [];
+  app.orderItems = orderItemsResult.value.data || [];
   app.stockMoves = movesResult.value.data || [];
   app.expenses = expensesResult.value.data || [];
   app.deliverers = deliverersResult.value.data || [];
@@ -522,7 +542,7 @@ function isProductAvailable(product) {
 
 function saleProducts(selected = "") {
   const selectedText = String(selected || "");
-  return app.products.filter((product) => isProductAvailable(product) || (app.editingSaleId && String(product.id) === selectedText));
+  return app.products.filter((product) => isProductAvailable(product) || ((app.editingSaleId || app.confirmingOrderId) && String(product.id) === selectedText));
 }
 
 function productOptions(selected = "") {
@@ -811,6 +831,7 @@ function buildSalePayload(items, seller, deliverer) {
 
 function resetSaleForm() {
   app.editingSaleId = null;
+  app.confirmingOrderId = null;
   saleForm.reset();
   saleForm.elements.desconto.value = "0";
   saleForm.elements.valor_recebido.value = "";
@@ -866,13 +887,16 @@ async function registerSale(event) {
   if (app.saleSaving) return;
   const rows = $$(".sale-item");
   if (!rows.length) return;
+  const confirmingOrderId = app.confirmingOrderId;
+  let reservedOrderId = null;
+  let saleCreated = false;
   app.saleSaving = true;
   if (saleSubmit) {
     saleSubmit.disabled = true;
-    saleSubmit.textContent = "Registrando venda...";
+    saleSubmit.textContent = confirmingOrderId ? "Confirmando pedido..." : "Registrando venda...";
   }
   if (saleSuccess) saleSuccess.textContent = "";
-  setStatus("Registrando venda...", "loading");
+  setStatus(confirmingOrderId ? "Confirmando pedido..." : "Registrando venda...", "loading");
   try {
     const usuarioId = await requireUserId();
     const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
@@ -881,18 +905,45 @@ async function registerSale(event) {
     const items = collectSaleItems();
     const { payload: salePayload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
     salePayload.usuario_id = usuarioId;
+    if (confirmingOrderId) {
+      const { data: reservedOrder, error: reserveError } = await supabaseClient
+        .from(TABLES.orders)
+        .update({ status: "Em separacao", updated_at: new Date().toISOString() })
+        .eq("id", confirmingOrderId)
+        .eq("status", "Aguardando confirmacao")
+        .select("id")
+        .single();
+      if (reserveError || !reservedOrder) throw new Error("Esse pedido ja foi confirmado ou cancelado.");
+      reservedOrderId = reservedOrder.id;
+    }
     const { data: sale, error: saleError } = await supabaseClient.rpc("registrar_venda_troco", {
       p_venda: salePayload,
       p_itens: saleItemPayload(items),
     });
     if (saleError) throw saleError;
+    saleCreated = true;
+    if (confirmingOrderId) {
+      const { error: orderUpdateError } = await supabaseClient
+        .from(TABLES.orders)
+        .update({
+          status: "Confirmado",
+          venda_id: sale?.id || null,
+          confirmado_em: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", confirmingOrderId)
+        .eq("status", "Em separacao");
+      if (orderUpdateError) throw orderUpdateError;
+    }
     localStorage.setItem(LAST_SELLER_KEY, String(seller.id));
     if (deliverer) localStorage.setItem(LAST_DELIVERER_KEY, String(deliverer.id));
     else localStorage.removeItem(LAST_DELIVERER_KEY);
     await loadAll();
     resetSaleForm();
     const registeredAt = new Date(sale?.created_at || Date.now()).toLocaleString("pt-BR");
-    const successMessage = `Venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`;
+    const successMessage = confirmingOrderId
+      ? `Pedido confirmado e venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`
+      : `Venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`;
     setStatus(successMessage, "success");
     if (saleSuccess) {
       saleSuccess.textContent = successMessage;
@@ -902,12 +953,19 @@ async function registerSale(event) {
       }, 8000);
     }
   } catch (error) {
+    if (reservedOrderId && !saleCreated) {
+      await supabaseClient
+        .from(TABLES.orders)
+        .update({ status: "Aguardando confirmacao", updated_at: new Date().toISOString() })
+        .eq("id", reservedOrderId)
+        .eq("status", "Em separacao");
+    }
     setStatus(error.message || "Erro ao registrar venda.", "error");
   } finally {
     app.saleSaving = false;
     if (saleSubmit) {
       saleSubmit.disabled = false;
-      saleSubmit.textContent = "Registrar venda";
+      saleSubmit.textContent = app.confirmingOrderId ? "Confirmar e registrar venda" : "Registrar venda";
     }
   }
 }
@@ -978,6 +1036,15 @@ async function cancelSale(saleId) {
       p_observacao: "Cancelamento pelo painel",
     });
     if (error) throw error;
+    await supabaseClient
+      .from(TABLES.orders)
+      .update({
+        status: "Cancelado",
+        motivo_cancelamento: "Venda cancelada pelo painel",
+        cancelado_em: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("venda_id", sale.id);
     setStatus("Venda cancelada e estoque devolvido.", "success");
     await loadAll();
   } catch (error) {
@@ -985,10 +1052,83 @@ async function cancelSale(saleId) {
   }
 }
 
+function normalizeOrderStatus(status = "") {
+  return String(status || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+
+function pendingOrders() {
+  return app.orders.filter((order) => normalizeOrderStatus(order.status) === "aguardando confirmacao");
+}
+
+function orderItems(orderId) {
+  return app.orderItems.filter((item) => String(item.pedido_id) === String(orderId));
+}
+
+function orderMatchesFilter(order) {
+  const filter = app.orderStatusFilter;
+  const status = normalizeOrderStatus(order.status);
+  if (filter === "all") return true;
+  if (filter === "pending") return status === "aguardando confirmacao";
+  if (filter === "confirmed") return status === "confirmado";
+  if (filter === "separation") return status === "em separacao";
+  if (filter === "route") return status === "em rota";
+  if (filter === "delivered") return status === "entregue";
+  if (filter === "cancelled") return status === "cancelado";
+  return true;
+}
+
+function saleMatchesStatusFilter(sale) {
+  const filter = app.orderStatusFilter;
+  const status = normalizeOrderStatus(sale.status_entrega || sale.status);
+  if (filter === "all") return true;
+  if (filter === "pending") return false;
+  if (filter === "confirmed") return !sale.cancelada && normalizeOrderStatus(sale.status) === "concluida";
+  if (filter === "separation") return false;
+  if (filter === "route") return status === "em rota";
+  if (filter === "delivered") return status === "entregue";
+  if (filter === "cancelled") return sale.cancelada || status === "cancelado";
+  return true;
+}
+
+function saleMatchesPeriod(sale) {
+  const { start, end } = periodRange();
+  const date = saleDate(sale);
+  return date >= start && date <= end;
+}
+
+function renderPendingOrders() {
+  if (!pendingOrdersRoot) return;
+  const rows = filteredOrders().filter(orderMatchesFilter);
+  pendingOrdersRoot.innerHTML = rows.length
+    ? rows.map((order) => {
+      const items = orderItems(order.id);
+      const isPending = normalizeOrderStatus(order.status) === "aguardando confirmacao";
+      return `
+        <article class="history-row ${normalizeOrderStatus(order.status) === "cancelado" ? "cancelled" : ""}">
+          <strong>${escapeHtml(order.codigo || `Pedido #${order.id}`)} - ${escapeHtml(order.cliente_nome || "Cliente")}</strong>
+          <span>Bairro: ${escapeHtml(order.cliente_bairro || "Nao informado")}</span>
+          <span>${items.map((item) => `${toNumber(item.quantidade)}x ${escapeHtml(item.produto_nome)}`).join(" | ") || "Sem itens"}</span>
+          <span>Valor dos produtos: ${currency.format(order.valor_produtos || 0)}</span>
+          <span>Origem: ${escapeHtml(order.origem || "Site")} | Status: ${escapeHtml(order.status || "Aguardando confirmacao")}</span>
+          <span>Recebido em: ${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}</span>
+          ${order.motivo_cancelamento ? `<span>Motivo: ${escapeHtml(order.motivo_cancelamento)}</span>` : ""}
+          <div class="history-actions">
+            <button type="button" data-view-order="${order.id}">Ver detalhes</button>
+            ${isPending ? `<button type="button" data-confirm-order="${order.id}">Confirmar e registrar venda</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
+          </div>
+        </article>
+      `;
+    }).join("")
+    : "<p>Nenhum pedido para este filtro.</p>";
+}
+
 function renderSalesHistory() {
   if (!salesHistory) return;
-  salesHistory.innerHTML = app.sales.length
-    ? app.sales.slice(0, 40).map((sale) => `
+  if (salesStatusFilter) salesStatusFilter.value = app.orderStatusFilter;
+  renderPendingOrders();
+  const rows = app.sales.filter(saleMatchesPeriod).filter(saleMatchesStatusFilter);
+  salesHistory.innerHTML = rows.length
+    ? rows.slice(0, 40).map((sale) => `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
         <strong>${escapeHtml(sale.nome_produto || "Venda")}</strong>
         <span>Venda registrada em: ${new Date(sale.created_at || sale.data_venda || Date.now()).toLocaleString("pt-BR")}</span>
@@ -1003,7 +1143,7 @@ function renderSalesHistory() {
         </div>
       </article>
     `).join("")
-    : "<p>Nenhuma venda registrada.</p>";
+    : "<p>Nenhuma venda confirmada para este filtro.</p>";
 }
 
 function viewSaleDetails(saleId) {
@@ -1021,6 +1161,86 @@ function viewSaleDetails(saleId) {
     `Entrega: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}`,
     `Status: ${sale.status_entrega || sale.status || "Nao informado"}`,
   ].join("\n"));
+}
+
+function viewOrderDetails(orderId) {
+  const order = app.orders.find((item) => String(item.id) === String(orderId));
+  if (!order) return;
+  const items = orderItems(orderId);
+  window.alert([
+    `Pedido ${order.codigo || `#${order.id}`}`,
+    `Cliente: ${order.cliente_nome || "Nao informado"}`,
+    `Bairro: ${order.cliente_bairro || "Nao informado"}`,
+    `Produtos: ${items.map((item) => `${item.quantidade}x ${item.produto_nome}`).join(", ") || "Sem itens"}`,
+    `Valor produtos: ${currency.format(order.valor_produtos || 0)}`,
+    `Origem: ${order.origem || "Site"}`,
+    `Status: ${order.status || "Aguardando confirmacao"}`,
+    `Recebido em: ${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}`,
+  ].join("\n"));
+}
+
+function loadOrderForConfirmation(orderId) {
+  const order = app.orders.find((item) => String(item.id) === String(orderId));
+  if (!order) return setStatus("Pedido nao encontrado.", "error");
+  if (normalizeOrderStatus(order.status) !== "aguardando confirmacao") return setStatus("Esse pedido ja foi processado.", "error");
+  const items = orderItems(orderId);
+  if (!items.length) return setStatus("Pedido sem itens para confirmar.", "error");
+
+  app.confirmingOrderId = order.id;
+  app.editingSaleId = null;
+  switchTab("sales");
+  saleItemsRoot.innerHTML = items.map((item) => {
+    const product = app.products.find((productRow) => String(productRow.id) === String(item.produto_id));
+    return saleItemTemplate({
+      product,
+      produto_id: item.produto_id,
+      quantidade: item.quantidade,
+      valor_unitario: item.valor_unitario,
+    });
+  }).join("");
+  saleForm.elements.desconto.value = "0";
+  saleForm.elements.forma_pagamento.value = "Pix";
+  saleForm.elements.valor_recebido.value = toNumber(order.valor_produtos).toFixed(2).replace(".", ",");
+  saleForm.elements.teve_troco.value = "nao";
+  saleForm.elements.troco.value = "";
+  saleForm.elements.taxa_entrega.value = "0";
+  saleForm.elements.cliente.value = order.cliente_nome || "";
+  saleForm.elements.observacao.value = `Pedido ${order.codigo || order.id} recebido pelo site. Bairro: ${order.cliente_bairro || ""}`;
+  saleForm.elements.motivo_alteracao.value = "";
+  app.saleReceivedTouched = true;
+  renderPeopleOptions();
+  setSuggestedDeliveryRoute();
+  saleEditBanner?.classList.remove("hidden");
+  saleEditMotive?.classList.add("hidden");
+  if (saleEditLabel) saleEditLabel.textContent = `Confirmando ${order.codigo || `pedido #${order.id}`}`;
+  if (saleSubmit) saleSubmit.textContent = "Confirmar e registrar venda";
+  updateSaleItemPrices();
+  updateSaleTotal();
+  saleForm.scrollIntoView({ behavior: "smooth", block: "start" });
+  setStatus("Revise o pedido, informe pagamento, vendedora e entregador, depois confirme a venda.", "success");
+}
+
+async function cancelOrder(orderId) {
+  const order = app.orders.find((item) => String(item.id) === String(orderId));
+  if (!order) return;
+  if (normalizeOrderStatus(order.status) !== "aguardando confirmacao") return setStatus("Apenas pedidos pendentes podem ser cancelados aqui.", "error");
+  const motive = window.prompt("Motivo do cancelamento:");
+  if (!motive || !motive.trim()) return setStatus("Informe o motivo do cancelamento.", "error");
+  setStatus("Cancelando pedido...", "loading");
+  const { error } = await supabaseClient
+    .from(TABLES.orders)
+    .update({
+      status: "Cancelado",
+      motivo_cancelamento: motive.trim(),
+      cancelado_em: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", orderId)
+    .eq("status", "Aguardando confirmacao");
+  if (error) return setStatus(error.message || "Erro ao cancelar pedido.", "error");
+  showToast("Pedido cancelado com sucesso.", "success");
+  setStatus("Pedido cancelado com sucesso.", "success");
+  await loadAll();
 }
 
 function renderStockFilters() {
@@ -1133,6 +1353,12 @@ function updateStockSaveState(productId) {
 
 function renderFinance() {
   const summary = summaryFor();
+  const orders = filteredOrders();
+  const pending = orders.filter((order) => normalizeOrderStatus(order.status) === "aguardando confirmacao");
+  $("[data-finance-orders-received]").textContent = String(orders.length);
+  $("[data-finance-orders-pending]").textContent = String(pending.length);
+  $("[data-finance-sales-confirmed]").textContent = String(filteredSales().length);
+  $("[data-finance-pending-potential]").textContent = currency.format(pending.reduce((sum, order) => sum + toNumber(order.valor_produtos), 0));
   $("[data-finance-revenue]").textContent = currency.format(summary.revenue);
   $("[data-finance-received]").textContent = currency.format(summary.received);
   $("[data-finance-delivery]").textContent = currency.format(summary.delivery);
@@ -1898,6 +2124,12 @@ document.addEventListener("click", async (event) => {
   if (viewSale) viewSaleDetails(viewSale.dataset.viewSale);
   const editSale = event.target.closest("[data-edit-sale]");
   if (editSale) loadSaleForEdit(editSale.dataset.editSale);
+  const viewOrder = event.target.closest("[data-view-order]");
+  if (viewOrder) viewOrderDetails(viewOrder.dataset.viewOrder);
+  const confirmOrder = event.target.closest("[data-confirm-order]");
+  if (confirmOrder) loadOrderForConfirmation(confirmOrder.dataset.confirmOrder);
+  const cancelOrderButton = event.target.closest("[data-cancel-order]");
+  if (cancelOrderButton) cancelOrder(cancelOrderButton.dataset.cancelOrder);
   if (event.target.closest("[data-cancel-edit-sale]")) resetSaleForm();
   const editTeam = event.target.closest("[data-team-edit]");
   if (editTeam) editTeamMember(editTeam.dataset.teamEdit, editTeam.dataset.teamId);
@@ -1975,6 +2207,10 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-routes-filter]")) {
     app.routesFilter = event.target.value;
     renderRoutes();
+  }
+  if (event.target.matches("[data-sales-status-filter]")) {
+    app.orderStatusFilter = event.target.value;
+    renderSalesHistory();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
   if (event.target.name === "entregador_id") {

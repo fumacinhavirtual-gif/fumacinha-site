@@ -2,6 +2,8 @@ const TABLE_NAME = "PRODUTOS";
 const CONFIG_TABLE_NAME = "SITE_CONFIG";
 const CATEGORY_TABLE_NAME = "CATEGORIAS";
 const SALES_TABLE_NAME = "VENDAS";
+const ORDERS_TABLE_NAME = "PEDIDOS";
+const ORDER_ITEMS_TABLE_NAME = "ITENS_PEDIDO";
 const BANNER_TABLE_NAME = "BANNERS_HOME";
 const BENEFITS_TABLE_NAME = "BENEFICIOS_LOJA";
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
@@ -1523,6 +1525,70 @@ function buildConfirmedWhatsAppUrlWithImages(customer = {}) {
   return buildWhatsAppSendUrl(lines.join("\n"));
 }
 
+function buildOrderWhatsAppUrl(customer = {}, order = {}) {
+  const { items, normalTotal } = getCartSummary();
+  const lines = [
+    "\uD83D\uDCE6 *Pedido Fumacinha*",
+    `Codigo: ${order.codigo || "Pendente"}`,
+    "",
+    "\uD83D\uDC64 *Cliente:*",
+    customer.nome,
+    "",
+    "\uD83D\uDCCD *Bairro:*",
+    customer.bairro,
+    "",
+    "*Produtos:*",
+    ...items.flatMap((item) => [
+      "",
+      `*${item.product.nome}*`,
+      `\u2022 Valor da unidade: ${currency.format(item.product.preco)}`,
+      `\u2022 Quantidade: ${item.quantity}`,
+      `\u2022 Subtotal: ${currency.format(item.product.preco * item.quantity)}`,
+    ]),
+    "",
+    "\uD83D\uDCB0 *Valor do Pedido:*",
+    currency.format(normalTotal),
+    "",
+    "\uD83D\uDE9A *Entrega:*",
+    "Taxa a combinar",
+  ];
+
+  return buildWhatsAppSendUrl(lines.join("\n"));
+}
+
+async function savePendingSiteOrder(customer = {}) {
+  if (!supabaseClient) throw new Error("Configure o Supabase para registrar pedidos.");
+  const { items, normalTotal } = getCartSummary();
+  if (!items.length) throw new Error("Adicione produtos ao carrinho.");
+
+  const invalidItem = items.find((item) => !item.product?.id || item.quantity <= 0 || item.quantity > Number(item.product.estoque || 0));
+  if (invalidItem) throw new Error(`Revise a quantidade de ${invalidItem.product?.nome || "um produto"}.`);
+
+  const pedido = {
+    cliente_nome: customer.nome,
+    cliente_bairro: customer.bairro,
+    origem: "Site",
+    status: "Aguardando confirmacao",
+    valor_produtos: normalTotal,
+  };
+  const itens = items.map((item) => ({
+    produto_id: String(item.product.id),
+    produto_nome: item.product.nome,
+    produto_imagem: item.product.imagem || "",
+    quantidade: item.quantity,
+    valor_unitario: item.product.preco,
+    subtotal: item.product.preco * item.quantity,
+  }));
+
+  const { data, error } = await supabaseClient.rpc("registrar_pedido_site", {
+    p_pedido: pedido,
+    p_itens: itens,
+  });
+
+  if (error) throw error;
+  return Array.isArray(data) ? data[0] : data;
+}
+
 function renderCart() {
   const { items, count, normalTotal } = getCartSummary();
 
@@ -1644,7 +1710,7 @@ function closeOrderConfirmation() {
   syncPageScrollLock();
 }
 
-function setOrderSubmitState(isSubmitting) {
+function setOrderSubmitState(isSubmitting, label = "Abrindo WhatsApp...") {
   if (!orderConfirmationForm) return;
   const submitButton = orderConfirmationForm.querySelector('button[type="submit"]');
   orderConfirmationForm.dataset.submitting = isSubmitting ? "true" : "false";
@@ -1653,7 +1719,7 @@ function setOrderSubmitState(isSubmitting) {
     submitButton.dataset.defaultHtml = submitButton.dataset.defaultHtml || submitButton.innerHTML;
     submitButton.disabled = isSubmitting;
     submitButton.setAttribute("aria-busy", isSubmitting ? "true" : "false");
-    submitButton.innerHTML = isSubmitting ? "Abrindo WhatsApp..." : submitButton.dataset.defaultHtml;
+    submitButton.innerHTML = isSubmitting ? label : submitButton.dataset.defaultHtml;
   }
 }
 
@@ -3079,7 +3145,7 @@ editLoginForm?.addEventListener("submit", async (event) => {
   clearSecretAdminAccess();
 });
 
-orderConfirmationForm?.addEventListener("submit", (event) => {
+orderConfirmationForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = event.currentTarget;
   if (form.dataset.submitting === "true") return;
@@ -3098,14 +3164,16 @@ orderConfirmationForm?.addEventListener("submit", (event) => {
   }
 
   if (orderError) orderError.textContent = "";
-  const whatsappUrl = buildConfirmedWhatsAppUrlWithImages(customer);
-
   try {
-    setOrderSubmitState(true);
+    setOrderSubmitState(true, "Registrando pedido...");
+    const order = await savePendingSiteOrder(customer);
+    const whatsappUrl = buildOrderWhatsAppUrl(customer, order);
+    if (orderError) orderError.textContent = "Pedido registrado com sucesso. Abrindo WhatsApp...";
+    setOrderSubmitState(true, "Abrindo WhatsApp...");
     window.location.assign(whatsappUrl);
-  } catch {
+  } catch (error) {
     setOrderSubmitState(false);
-    if (orderError) orderError.textContent = "Não foi possível abrir o WhatsApp. Tente novamente.";
+    if (orderError) orderError.textContent = error?.message || "Nao foi possivel registrar o pedido. Tente novamente.";
   }
 });
 
