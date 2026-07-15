@@ -1731,7 +1731,7 @@ function renderOrderSummary() {
     <h3>Resumo do pedido</h3>
     <div class="order-summary-list">
       <div class="order-summary-line">
-        <span class="summary-label"><span class="summary-icon" aria-hidden="true">□</span><span><strong>Quantidade de produtos</strong><small>Total de itens no carrinho</small></span></span>
+        <span class="summary-label"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M3 4h2l2.3 11.4a2 2 0 0 0 2 1.6h8.8a2 2 0 0 0 2-1.6L21.5 8H6.2" /></svg></span><span><strong>Quantidade de produtos</strong><small>Total de itens no carrinho</small></span></span>
         <strong>${count}</strong>
       </div>
       <div class="order-summary-line">
@@ -1739,7 +1739,7 @@ function renderOrderSummary() {
         <strong>${currency.format(normalTotal)}</strong>
       </div>
       <div class="order-summary-line">
-        <span class="summary-label"><span class="summary-icon" aria-hidden="true">→</span><span><strong>Taxa de entrega</strong><small>Sera calculada depois</small></span></span>
+        <span class="summary-label"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M5 18H3.8a1.8 1.8 0 0 1-1.8-1.8V14h4l2-5h6l2 4h2.6a2.4 2.4 0 0 1 2.2 1.5l.7 1.5H20" /><path d="M9 18h7" /><path d="M10 9l-1.5 4" /><path d="M14 9l1.5 4" /></svg></span><span><strong>Taxa de entrega</strong><small>Sera calculada depois</small></span></span>
         <strong>A combinar</strong>
       </div>
     </div>
