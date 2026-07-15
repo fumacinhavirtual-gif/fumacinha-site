@@ -255,8 +255,18 @@ function slugify(value) {
 }
 
 function getProductDescription(product) {
-  if (product.descricao) return product.descricao;
-  return `Produto da categoria ${product.categoria}, disponível na Fumacinha para confirmar cores, estoque e entrega pelo WhatsApp.`;
+  return String(product.descricao || "").trim();
+}
+
+function productDescriptionBlock(product) {
+  const description = getProductDescription(product);
+  if (!description) return "";
+  return `
+    <div class="product-description-block">
+      <h2>Descrição</h2>
+      <p class="product-description">${escapeHtml(description)}</p>
+    </div>
+  `;
 }
 
 function productSearchText(product) {
@@ -1321,7 +1331,7 @@ function showProduct(productId) {
           </div>
         </div>
         <button class="btn primary" type="button" data-add-product="${product.id}">Adicionar ao Carrinho</button>
-        <p class="product-description">${getProductDescription(product)}</p>
+        ${productDescriptionBlock(product)}
       </div>
     </section>
     ${
