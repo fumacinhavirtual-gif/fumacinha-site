@@ -1606,23 +1606,24 @@ body.order-confirmation-view .whatsapp-float {
   display: block;
   flex: 1 0 auto;
   width: 100%;
-  padding: clamp(18px, 4vw, 42px) 20px 56px;
-  background: var(--white);
+  padding: clamp(18px, 4vw, 46px) 20px 64px;
+  background: #f7f8fa;
 }
 
 .order-confirmation-dialog {
   width: min(760px, 100%);
   margin: 0 auto;
-  padding: 0;
-  border-radius: 0;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(17, 17, 17, 0.05);
+  border-radius: 24px;
   background: var(--white);
-  box-shadow: none;
+  box-shadow: 0 22px 60px rgba(17, 24, 39, 0.08);
 }
 
 .order-confirmation-dialog h2 {
-  margin: 12px 0 20px;
+  margin: 10px 0 10px;
   color: var(--black);
-  font-size: clamp(1.7rem, 4vw, 2.35rem);
+  font-size: clamp(2rem, 5vw, 2.75rem);
   line-height: 1.1;
 }
 
@@ -1631,71 +1632,106 @@ body.order-confirmation-view .whatsapp-float {
   align-items: center;
   justify-content: center;
   width: fit-content;
-  min-height: 44px;
-  margin-bottom: 18px;
-  border: 0;
+  min-height: 48px;
+  margin-bottom: 30px;
+  border: 1px solid #dfe3e8;
   border-radius: 999px;
-  padding: 10px 18px;
-  color: var(--white);
-  background: var(--red);
-  font-weight: 900;
+  padding: 11px 18px;
+  color: var(--black);
+  background: var(--white);
+  font-weight: 800;
   cursor: pointer;
-  transition: background 200ms ease, transform 200ms ease;
+  box-shadow: 0 8px 22px rgba(17, 24, 39, 0.06);
+  transition: background 200ms ease, border-color 200ms ease, transform 200ms ease;
 }
 
 .back-to-cart-button:hover,
 .back-to-cart-button:focus-visible {
-  background: #a91b20;
+  border-color: #cfd5dc;
+  background: #f9fafb;
   transform: translateY(-1px);
 }
 
-.order-confirmation-note {
-  margin: -8px 0 18px;
-  color: #5f6368;
-  font-size: 0.98rem;
+.order-confirmation .eyebrow {
+  margin-bottom: 0;
+  color: var(--green);
+  letter-spacing: 0.16em;
+}
+
+.order-confirmation-intro {
+  margin: 0 0 24px;
+  color: #69707a;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.45;
 }
 
 .order-confirmation-form {
   display: grid;
-  gap: 18px;
+  gap: 24px;
 }
 
 .order-fields {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 12px;
+  gap: 22px;
 }
 
 .order-fields label {
   display: grid;
-  gap: 7px;
+  gap: 10px;
   color: var(--black);
   font-weight: 900;
 }
 
-.order-fields label > span {
+.order-field-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.order-field-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
   color: var(--green);
+}
+
+.order-field-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .order-fields small {
   color: var(--muted);
-  font-size: 0.76rem;
+  font-size: 0.8rem;
   font-weight: 700;
 }
 
 .order-fields input,
 .order-fields textarea {
   width: 100%;
-  border: 1px solid #dddddd;
-  border-radius: 14px;
-  padding: 13px 14px;
+  min-height: 56px;
+  border: 1px solid #d9dde3;
+  border-radius: 16px;
+  padding: 0 18px;
   color: var(--black);
   background: var(--white);
   font: inherit;
+  font-weight: 700;
   outline: none;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+
+.order-fields input::placeholder {
+  color: #9aa1aa;
+  font-weight: 700;
 }
 
 .order-fields input:focus,
@@ -1716,52 +1752,149 @@ body.order-confirmation-view .whatsapp-float {
 }
 
 .order-form-error {
-  min-height: 22px;
-  margin: -6px 0 0;
+  min-height: 0;
+  margin: -8px 0 0;
   color: #b52020;
   font-size: 0.9rem;
   font-weight: 900;
 }
 
+.order-form-error:empty {
+  display: none;
+}
+
 .order-summary-box {
   display: grid;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: var(--soft);
+  gap: 20px;
+  padding: clamp(20px, 4vw, 26px);
+  border: 1px solid rgba(17, 17, 17, 0.06);
+  border-radius: 22px;
+  background: var(--white);
+  box-shadow: 0 18px 46px rgba(17, 24, 39, 0.07);
 }
 
 .order-summary-box h3 {
   margin: 0;
   color: var(--black);
+  font-size: 1.35rem;
 }
 
-.order-summary-items {
+.order-summary-list {
   display: grid;
-  gap: 7px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--line);
 }
 
-.order-summary-item,
 .order-summary-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  color: var(--muted);
+  gap: 16px;
+  padding: 16px 0;
+  color: var(--black);
+  border-bottom: 1px solid #edf0f3;
 }
 
-.order-summary-item strong,
+.order-summary-line:first-child {
+  padding-top: 0;
+}
+
+.order-summary-line:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
 .order-summary-line strong {
   color: var(--black);
   text-align: right;
+  font-size: 1.05rem;
+}
+
+.order-summary-line:nth-child(2) > strong,
+.order-summary-line:nth-child(3) > strong {
+  color: var(--green);
+}
+
+.summary-label {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.summary-label strong {
+  display: block;
+  text-align: left;
+  color: var(--black);
+  font-size: 0.98rem;
+}
+
+.summary-label small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+
+.summary-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  color: var(--green);
+  background: #eaf7ef;
+  font-weight: 900;
 }
 
 .order-summary-box p {
   margin: 0;
   color: var(--muted);
   font-weight: 900;
+}
+
+.order-safe-note {
+  margin: 0;
+  padding: 16px 18px;
+  border: 1px solid #cfeedd;
+  border-radius: 16px;
+  color: var(--green);
+  background: #eefaf3;
+  font-weight: 900;
+}
+
+.order-safe-note::before {
+  content: "✓";
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-right: 9px;
+  border: 1px solid #bde7cd;
+  border-radius: 999px;
+  color: var(--green);
+}
+
+.order-confirmation .btn.whatsapp.checkout {
+  min-height: 60px;
+  border-radius: 18px;
+  font-size: 1.05rem;
+  box-shadow: 0 18px 36px rgba(0, 150, 70, 0.22);
+}
+
+.order-redirect-note {
+  margin: -10px 0 0;
+  color: var(--muted);
+  text-align: center;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.order-redirect-note::before {
+  content: "▣";
+  margin-right: 6px;
+  color: #8c949f;
 }
 
 .policy-dialog {
