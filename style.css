@@ -394,41 +394,61 @@ body.order-confirmation-view .whatsapp-float {
 
 .home-banner-carousel {
   position: relative;
-  padding: 16px clamp(14px, 4vw, 44px) 0;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
   background: var(--white);
+  touch-action: pan-y pinch-zoom;
+  user-select: none;
 }
 
 .home-banner-viewport {
-  width: min(960px, 100%);
-  margin: 0 auto;
-  border-radius: 18px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  border-radius: 0;
   overflow: hidden;
   background: var(--soft);
+  cursor: grab;
+}
+
+.home-banner-carousel.dragging .home-banner-viewport {
+  cursor: grabbing;
 }
 
 .home-banner-track {
   display: flex;
-  transition: transform 0.45s ease;
+  flex-wrap: nowrap;
+  width: 100%;
+  transition: transform 0.52s ease;
   will-change: transform;
 }
 
 .home-banner-slide {
   position: relative;
   flex: 0 0 100%;
-  min-height: 220px;
+  width: 100%;
+  min-width: 100%;
+  aspect-ratio: 16 / 10;
+  max-height: 420px;
+  min-height: 180px;
+  overflow: hidden;
 }
 
 .home-banner-slide a,
 .home-banner-slide {
+  display: block;
   color: var(--white);
 }
 
 .home-banner-slide img {
+  display: block;
   width: 100%;
   height: 100%;
-  min-height: 220px;
-  max-height: 320px;
   object-fit: cover;
+  pointer-events: none;
 }
 
 .home-banner-slide div {
@@ -450,59 +470,41 @@ body.order-confirmation-view .whatsapp-float {
   font-size: clamp(0.9rem, 2vw, 1.08rem);
 }
 
-.home-banner-arrow {
-  position: absolute;
-  top: 50%;
-  z-index: 2;
-  display: grid;
-  place-items: center;
-  width: 38px;
-  height: 38px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  color: var(--black);
-  background: rgba(255, 255, 255, 0.92);
-  transform: translateY(-50%);
-  cursor: pointer;
-}
-
-.home-banner-arrow.prev {
-  left: clamp(20px, 6vw, 90px);
-}
-
-.home-banner-arrow.next {
-  right: clamp(20px, 6vw, 90px);
-}
-
-.home-banner-arrow svg {
-  width: 20px;
-  height: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .home-banner-dots {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 3;
   display: flex;
   justify-content: center;
-  gap: 7px;
-  margin-top: 10px;
+  gap: 8px;
+  transform: translateX(-50%);
 }
 
 .home-banner-dots button {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   border: 0;
   border-radius: 999px;
-  background: #d7d7d7;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.22);
   cursor: pointer;
+  transition: width 200ms ease, background 200ms ease, opacity 200ms ease;
 }
 
 .home-banner-dots button.active {
-  width: 22px;
-  background: var(--green);
+  width: 28px;
+  background: #ffffff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-banner-track {
+    transition: none;
+  }
+
+  .home-banner-dots button {
+    transition: none;
+  }
 }
 
 .config-banner img {
@@ -3092,18 +3094,9 @@ body.order-confirmation-view .whatsapp-float {
     font-size: 0.9rem;
   }
 
-  .home-banner-carousel {
-    padding: 12px 12px 0;
-  }
-
   .home-banner-slide,
   .home-banner-slide img {
-    min-height: 150px;
-  }
-
-  .home-banner-arrow {
-    width: 32px;
-    height: 32px;
+    min-height: 170px;
   }
 
   .category-section {

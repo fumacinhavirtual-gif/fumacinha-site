@@ -57,6 +57,7 @@ const state = {
   bannerCarousel: { enabled: false, interval: 5, banners: [] },
   bannerIndex: 0,
   bannerTimer: null,
+  bannerDrag: { active: false, startX: 0, startY: 0, deltaX: 0, dragging: false },
   productEditorMode: "create",
   selectedProductImageFile: null,
   removeProductImage: false,
@@ -110,8 +111,6 @@ const homeBannerCarousel = document.querySelector("[data-home-banner-carousel]")
 const brandLogoImage = document.querySelector("[data-brand-logo-image]");
 const bannerTrack = document.querySelector("[data-banner-track]");
 const bannerDots = document.querySelector("[data-banner-dots]");
-const bannerPrev = document.querySelector("[data-banner-prev]");
-const bannerNext = document.querySelector("[data-banner-next]");
 const configBanner = document.querySelector("[data-config-banner]");
 const configBannerImage = document.querySelector("[data-config-banner-image]");
 const homeText = document.querySelector("[data-home-text]");
@@ -683,11 +682,13 @@ function moveHomeBanner(direction) {
   updateHomeBannerPosition();
 }
 
-function updateHomeBannerPosition() {
+function updateHomeBannerPosition(offsetPercent = 0, animate = true) {
   if (!bannerTrack) return;
-  bannerTrack.style.transform = `translateX(-${state.bannerIndex * 100}%)`;
+  bannerTrack.style.transition = animate ? "" : "none";
+  bannerTrack.style.transform = `translateX(calc(-${state.bannerIndex * 100}% + ${offsetPercent}%))`;
   bannerDots?.querySelectorAll("button").forEach((button, index) => {
     button.classList.toggle("active", index === state.bannerIndex);
+    button.setAttribute("aria-current", index === state.bannerIndex ? "true" : "false");
   });
 }
 
@@ -695,7 +696,37 @@ function startBannerAutoplay() {
   window.clearInterval(state.bannerTimer);
   const banners = activeBanners();
   if (!state.bannerCarousel.enabled || banners.length <= 1) return;
+  if (document.visibilityState === "hidden") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
   state.bannerTimer = window.setInterval(() => moveHomeBanner(1), Math.max(2, Number(state.bannerCarousel.interval || 5)) * 1000);
+}
+
+function pauseBannerAutoplay(resume = true) {
+  window.clearInterval(state.bannerTimer);
+  if (resume) window.setTimeout(startBannerAutoplay, 3500);
+}
+
+function bannerClientWidth() {
+  return homeBannerCarousel?.getBoundingClientRect().width || 1;
+}
+
+function finishBannerDrag() {
+  if (!state.bannerDrag.active) return;
+  const banners = activeBanners();
+  const moved = state.bannerDrag.deltaX;
+  const threshold = bannerClientWidth() * 0.18;
+  homeBannerCarousel?.classList.remove("dragging");
+  state.bannerDrag.active = false;
+  state.bannerDrag.deltaX = 0;
+  if (banners.length > 1 && Math.abs(moved) > threshold) {
+    moveHomeBanner(moved < 0 ? 1 : -1);
+  } else {
+    updateHomeBannerPosition(0, true);
+  }
+  pauseBannerAutoplay(true);
+  window.setTimeout(() => {
+    state.bannerDrag.dragging = false;
+  }, 60);
 }
 
 function renderHomeBannerCarousel() {
@@ -3197,13 +3228,11 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-policy-close]")) closePolicyModal();
   if (event.target === policyModal) closePolicyModal();
 
-  if (event.target.closest("[data-banner-prev]")) moveHomeBanner(-1);
-  if (event.target.closest("[data-banner-next]")) moveHomeBanner(1);
   const bannerDot = event.target.closest("[data-banner-dot]");
   if (bannerDot) {
     state.bannerIndex = Number(bannerDot.dataset.bannerDot);
     updateHomeBannerPosition();
-    startBannerAutoplay();
+    pauseBannerAutoplay(true);
   }
 });
 
@@ -3299,7 +3328,12 @@ window.addEventListener("pageshow", () => {
 
 window.addEventListener("focus", restoreHomeAfterCompletedCheckout);
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") restoreHomeAfterCompletedCheckout();
+  if (document.visibilityState === "visible") {
+    restoreHomeAfterCompletedCheckout();
+    startBannerAutoplay();
+  } else {
+    window.clearInterval(state.bannerTimer);
+  }
 });
 
 productEditorForm?.addEventListener("submit", saveProduct);
@@ -3480,6 +3514,39 @@ adminProductSort?.addEventListener("change", (event) => {
 adminProductFilter?.addEventListener("change", (event) => {
   state.adminProducts.filter = event.target.value;
   renderProductsByCategory();
+});
+
+homeBannerCarousel?.addEventListener("pointerdown", (event) => {
+  if (event.target.closest("[data-banner-dot]")) return;
+  const banners = activeBanners();
+  if (banners.length <= 1) return;
+  state.bannerDrag = { active: true, startX: event.clientX, startY: event.clientY, deltaX: 0, dragging: false };
+  homeBannerCarousel.classList.add("dragging");
+  pauseBannerAutoplay(false);
+});
+
+homeBannerCarousel?.addEventListener("pointermove", (event) => {
+  if (!state.bannerDrag.active) return;
+  const deltaX = event.clientX - state.bannerDrag.startX;
+  const deltaY = event.clientY - state.bannerDrag.startY;
+  if (!state.bannerDrag.dragging && Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) return;
+  if (!state.bannerDrag.dragging && Math.abs(deltaY) > Math.abs(deltaX)) {
+    finishBannerDrag();
+    return;
+  }
+  state.bannerDrag.dragging = true;
+  state.bannerDrag.deltaX = deltaX;
+  updateHomeBannerPosition((deltaX / bannerClientWidth()) * 100, false);
+});
+
+homeBannerCarousel?.addEventListener("pointerup", finishBannerDrag);
+homeBannerCarousel?.addEventListener("pointercancel", finishBannerDrag);
+homeBannerCarousel?.addEventListener("pointerleave", finishBannerDrag);
+
+homeBannerCarousel?.addEventListener("click", (event) => {
+  if (!state.bannerDrag.dragging) return;
+  event.preventDefault();
+  event.stopPropagation();
 });
 
 lowStockLimitInput?.addEventListener("input", (event) => {
