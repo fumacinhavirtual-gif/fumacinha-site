@@ -754,18 +754,32 @@ function isProductAvailable(product) {
 
 function saleProducts(selected = "") {
   const selectedText = String(selected || "");
-  const search = app.saleProductSearch.trim().toLowerCase();
   return app.products.filter((product) => {
     const isSelected = selectedText && String(product.id) === selectedText;
     if (!isProductAvailable(product) && !isSelected) return false;
-    if (!isSelected && app.saleProductCategory !== "all" && String(product.categoria || "") !== app.saleProductCategory) return false;
-    if (!isSelected && search && ![
-      product.nome,
-      product.categoria,
-      product.descricao,
-    ].filter(Boolean).join(" ").toLowerCase().includes(search)) return false;
+    if (!isSelected && !productMatchesSaleFilters(product)) return false;
     return true;
   });
+}
+
+function saleFilterText(value = "") {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function productMatchesSaleFilters(product) {
+  if (!isProductAvailable(product)) return false;
+  const search = saleFilterText(app.saleProductSearch);
+  if (app.saleProductCategory !== "all" && String(product.categoria || "") !== app.saleProductCategory) return false;
+  if (!search) return true;
+  return saleFilterText([
+    product.nome,
+    product.categoria,
+    product.descricao,
+  ].filter(Boolean).join(" ")).includes(search);
 }
 
 function productOptions(selected = "") {
@@ -793,6 +807,18 @@ function renderSaleProductFilters() {
   saleProductCategorySelect.innerHTML = `<option value="all">Todas as categorias</option>${categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
   saleProductCategorySelect.value = categories.includes(app.saleProductCategory) ? app.saleProductCategory : "all";
   if (saleProductCategorySelect.value !== app.saleProductCategory) app.saleProductCategory = "all";
+}
+
+function syncSaleItemSelectionsWithFilters() {
+  const firstProduct = firstAvailableProduct();
+  $$(".sale-item").forEach((row) => {
+    const select = row.querySelector('[name="produto_id"]');
+    const price = row.querySelector('[name="valor_unitario"]');
+    const current = app.products.find((product) => String(product.id) === String(select?.value));
+    if (productMatchesSaleFilters(current)) return;
+    if (select) select.value = firstProduct?.id || "";
+    if (price) price.value = firstProduct ? toNumber(firstProduct.preco).toFixed(2) : "";
+  });
 }
 
 function saleItemTemplate(item = {}) {
@@ -2567,7 +2593,9 @@ document.addEventListener("input", (event) => {
   }
   if (event.target.matches("[data-sale-product-search]")) {
     app.saleProductSearch = event.target.value;
+    syncSaleItemSelectionsWithFilters();
     updateSaleItemPrices();
+    updateSaleTotal();
   }
   if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
   if (event.target.closest("[data-cash-form]")) {
@@ -2616,7 +2644,9 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.matches("[data-sale-product-category]")) {
     app.saleProductCategory = event.target.value || "all";
+    syncSaleItemSelectionsWithFilters();
     updateSaleItemPrices();
+    updateSaleTotal();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
   if (event.target.name === "entregador_id") {
