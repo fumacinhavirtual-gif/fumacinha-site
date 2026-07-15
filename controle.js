@@ -670,6 +670,20 @@ function renderStoreStatus() {
   }
 }
 
+function storeStatusErrorMessage(error) {
+  const message = String(error?.message || error || "");
+  const missingStatusColumn =
+    message.includes("loja_online") ||
+    message.includes("mensagem_loja_fechada") ||
+    (message.includes("SITE_CONFIG") && message.includes("schema cache"));
+
+  if (missingStatusColumn) {
+    return "Execute o arquivo SUPABASE_STATUS_LOJA.sql no SQL Editor do Supabase da Fumacinha e depois clique em Atualizar.";
+  }
+
+  return message || "Nao foi possivel atualizar o status da loja.";
+}
+
 async function saveStoreStatus(patch, successMessage) {
   if (app.storeStatusSaving) return;
   if (!(await requireAuth())) return;
@@ -705,7 +719,10 @@ async function saveStoreStatus(patch, successMessage) {
     setStatus(successMessage, "success");
     showToast(successMessage);
   } catch (error) {
-    setStatus(error.message || "Nao foi possivel atualizar o status da loja.", "error");
+    console.error("Erro ao atualizar status da loja:", error);
+    const message = storeStatusErrorMessage(error);
+    setStatus(message, "error");
+    showToast(message, "error");
   } finally {
     app.storeStatusSaving = false;
     renderStoreStatus();
