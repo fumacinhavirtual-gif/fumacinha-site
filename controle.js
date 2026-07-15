@@ -67,6 +67,7 @@ const app = {
   routesFilter: "todas",
   sellerSearch: "",
   delivererSearch: "",
+  clientSearch: "",
   period: "today",
   activeTab: "home",
   stockSearch: "",
@@ -121,6 +122,8 @@ const changeHistory = $("[data-change-history]");
 const routesDateInput = $("[data-routes-date]");
 const routesFilterSelect = $("[data-routes-filter]");
 const routesList = $("[data-routes-list]");
+const topClientsRoot = $("[data-top-clients]");
+const clientsCount = $("[data-clients-count]");
 let toastTimer = null;
 
 function setStatus(message = "", type = "") {
@@ -327,6 +330,13 @@ function normalizePhone(value = "") {
   return digits.startsWith("55") ? digits : `55${digits}`;
 }
 
+function phoneDisplay(value = "") {
+  const digits = String(value || "").replace(/\D/g, "").replace(/^55/, "");
+  if (digits.length === 11) return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+  if (digits.length === 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+  return digits || "Sem WhatsApp";
+}
+
 function orderPhone(order) {
   return normalizePhone(order.cliente_telefone || order.telefone || "");
 }
@@ -336,6 +346,52 @@ function orderWhatsappUrl(order) {
   if (!phone) return "";
   const text = `Ola, ${order.cliente_nome || "cliente"}! Estou entrando em contato sobre o pedido ${order.codigo || order.id} da Fumacinha.`;
   return `https://api.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(text)}`;
+}
+
+function clientWhatsappUrl(phone, name = "cliente") {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return "";
+  const text = `Ola, ${name || "cliente"}! Aqui e da Fumacinha.`;
+  return `https://api.whatsapp.com/send/?phone=${normalized}&text=${encodeURIComponent(text)}`;
+}
+
+function saleLinkedOrder(sale) {
+  return app.orders.find((order) => String(order.venda_id || "") === String(sale.id));
+}
+
+function clientRows() {
+  const rank = new Map();
+  filteredSales().forEach((sale) => {
+    const linkedOrder = saleLinkedOrder(sale);
+    const name = sale.cliente_nome || linkedOrder?.cliente_nome || "Cliente sem nome";
+    const rawPhone = sale.cliente_telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || "";
+    const phone = normalizePhone(rawPhone);
+    const key = phone || name.trim().toLowerCase();
+    const current = rank.get(key) || {
+      name,
+      phone,
+      purchases: 0,
+      total: 0,
+      received: 0,
+      lastDate: null,
+    };
+    current.name = current.name === "Cliente sem nome" && name ? name : current.name;
+    current.phone = current.phone || phone;
+    current.purchases += 1;
+    current.total += saleProductsValue(sale);
+    current.received += saleDeliveredValue(sale);
+    const date = saleDate(sale);
+    if (!current.lastDate || date > current.lastDate) current.lastDate = date;
+    rank.set(key, current);
+  });
+
+  const search = app.clientSearch.trim().toLowerCase();
+  return [...rank.values()]
+    .filter((client) => {
+      if (!search) return true;
+      return `${client.name} ${phoneDisplay(client.phone)} ${client.phone}`.toLowerCase().includes(search);
+    })
+    .sort((a, b) => b.purchases - a.purchases || b.total - a.total || (b.lastDate || 0) - (a.lastDate || 0));
 }
 
 function scrollToOrder(orderId) {
@@ -1932,7 +1988,48 @@ function renderFinance() {
   $("[data-finance-gross]").textContent = currency.format(summary.gross);
   $("[data-finance-expenses]").textContent = currency.format(summary.expenses);
   $("[data-finance-net]").textContent = currency.format(summary.net);
+  renderTopClients();
   renderExpenses();
+}
+
+function renderTopClients() {
+  if (!topClientsRoot) return;
+  const rows = clientRows();
+  const allClientsCount = clientRowsUnfilteredCount();
+  if (clientsCount) clientsCount.textContent = `${allClientsCount} ${allClientsCount === 1 ? "cliente" : "clientes"}`;
+  topClientsRoot.innerHTML = rows.length
+    ? rows.slice(0, 20).map((client, index) => {
+      const whatsappUrl = clientWhatsappUrl(client.phone, client.name);
+      const lastDate = client.lastDate ? client.lastDate.toLocaleDateString("pt-BR") : "Sem data";
+      return `
+        <article class="client-row">
+          <div class="client-rank">${index + 1}</div>
+          <div class="client-main">
+            <strong>${escapeHtml(client.name)}</strong>
+            <span>${escapeHtml(phoneDisplay(client.phone))}</span>
+            <small>Ultima compra: ${lastDate}</small>
+          </div>
+          <div class="client-stats">
+            <strong>${client.purchases}</strong>
+            <span>${client.purchases === 1 ? "compra" : "compras"}</span>
+          </div>
+          <div class="client-total">
+            <strong>${currency.format(client.total)}</strong>
+            <span>em produtos</span>
+          </div>
+          ${whatsappUrl ? `<a class="client-whatsapp" href="${whatsappUrl}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+        </article>
+      `;
+    }).join("")
+    : `<p class="empty-state">Nenhum cliente encontrado neste periodo.</p>`;
+}
+
+function clientRowsUnfilteredCount() {
+  const previousSearch = app.clientSearch;
+  app.clientSearch = "";
+  const count = clientRows().length;
+  app.clientSearch = previousSearch;
+  return count;
 }
 
 async function saveExpense(event) {
@@ -2749,6 +2846,10 @@ document.addEventListener("input", (event) => {
   if (event.target.matches("[data-order-search]")) {
     app.orderSearch = event.target.value;
     renderPendingOrders();
+  }
+  if (event.target.matches("[data-client-search]")) {
+    app.clientSearch = event.target.value;
+    renderTopClients();
   }
   if (event.target.matches("[data-sale-product-search]")) {
     app.saleProductSearch = event.target.value;
