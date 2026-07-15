@@ -14,6 +14,7 @@ const ADMIN_ACCESS_PARAM = "admin";
 const ADMIN_ACCESS_SECRET = "fumacinha";
 const PRODUCT_SLOW_LOAD_MS = 5000;
 const ALL_CATEGORY_ID = "all";
+const CHECKOUT_COMPLETED_KEY = "fumacinha_checkout_completed";
 const ALL_CATEGORY_ICON = `
   <svg viewBox="0 0 24 24" aria-hidden="true">
     <rect x="4" y="4" width="6" height="6" rx="1.5"></rect>
@@ -40,6 +41,7 @@ const state = {
   products: [],
   categories: [],
   cart: new Map(),
+  checkoutCompleted: false,
   productQuantity: 1,
   search: "",
   editMode: false,
@@ -1770,6 +1772,33 @@ function closeOrderConfirmation() {
   syncPageScrollLock();
 }
 
+function restoreHomeAfterCompletedCheckout({ clearFlag = true } = {}) {
+  if (!state.checkoutCompleted && sessionStorage.getItem(CHECKOUT_COMPLETED_KEY) !== "1") return;
+  closeOrderConfirmation();
+  closeCart();
+  document.body.classList.remove("product-detail-view");
+  productPage?.classList.add("hidden");
+  productPage?.setAttribute("aria-hidden", "true");
+  state.currentProductId = null;
+  window.scrollTo({ top: 0, behavior: "auto" });
+  if (window.location.hash) {
+    history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
+  }
+  state.checkoutCompleted = false;
+  if (clearFlag) sessionStorage.removeItem(CHECKOUT_COMPLETED_KEY);
+}
+
+function completeCheckoutAndPrepareHome() {
+  state.checkoutCompleted = true;
+  sessionStorage.setItem(CHECKOUT_COMPLETED_KEY, "1");
+  state.cart.clear();
+  renderCart();
+  orderConfirmationForm?.reset();
+  closeOrderConfirmation();
+  closeCart();
+  restoreHomeAfterCompletedCheckout({ clearFlag: false });
+}
+
 function setOrderSubmitState(isSubmitting, label = "Abrindo WhatsApp...") {
   if (!orderConfirmationForm) return;
   const submitButton = orderConfirmationForm.querySelector('button[type="submit"]');
@@ -3255,6 +3284,7 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
     const whatsappUrl = buildOrderWhatsAppUrl(customer, order);
     if (orderError) orderError.textContent = "Pedido registrado com sucesso. Abrindo WhatsApp...";
     setOrderSubmitState(true, "Abrindo WhatsApp...");
+    completeCheckoutAndPrepareHome();
     window.location.assign(whatsappUrl);
   } catch (error) {
     setOrderSubmitState(false);
@@ -3263,7 +3293,13 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
 });
 
 window.addEventListener("pageshow", () => {
+  restoreHomeAfterCompletedCheckout();
   setOrderSubmitState(false);
+});
+
+window.addEventListener("focus", restoreHomeAfterCompletedCheckout);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") restoreHomeAfterCompletedCheckout();
 });
 
 productEditorForm?.addEventListener("submit", saveProduct);
