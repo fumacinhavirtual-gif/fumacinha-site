@@ -3019,6 +3019,9 @@ document.addEventListener("click", async (event) => {
     if (!(await ensureStoreIsOpen())) return;
     openOrderConfirmation();
   }
+  if (event.target.closest("[data-back-to-top]")) {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
   if (event.target.closest("[data-close-cart]")) closeCart();
   if (event.target === cartDrawer) closeCart();
   if (event.target.closest("[data-close-order-confirmation]")) closeOrderConfirmation();
