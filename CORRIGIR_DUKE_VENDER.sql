@@ -12,8 +12,8 @@ begin
     from public."PRODUTOS"
    where nome ilike '%duke%';
 
-  if duke_count <> 1 then
-    raise exception 'Esperado exatamente 1 produto Duke; encontrados: %', duke_count;
+  if duke_count = 0 then
+    raise exception 'Nenhum produto Duke foi encontrado';
   end if;
 end
 $$;

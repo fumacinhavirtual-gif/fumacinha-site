@@ -531,21 +531,28 @@ async function requireUserId() {
 }
 
 async function ensureDukeAvailability(products) {
-  const duke = products.find((product) => String(product.nome || "").toLowerCase().includes("duke"));
-  const estoque = Number(duke?.estoque ?? 0);
-  if (!duke || !Number.isFinite(estoque) || estoque <= 0 || duke.ativo !== false) return products;
+  const dukeIds = products
+    .filter((product) => {
+      const estoque = Number(product.estoque ?? 0);
+      return String(product.nome || "").toLowerCase().includes("duke")
+        && Number.isFinite(estoque)
+        && estoque > 0
+        && product.ativo === false;
+    })
+    .map((product) => product.id);
+  if (!dukeIds.length) return products;
 
   const { data, error } = await supabaseClient
     .from(TABLES.products)
     .update({ ativo: true })
-    .eq("id", duke.id)
+    .in("id", dukeIds)
     .eq("ativo", false)
     .gt("estoque", 0)
-    .select("*")
-    .single();
+    .select("*");
   if (error) throw error;
 
-  return products.map((product) => String(product.id) === String(data.id) ? data : product);
+  const updatedProducts = new Map((data || []).map((product) => [String(product.id), product]));
+  return products.map((product) => updatedProducts.get(String(product.id)) || product);
 }
 
 async function loadAll() {
