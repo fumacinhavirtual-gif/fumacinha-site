@@ -11,6 +11,15 @@ const LOW_STOCK_DEFAULT_LIMIT = 5;
 const ADMIN_ACCESS_PARAM = "admin";
 const ADMIN_ACCESS_SECRET = "fumacinha";
 const PRODUCT_SLOW_LOAD_MS = 5000;
+const ALL_CATEGORY_ID = "all";
+const ALL_CATEGORY_ICON = `
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect x="4" y="4" width="6" height="6" rx="1.5"></rect>
+    <rect x="14" y="4" width="6" height="6" rx="1.5"></rect>
+    <rect x="4" y="14" width="6" height="6" rx="1.5"></rect>
+    <rect x="14" y="14" width="6" height="6" rx="1.5"></rect>
+  </svg>
+`;
 
 const settings = {
   brandTitle: "Fumacinha",
@@ -35,7 +44,7 @@ const state = {
   productsLoaded: false,
   productLoadPromise: null,
   categoryConfigs: [],
-  activeCategory: "",
+  activeCategory: ALL_CATEGORY_ID,
   financeFilter: "today",
   historyGroup: "day",
   bannerCarousel: { enabled: false, interval: 5, banners: [] },
@@ -252,27 +261,31 @@ function productSearchText(product) {
   return `${product.nome} ${product.categoria} ${product.descricao || ""}`.toLowerCase();
 }
 
+function isAllCategorySelected() {
+  return state.activeCategory === ALL_CATEGORY_ID;
+}
+
 function getVisibleProducts() {
   const term = state.search.trim().toLowerCase();
   const publicProducts = state.products.filter((product) => product.ativo && product.estoque > 0);
   if (term) {
     return publicProducts.filter((product) => productSearchText(product).includes(term));
   }
-  if (state.activeCategory) {
+  if (!isAllCategorySelected()) {
     return publicProducts.filter((product) => product.categoryId === state.activeCategory);
   }
   return publicProducts.filter((product) => !product.ocultar_home);
 }
 
 function getFeaturedProducts() {
-  if (state.search.trim() || state.activeCategory) return [];
+  if (state.search.trim() || !isAllCategorySelected()) return [];
   return state.products.filter((product) => {
     return product.ativo && product.estoque > 0 && product.destaque_home && !product.ocultar_home;
   });
 }
 
 function getHomeCategories() {
-  if (state.search.trim() || state.activeCategory) return state.categories;
+  if (state.search.trim() || !isAllCategorySelected()) return state.categories;
   return state.categories.filter((category) => category.ativo_home);
 }
 
@@ -1187,7 +1200,15 @@ async function loadSiteConfig() {
 
 function renderCategories() {
   const categories = state.categories.filter((category) => category.ativo_home);
-  categoryRail.innerHTML = categories
+  const allCategory = `
+    <a class="category-button ${isAllCategorySelected() ? "active" : ""}" href="#produtos" data-category-scroll="${ALL_CATEGORY_ID}">
+      <span class="category-circle category-circle-all">
+        ${ALL_CATEGORY_ICON}
+      </span>
+      <span>TODOS</span>
+    </a>
+  `;
+  const categoryItems = categories
     .map(
       (category) => `
         <a class="category-button ${category.id === state.activeCategory ? "active" : ""}" href="#cat-${category.id}" data-category-scroll="${category.id}">
@@ -1203,12 +1224,13 @@ function renderCategories() {
       `
     )
     .join("");
+  categoryRail.innerHTML = `${allCategory}${categoryItems}`;
 }
 
 function renderProductsByCategory() {
   const visibleProducts = state.editMode ? getAdminFilteredProducts() : getVisibleProducts();
   const featuredProducts = state.editMode ? [] : getFeaturedProducts();
-  const visibleCategories = state.activeCategory
+  const visibleCategories = !isAllCategorySelected()
     ? state.categories.filter((category) => category.id === state.activeCategory)
     : state.search.trim() || (state.editMode && state.adminProducts.query.trim())
       ? state.categories
@@ -1254,10 +1276,11 @@ function renderProductsByCategory() {
 }
 
 function showHome(scroll = true) {
-  state.activeCategory = "";
+  state.activeCategory = ALL_CATEGORY_ID;
   document.body.classList.remove("product-view");
   document.querySelectorAll("[data-view='home']").forEach((item) => item.classList.remove("hidden"));
   productPage.classList.add("hidden");
+  renderCategories();
   renderProductsByCategory();
   if (scroll) document.querySelector("#inicio").scrollIntoView({ behavior: "smooth" });
 }
@@ -2764,7 +2787,9 @@ document.addEventListener("click", (event) => {
     state.activeCategory = categoryLink.dataset.categoryScroll;
     renderCategories();
     renderProductsByCategory();
-    document.querySelector(`#cat-${categoryLink.dataset.categoryScroll}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const scrollTarget =
+      state.activeCategory === ALL_CATEGORY_ID ? document.querySelector("#produtos") : document.querySelector(`#cat-${state.activeCategory}`);
+    scrollTarget?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   const viewProductButton = event.target.closest("[data-view-product]");
@@ -3198,7 +3223,8 @@ lowStockLimitInput?.addEventListener("input", (event) => {
 
 searchInput?.addEventListener("input", (event) => {
   state.search = event.target.value;
-  state.activeCategory = "";
+  state.activeCategory = ALL_CATEGORY_ID;
+  renderCategories();
   renderProductsByCategory();
 });
 

@@ -671,6 +671,11 @@ main {
   stroke-linejoin: round;
 }
 
+.category-circle-all svg {
+  width: 46px;
+  height: 46px;
+}
+
 .category-image {
   width: 70%;
   height: 70%;
