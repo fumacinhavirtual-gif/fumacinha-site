@@ -7,6 +7,7 @@ const TABLES = {
   saleItems: "ITENS_VENDA",
   orders: "PEDIDOS",
   orderItems: "ITENS_PEDIDO",
+  orderChanges: "ALTERACOES_PEDIDO",
   stockMoves: "MOVIMENTACOES_ESTOQUE",
   expenses: "DESPESAS",
   deliverers: "ENTREGADORES",
@@ -43,6 +44,7 @@ const app = {
   saleReceivedTouched: false,
   saleSaving: false,
   editingSaleId: null,
+  editingOrderId: null,
   confirmingOrderId: null,
   orderStatusFilter: "pending",
   orderSearch: "",
@@ -684,7 +686,7 @@ function isProductAvailable(product) {
 
 function saleProducts(selected = "") {
   const selectedText = String(selected || "");
-  return app.products.filter((product) => isProductAvailable(product) || ((app.editingSaleId || app.confirmingOrderId) && String(product.id) === selectedText));
+  return app.products.filter((product) => isProductAvailable(product) || ((app.editingSaleId || app.editingOrderId || app.confirmingOrderId) && String(product.id) === selectedText));
 }
 
 function productOptions(selected = "") {
@@ -961,7 +963,7 @@ function buildSalePayload(items, seller, deliverer) {
       data_entrega: draft.routeDate,
       horario_rota: draft.routeTime,
       rota_data_hora: routeDateTime,
-      status_entrega: "Aguardando",
+      status_entrega: saleForm.elements.status_entrega?.value || "Aguardando",
       status: "concluida",
       custo_unitario: productCost(first.product),
       custo_total: cost,
@@ -973,6 +975,7 @@ function buildSalePayload(items, seller, deliverer) {
 
 function resetSaleForm() {
   app.editingSaleId = null;
+  app.editingOrderId = null;
   app.confirmingOrderId = null;
   saleForm.reset();
   saleForm.elements.desconto.value = "0";
@@ -981,6 +984,9 @@ function resetSaleForm() {
   saleForm.elements.teve_troco.value = "nao";
   saleForm.elements.taxa_entrega.value = "";
   saleForm.elements.motivo_alteracao.value = "";
+  if (saleForm.elements.bairro) saleForm.elements.bairro.value = "";
+  if (saleForm.elements.telefone) saleForm.elements.telefone.value = "";
+  if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = "Aguardando";
   app.deliveryManuallyEdited = false;
   app.saleReceivedTouched = false;
   setSuggestedDeliveryRoute();
@@ -1012,6 +1018,9 @@ function loadSaleForEdit(saleId) {
   saleForm.elements.data_entrega.value = saleRouteDate(sale);
   saleForm.elements.horario_rota.value = saleRouteTime(sale) || "11:00";
   saleForm.elements.cliente.value = sale.cliente_nome || "";
+  if (saleForm.elements.bairro) saleForm.elements.bairro.value = sale.cliente_bairro || "";
+  if (saleForm.elements.telefone) saleForm.elements.telefone.value = sale.cliente_telefone || "";
+  if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = sale.status_entrega || "Aguardando";
   saleForm.elements.observacao.value = sale.observacao || "";
   saleForm.elements.motivo_alteracao.value = "";
   saleEditBanner?.classList.remove("hidden");
@@ -1164,6 +1173,7 @@ async function updateEditedSale(event) {
 }
 
 function saveSale(event) {
+  if (app.editingOrderId) return saveOrderEdit(event);
   return app.editingSaleId ? updateEditedSale(event) : registerSale(event);
 }
 
@@ -1266,7 +1276,7 @@ function renderPendingOrders() {
           <div class="history-actions">
             <button type="button" data-view-order="${order.id}">Ver detalhes</button>
             ${phoneUrl ? `<button type="button" data-open-order-whatsapp="${order.id}">Abrir conversa no WhatsApp</button>` : `<span>Telefone nao informado</span>`}
-            ${isPending ? `<button type="button" data-confirm-order="${order.id}">Confirmar e registrar venda</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
+            ${isPending ? `<button type="button" data-edit-order="${order.id}">Editar pedido</button><button type="button" data-confirm-order="${order.id}">Confirmar pedido</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
           </div>
         </article>
       `;
@@ -1331,14 +1341,15 @@ function viewOrderDetails(orderId) {
   ].join("\n"));
 }
 
-function loadOrderForConfirmation(orderId) {
+function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   const order = app.orders.find((item) => String(item.id) === String(orderId));
   if (!order) return setStatus("Pedido nao encontrado.", "error");
   if (normalizeOrderStatus(order.status) !== "aguardando confirmacao") return setStatus("Esse pedido ja foi processado.", "error");
   const items = orderItems(orderId);
   if (!items.length) return setStatus("Pedido sem itens para confirmar.", "error");
 
-  app.confirmingOrderId = order.id;
+  app.confirmingOrderId = mode === "confirm" ? order.id : null;
+  app.editingOrderId = mode === "edit" ? order.id : null;
   app.editingSaleId = null;
   switchTab("sales");
   saleItemsRoot.innerHTML = items.map((item) => {
@@ -1350,40 +1361,136 @@ function loadOrderForConfirmation(orderId) {
       valor_unitario: item.valor_unitario,
     });
   }).join("");
-  saleForm.elements.desconto.value = "0";
-  saleForm.elements.forma_pagamento.value = "Pix";
-  saleForm.elements.valor_recebido.value = toNumber(order.valor_produtos).toFixed(2).replace(".", ",");
-  saleForm.elements.teve_troco.value = "nao";
-  saleForm.elements.troco.value = "";
-  saleForm.elements.taxa_entrega.value = "0";
+  saleForm.elements.desconto.value = toNumber(order.desconto || 0).toFixed(2).replace(".", ",");
+  saleForm.elements.forma_pagamento.value = order.forma_pagamento || "Pix";
+  saleForm.elements.valor_recebido.value = toNumber(order.valor_pago_cliente || order.valor_produtos).toFixed(2).replace(".", ",");
+  saleForm.elements.teve_troco.value = order.teve_troco || toNumber(order.troco) > 0 ? "sim" : "nao";
+  saleForm.elements.troco.value = toNumber(order.troco || 0) ? toNumber(order.troco).toFixed(2).replace(".", ",") : "";
+  saleForm.elements.taxa_entrega.value = toNumber(order.taxa_entrega || 0).toFixed(2).replace(".", ",");
   saleForm.elements.cliente.value = order.cliente_nome || "";
-  saleForm.elements.observacao.value = `Pedido ${order.codigo || order.id} recebido pelo site. Bairro: ${order.cliente_bairro || ""}`;
+  if (saleForm.elements.bairro) saleForm.elements.bairro.value = order.cliente_bairro || "";
+  if (saleForm.elements.telefone) saleForm.elements.telefone.value = order.cliente_telefone || "";
+  if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = order.status_entrega || "Aguardando";
+  saleForm.elements.observacao.value = order.observacao_interna || `Pedido ${order.codigo || order.id} recebido pelo site. Bairro: ${order.cliente_bairro || ""}`;
   saleForm.elements.motivo_alteracao.value = "";
   app.saleReceivedTouched = true;
   renderPeopleOptions();
-  setSuggestedDeliveryRoute();
+  saleForm.elements.vendedora_id.value = order.vendedora_id || localStorage.getItem(LAST_SELLER_KEY) || "";
+  saleForm.elements.entregador_id.value = order.entregador_id || localStorage.getItem(LAST_DELIVERER_KEY) || "";
+  saleForm.elements.data_entrega.value = order.data_entrega || localDateValue();
+  saleForm.elements.horario_rota.value = order.horario_rota || nextRouteSuggestion().time;
   saleEditBanner?.classList.remove("hidden");
-  saleEditMotive?.classList.add("hidden");
-  if (saleEditLabel) saleEditLabel.textContent = `Confirmando ${order.codigo || `pedido #${order.id}`}`;
-  if (saleSubmit) saleSubmit.textContent = "Confirmar e registrar venda";
+  saleEditMotive?.classList.remove("hidden");
+  if (saleEditLabel) saleEditLabel.textContent = mode === "edit" ? `Editando ${order.codigo || `pedido #${order.id}`}` : `Confirmando ${order.codigo || `pedido #${order.id}`}`;
+  if (saleSubmit) saleSubmit.textContent = mode === "edit" ? "Salvar alteracoes do pedido" : "Confirmar pedido e registrar venda";
   updateSaleItemPrices();
   updateSaleTotal();
   saleForm.scrollIntoView({ behavior: "smooth", block: "start" });
-  setStatus("Revise o pedido, informe pagamento, vendedora e entregador, depois confirme a venda.", "success");
+  setStatus(mode === "edit" ? "Edite o pedido e salve. Ele continuara pendente." : "Revise o pedido, informe pagamento, vendedora e entregador, depois confirme a venda.", "success");
+}
+
+function loadOrderForConfirmation(orderId) {
+  loadOrderIntoSaleForm(orderId, "confirm");
+}
+
+function loadOrderForEdit(orderId) {
+  loadOrderIntoSaleForm(orderId, "edit");
+}
+
+function orderItemPayload(items) {
+  return items.map((item) => ({
+    produto_id: String(item.product.id),
+    produto_nome: item.product.nome,
+    produto_imagem: item.product.imagem || "",
+    quantidade: item.quantity,
+    valor_unitario: item.unitValue,
+    subtotal: item.quantity * item.unitValue,
+  }));
+}
+
+async function saveOrderEdit(event) {
+  event.preventDefault();
+  if (app.saleSaving || !app.editingOrderId) return;
+  const order = app.orders.find((item) => String(item.id) === String(app.editingOrderId));
+  if (!order) return setStatus("Pedido nao encontrado.", "error");
+  if (normalizeOrderStatus(order.status) !== "aguardando confirmacao") return setStatus("Apenas pedidos pendentes podem ser editados.", "error");
+  app.saleSaving = true;
+  if (saleSubmit) {
+    saleSubmit.disabled = true;
+    saleSubmit.textContent = "Salvando alteracoes...";
+  }
+  setStatus("Salvando alteracoes do pedido...", "loading");
+  try {
+    const usuarioId = await requireUserId();
+    const items = collectSaleItems({ allowEditing: true });
+    const draft = currentSaleDraft();
+    if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
+    if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
+    const previous = {
+      pedido: order,
+      itens: orderItems(order.id),
+    };
+    const motivo = saleForm.elements.motivo_alteracao.value.trim();
+    const payload = {
+      cliente_nome: saleForm.elements.cliente.value.trim(),
+      cliente_bairro: saleForm.elements.bairro?.value.trim() || "",
+      cliente_telefone: String(saleForm.elements.telefone?.value || "").replace(/\D/g, ""),
+      forma_pagamento: draft.payment,
+      valor_pago_cliente: draft.paidValue,
+      teve_troco: draft.cash && draft.hasChange,
+      troco: draft.cash && draft.hasChange ? draft.changeValue : 0,
+      taxa_entrega: Math.max(0, draft.deliveryValue),
+      desconto: parseMoney(saleForm.elements.desconto.value),
+      valor_produtos: draft.productsValue,
+      vendedora_id: saleForm.elements.vendedora_id.value || null,
+      entregador_id: saleForm.elements.entregador_id.value || null,
+      data_entrega: draft.routeDate,
+      horario_rota: draft.routeTime,
+      rota_data_hora: routeIso(draft.routeDate, draft.routeTime),
+      status_entrega: saleForm.elements.status_entrega?.value || "Aguardando",
+      observacao_interna: saleForm.elements.observacao.value.trim(),
+      updated_at: new Date().toISOString(),
+    };
+    if (!payload.cliente_nome) throw new Error("Informe o nome do cliente.");
+    const { error: orderError } = await supabaseClient.from(TABLES.orders).update(payload).eq("id", order.id).eq("status", "Aguardando confirmacao");
+    if (orderError) throw orderError;
+    const { error: deleteError } = await supabaseClient.from(TABLES.orderItems).delete().eq("pedido_id", order.id);
+    if (deleteError) throw deleteError;
+    const nextItems = orderItemPayload(items).map((item) => ({ ...item, pedido_id: order.id }));
+    const { error: itemsError } = await supabaseClient.from(TABLES.orderItems).insert(nextItems);
+    if (itemsError) throw itemsError;
+    await supabaseClient.from(TABLES.orderChanges).insert({
+      pedido_id: order.id,
+      dados_anteriores: previous,
+      dados_novos: { pedido: payload, itens: nextItems },
+      motivo,
+      usuario_id: usuarioId,
+    });
+    await loadAll();
+    resetSaleForm();
+    showToast("Pedido atualizado com sucesso.", "success");
+    setStatus("Pedido atualizado com sucesso.", "success");
+  } catch (error) {
+    setStatus(error.message || "Erro ao salvar pedido.", "error");
+  } finally {
+    app.saleSaving = false;
+    if (saleSubmit) {
+      saleSubmit.disabled = false;
+      saleSubmit.textContent = app.editingOrderId ? "Salvar alteracoes do pedido" : "Registrar venda";
+    }
+  }
 }
 
 async function cancelOrder(orderId) {
   const order = app.orders.find((item) => String(item.id) === String(orderId));
   if (!order) return;
   if (normalizeOrderStatus(order.status) !== "aguardando confirmacao") return setStatus("Apenas pedidos pendentes podem ser cancelados aqui.", "error");
-  const motive = window.prompt("Motivo do cancelamento:");
-  if (!motive || !motive.trim()) return setStatus("Informe o motivo do cancelamento.", "error");
   setStatus("Cancelando pedido...", "loading");
   const { error } = await supabaseClient
     .from(TABLES.orders)
     .update({
       status: "Cancelado",
-      motivo_cancelamento: motive.trim(),
+      motivo_cancelamento: "",
       cancelado_em: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -2285,6 +2392,8 @@ document.addEventListener("click", async (event) => {
   if (editSale) loadSaleForEdit(editSale.dataset.editSale);
   const viewOrder = event.target.closest("[data-view-order]");
   if (viewOrder) viewOrderDetails(viewOrder.dataset.viewOrder);
+  const editOrder = event.target.closest("[data-edit-order]");
+  if (editOrder) loadOrderForEdit(editOrder.dataset.editOrder);
   const confirmOrder = event.target.closest("[data-confirm-order]");
   if (confirmOrder) loadOrderForConfirmation(confirmOrder.dataset.confirmOrder);
   const cancelOrderButton = event.target.closest("[data-cancel-order]");
