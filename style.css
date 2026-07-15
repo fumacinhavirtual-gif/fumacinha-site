@@ -1525,6 +1525,14 @@ main {
   line-height: 1.1;
 }
 
+.order-confirmation-note {
+  margin: -8px 0 18px;
+  color: #5f6368;
+  font-size: 0.98rem;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
 .order-confirmation-form {
   display: grid;
   gap: 18px;
