@@ -74,6 +74,7 @@ const currency = new Intl.NumberFormat("pt-BR", {
 });
 
 const productRoot = document.querySelector("[data-products]");
+const productsHeading = document.querySelector("[data-products-heading]");
 const productPage = document.querySelector("[data-product-page]");
 const categoryRail = document.querySelector("[data-category-rail]");
 const cartDrawer = document.querySelector("[data-cart-drawer]");
@@ -1234,11 +1235,14 @@ function renderCategories() {
 function renderProductsByCategory() {
   const visibleProducts = state.editMode ? getAdminFilteredProducts() : getVisibleProducts();
   const featuredProducts = state.editMode ? [] : getFeaturedProducts();
+  const shouldShowFeatured = !state.editMode && isAllCategorySelected() && settings.showFeaturedProducts && featuredProducts.length > 0;
   const visibleCategories = !isAllCategorySelected()
     ? state.categories.filter((category) => category.id === state.activeCategory)
     : state.search.trim() || (state.editMode && state.adminProducts.query.trim())
       ? state.categories
       : getHomeCategories();
+
+  productsHeading?.classList.toggle("hidden", !shouldShowFeatured);
 
   if (!visibleProducts.length && !featuredProducts.length) {
     renderAdminProductPanel();
@@ -1246,13 +1250,9 @@ function renderProductsByCategory() {
     return;
   }
 
-  const featuredSection = featuredProducts.length
+  const featuredSection = shouldShowFeatured
     ? `
         <section class="product-category featured-products" id="mais-procurados">
-          <div class="product-category-heading">
-            <p class="eyebrow">Destaques</p>
-            <h3>Mais Procurados da Fumacinha</h3>
-          </div>
           <div class="featured-products-wrapper">
             <div class="products-grid featured-products-scroll">${featuredProducts.map((product, index) => productCard(product, index, "featured-product-card")).join("")}</div>
           </div>
