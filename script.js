@@ -1553,16 +1553,32 @@ function animateCartCounter(quantity = 1) {
   }, 700);
 }
 
+function isOverlayOpen(element) {
+  if (!element) return false;
+  if (element.classList.contains("hidden")) return false;
+  if (element.getAttribute("aria-hidden") === "true") return false;
+  return true;
+}
+
+function syncPageScrollLock() {
+  const shouldLock =
+    cartDrawer?.classList.contains("open") ||
+    isOverlayOpen(orderConfirmation) ||
+    isOverlayOpen(policyModal);
+
+  document.body.classList.toggle("no-scroll", Boolean(shouldLock));
+}
+
 function openCart() {
   cartDrawer.classList.add("open");
   cartDrawer.setAttribute("aria-hidden", "false");
-  document.body.classList.add("no-scroll");
+  syncPageScrollLock();
 }
 
 function closeCart() {
   cartDrawer.classList.remove("open");
   cartDrawer.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("no-scroll");
+  syncPageScrollLock();
 }
 
 function renderOrderSummary() {
@@ -1584,7 +1600,7 @@ function openOrderConfirmation() {
   closeCart();
   orderConfirmation.classList.remove("hidden");
   orderConfirmation.setAttribute("aria-hidden", "false");
-  document.body.classList.add("no-scroll");
+  syncPageScrollLock();
   orderConfirmationForm?.elements.nome?.focus();
 }
 
@@ -1594,7 +1610,7 @@ function closeOrderConfirmation() {
   if (orderError) orderError.textContent = "";
   orderConfirmationForm?.querySelectorAll(".field-invalid").forEach((field) => field.classList.remove("field-invalid"));
   setOrderSubmitState(false);
-  document.body.classList.remove("no-scroll");
+  syncPageScrollLock();
 }
 
 function setOrderSubmitState(isSubmitting) {
@@ -1618,13 +1634,13 @@ function openPolicyModal(policyKey) {
   policyContent.innerHTML = policy.html;
   policyModal.classList.remove("hidden");
   policyModal.setAttribute("aria-hidden", "false");
-  document.body.classList.add("no-scroll");
+  syncPageScrollLock();
 }
 
 function closePolicyModal() {
   policyModal?.classList.add("hidden");
   policyModal?.setAttribute("aria-hidden", "true");
-  document.body.classList.remove("no-scroll");
+  syncPageScrollLock();
 }
 
 function showToast(message, title = "Fumacinha") {
@@ -3263,6 +3279,9 @@ function moveBenefits(direction) {
 benefitPrev?.addEventListener("click", () => moveBenefits(-1));
 benefitNext?.addEventListener("click", () => moveBenefits(1));
 if (benefitTrack) window.setInterval(() => moveBenefits(1), 3600);
+
+window.addEventListener("pageshow", syncPageScrollLock);
+window.addEventListener("focus", syncPageScrollLock);
 
 renderSettings();
 renderCart();
