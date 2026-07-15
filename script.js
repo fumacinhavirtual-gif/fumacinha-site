@@ -1612,7 +1612,7 @@ async function savePendingSiteOrder(customer = {}) {
 
   const pedido = {
     cliente_nome: customer.nome,
-    cliente_bairro: customer.bairro || "",
+    cliente_bairro: customer.bairro || "Nao informado",
     cliente_telefone: customer.telefone || "",
     origem: "Site",
     status: "Aguardando confirmacao",
@@ -3232,7 +3232,7 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
 
   const customer = {
     nome: form.elements.nome.value.trim(),
-    bairro: "",
+    bairro: "Nao informado",
     telefone: String(form.elements.telefone?.value || "").replace(/\D/g, ""),
   };
 
