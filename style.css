@@ -777,6 +777,9 @@ main {
 .category-product-list {
   display: grid;
   gap: 58px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .load-message {
@@ -801,6 +804,9 @@ main {
 }
 
 .product-category {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   scroll-margin-top: 96px;
 }
 
@@ -2935,19 +2941,20 @@ main {
   }
 
   .featured-products .featured-products-scroll {
-    display: flex;
+    display: flex !important;
     grid-template-columns: none;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap !important;
     align-items: stretch;
-    width: 100%;
-    max-width: 100%;
+    width: 100% !important;
+    max-width: 100% !important;
     gap: 12px;
-    padding: 0 0 12px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    padding: 0 16px 12px !important;
+    box-sizing: border-box !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
     scroll-snap-type: x mandatory;
-    scroll-padding-inline: 0;
-    overscroll-behavior-inline: contain;
+    scroll-padding-inline: 16px;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -2957,11 +2964,11 @@ main {
   }
 
   .featured-products .featured-products-scroll > .product-card {
-    flex: 0 0 calc((100% - 12px) / 2);
-    width: calc((100% - 12px) / 2);
-    min-width: calc((100% - 12px) / 2);
-    max-width: calc((100% - 12px) / 2);
-    box-sizing: border-box;
+    flex: 0 0 calc((100% - 12px) / 2) !important;
+    width: calc((100% - 12px) / 2) !important;
+    min-width: calc((100% - 12px) / 2) !important;
+    max-width: calc((100% - 12px) / 2) !important;
+    box-sizing: border-box !important;
     scroll-snap-align: start;
   }
 
@@ -2982,6 +2989,40 @@ main {
   .featured-products .featured-products-scroll .price-block,
   .featured-products .featured-products-scroll .view-button {
     max-width: 100%;
+  }
+
+  .category-products-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 18px 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 16px !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  .category-products-grid > .product-card {
+    flex: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden;
+  }
+
+  .product-card img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    object-fit: contain;
+  }
+
+  .product-card h3,
+  .product-card .product-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: normal;
   }
 
   .featured-products .featured-products-scroll::after {

@@ -1243,7 +1243,7 @@ function renderProductsByCategory() {
           <div class="product-category-heading">
             <h3>${escapeHtml(category.name)}</h3>
           </div>
-          <div class="products-grid">${categoryProducts.map(productCard).join("")}</div>
+          <div class="products-grid category-products-grid">${categoryProducts.map((product, index) => productCard(product, index)).join("")}</div>
         </section>
       `;
     })
@@ -1299,7 +1299,7 @@ function showProduct(productId) {
     </section>
     ${
       related.length
-        ? `<section class="related"><h2>Produtos relacionados</h2><div class="products-grid">${related.map(productCard).join("")}</div></section>`
+        ? `<section class="related"><h2>Produtos relacionados</h2><div class="products-grid">${related.map((product, index) => productCard(product, index)).join("")}</div></section>`
         : ""
     }
   `;
