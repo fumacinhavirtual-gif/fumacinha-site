@@ -133,7 +133,8 @@ textarea {
 
 .primary-action,
 .ghost-action,
-.danger-action {
+.danger-action,
+.confirm-order-action {
   min-height: 48px;
   border: 0;
   border-radius: 14px;
@@ -149,6 +150,16 @@ textarea {
 .primary-action:hover,
 .primary-action:focus-visible {
   background: var(--red-dark);
+}
+
+.confirm-order-action {
+  color: var(--white);
+  background: #198754;
+}
+
+.confirm-order-action:hover,
+.confirm-order-action:focus-visible {
+  background: #157347;
 }
 
 .ghost-action {
@@ -552,6 +563,11 @@ textarea {
 }
 
 .form-footer {
+  display: grid;
+  gap: 10px;
+}
+
+.form-actions {
   display: grid;
   gap: 10px;
 }

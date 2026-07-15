@@ -99,6 +99,7 @@ const sellerList = $("[data-seller-list]");
 const delivererList = $("[data-deliverer-list]");
 const saleSuccess = $("[data-sale-success]");
 const saleSubmit = $("[data-sale-submit]");
+const confirmEditedOrderButton = $("[data-confirm-edited-order]");
 const saleEditBanner = $("[data-sale-edit-banner]");
 const saleEditLabel = $("[data-sale-edit-label]");
 const saleEditMotive = $("[data-sale-edit-motive]");
@@ -994,6 +995,7 @@ function resetSaleForm() {
   renderPeopleOptions();
   saleEditBanner?.classList.add("hidden");
   saleEditMotive?.classList.add("hidden");
+  confirmEditedOrderButton?.classList.add("hidden");
   if (saleSubmit) saleSubmit.textContent = "Registrar venda";
   updateSaleItemPrices();
   updateSaleTotal();
@@ -1025,6 +1027,7 @@ function loadSaleForEdit(saleId) {
   saleForm.elements.motivo_alteracao.value = "";
   saleEditBanner?.classList.remove("hidden");
   saleEditMotive?.classList.remove("hidden");
+  confirmEditedOrderButton?.classList.add("hidden");
   if (saleEditLabel) saleEditLabel.textContent = `Venda #${sale.id}`;
   if (saleSubmit) saleSubmit.textContent = "Salvar alteracoes";
   app.saleReceivedTouched = true;
@@ -1276,7 +1279,7 @@ function renderPendingOrders() {
           <div class="history-actions">
             <button type="button" data-view-order="${order.id}">Ver detalhes</button>
             ${phoneUrl ? `<button type="button" data-open-order-whatsapp="${order.id}">Abrir conversa no WhatsApp</button>` : `<span>Telefone nao informado</span>`}
-            ${isPending ? `<button type="button" data-edit-order="${order.id}">Editar pedido</button><button type="button" data-confirm-order="${order.id}">Confirmar pedido</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
+            ${isPending ? `<button type="button" data-edit-order="${order.id}">Editar pedido</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
           </div>
         </article>
       `;
@@ -1383,6 +1386,7 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   saleEditMotive?.classList.remove("hidden");
   if (saleEditLabel) saleEditLabel.textContent = mode === "edit" ? `Editando ${order.codigo || `pedido #${order.id}`}` : `Confirmando ${order.codigo || `pedido #${order.id}`}`;
   if (saleSubmit) saleSubmit.textContent = mode === "edit" ? "Salvar alteracoes do pedido" : "Confirmar pedido e registrar venda";
+  confirmEditedOrderButton?.classList.toggle("hidden", mode !== "edit");
   updateSaleItemPrices();
   updateSaleTotal();
   saleForm.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1467,9 +1471,15 @@ async function saveOrderEdit(event) {
       usuario_id: usuarioId,
     });
     await loadAll();
-    resetSaleForm();
+    app.orders = app.orders.map((current) => String(current.id) === String(order.id) ? { ...current, ...payload } : current);
+    app.orderItems = [...app.orderItems.filter((item) => String(item.pedido_id) !== String(order.id)), ...nextItems];
+    app.editingOrderId = order.id;
+    app.confirmingOrderId = null;
+    app.editingSaleId = null;
+    confirmEditedOrderButton?.classList.remove("hidden");
+    renderSalesHistory();
     showToast("Pedido atualizado com sucesso.", "success");
-    setStatus("Pedido atualizado com sucesso.", "success");
+    setStatus("Pedido atualizado com sucesso. Confira os dados e toque em Confirmar pedido para registrar a venda.", "success");
   } catch (error) {
     setStatus(error.message || "Erro ao salvar pedido.", "error");
   } finally {
@@ -1479,6 +1489,17 @@ async function saveOrderEdit(event) {
       saleSubmit.textContent = app.editingOrderId ? "Salvar alteracoes do pedido" : "Registrar venda";
     }
   }
+}
+
+function confirmEditedOrder() {
+  if (!app.editingOrderId) return;
+  const orderId = app.editingOrderId;
+  app.confirmingOrderId = orderId;
+  app.editingOrderId = null;
+  app.editingSaleId = null;
+  confirmEditedOrderButton?.classList.add("hidden");
+  if (saleSubmit) saleSubmit.textContent = "Confirmar pedido e registrar venda";
+  saleForm?.requestSubmit();
 }
 
 async function cancelOrder(orderId) {
@@ -2394,8 +2415,7 @@ document.addEventListener("click", async (event) => {
   if (viewOrder) viewOrderDetails(viewOrder.dataset.viewOrder);
   const editOrder = event.target.closest("[data-edit-order]");
   if (editOrder) loadOrderForEdit(editOrder.dataset.editOrder);
-  const confirmOrder = event.target.closest("[data-confirm-order]");
-  if (confirmOrder) loadOrderForConfirmation(confirmOrder.dataset.confirmOrder);
+  if (event.target.closest("[data-confirm-edited-order]")) confirmEditedOrder();
   const cancelOrderButton = event.target.closest("[data-cancel-order]");
   if (cancelOrderButton) cancelOrder(cancelOrderButton.dataset.cancelOrder);
   const orderWhatsapp = event.target.closest("[data-open-order-whatsapp]");
