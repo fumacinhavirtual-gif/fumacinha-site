@@ -49,6 +49,8 @@ const app = {
   orderStatusFilter: "pending",
   orderSearch: "",
   orderSort: "recent",
+  saleProductSearch: "",
+  saleProductCategory: "all",
   seenOrderIds: new Set(),
   notifiedOrderIds: new Set(),
   realtimeChannel: null,
@@ -79,6 +81,8 @@ const loginStatus = $("[data-login-status]");
 const appStatus = $("[data-app-status]");
 const saleForm = $("[data-sale-form]");
 const saleItemsRoot = $("[data-sale-items]");
+const saleProductSearchInput = $("[data-sale-product-search]");
+const saleProductCategorySelect = $("[data-sale-product-category]");
 const stockList = $("[data-stock-list]");
 const stockHistory = $("[data-stock-history]");
 const salesHistory = $("[data-sales-history]");
@@ -614,6 +618,7 @@ function renderAll() {
   renderPeriods();
   renderPeopleOptions();
   renderDashboard();
+  renderSaleProductFilters();
   renderSaleItems();
   updateSaleItemPrices();
   updateSaleTotal();
@@ -749,7 +754,18 @@ function isProductAvailable(product) {
 
 function saleProducts(selected = "") {
   const selectedText = String(selected || "");
-  return app.products.filter((product) => isProductAvailable(product) || ((app.editingSaleId || app.editingOrderId || app.confirmingOrderId) && String(product.id) === selectedText));
+  const search = app.saleProductSearch.trim().toLowerCase();
+  return app.products.filter((product) => {
+    const isSelected = selectedText && String(product.id) === selectedText;
+    if (!isProductAvailable(product) && !isSelected) return false;
+    if (!isSelected && app.saleProductCategory !== "all" && String(product.categoria || "") !== app.saleProductCategory) return false;
+    if (!isSelected && search && ![
+      product.nome,
+      product.categoria,
+      product.descricao,
+    ].filter(Boolean).join(" ").toLowerCase().includes(search)) return false;
+    return true;
+  });
 }
 
 function productOptions(selected = "") {
@@ -761,6 +777,22 @@ function productOptions(selected = "") {
 
 function firstAvailableProduct() {
   return saleProducts()[0] || null;
+}
+
+function saleProductCategories() {
+  return [...new Set(app.products
+    .filter(isProductAvailable)
+    .map((product) => product.categoria || "Produtos"))]
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+function renderSaleProductFilters() {
+  if (saleProductSearchInput) saleProductSearchInput.value = app.saleProductSearch;
+  if (!saleProductCategorySelect) return;
+  const categories = saleProductCategories();
+  saleProductCategorySelect.innerHTML = `<option value="all">Todas as categorias</option>${categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
+  saleProductCategorySelect.value = categories.includes(app.saleProductCategory) ? app.saleProductCategory : "all";
+  if (saleProductCategorySelect.value !== app.saleProductCategory) app.saleProductCategory = "all";
 }
 
 function saleItemTemplate(item = {}) {
@@ -2533,6 +2565,10 @@ document.addEventListener("input", (event) => {
     app.orderSearch = event.target.value;
     renderPendingOrders();
   }
+  if (event.target.matches("[data-sale-product-search]")) {
+    app.saleProductSearch = event.target.value;
+    updateSaleItemPrices();
+  }
   if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
   if (event.target.closest("[data-cash-form]")) {
     app.cashEditing = true;
@@ -2577,6 +2613,10 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-order-sort]")) {
     app.orderSort = event.target.value;
     renderPendingOrders();
+  }
+  if (event.target.matches("[data-sale-product-category]")) {
+    app.saleProductCategory = event.target.value || "all";
+    updateSaleItemPrices();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
   if (event.target.name === "entregador_id") {
