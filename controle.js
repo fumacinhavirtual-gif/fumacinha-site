@@ -530,6 +530,24 @@ async function requireUserId() {
   return data.user.id;
 }
 
+async function ensureDukeAvailability(products) {
+  const duke = products.find((product) => String(product.nome || "").toLowerCase().includes("duke"));
+  const estoque = Number(duke?.estoque ?? 0);
+  if (!duke || !Number.isFinite(estoque) || estoque <= 0 || duke.ativo !== false) return products;
+
+  const { data, error } = await supabaseClient
+    .from(TABLES.products)
+    .update({ ativo: true })
+    .eq("id", duke.id)
+    .eq("ativo", false)
+    .gt("estoque", 0)
+    .select("*")
+    .single();
+  if (error) throw error;
+
+  return products.map((product) => String(product.id) === String(data.id) ? data : product);
+}
+
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
@@ -559,7 +577,13 @@ async function loadAll() {
     return;
   }
 
-  app.products = productsResult.value.data || [];
+  const loadedProducts = productsResult.value.data || [];
+  try {
+    app.products = await ensureDukeAvailability(loadedProducts);
+  } catch (error) {
+    app.products = loadedProducts;
+    console.error("Erro ao corrigir disponibilidade do Duke:", error);
+  }
   app.sales = salesResult.value.data || [];
   app.saleItems = itemsResult.value.data || [];
   app.orders = ordersResult.value.data || [];
