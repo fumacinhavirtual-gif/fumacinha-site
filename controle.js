@@ -703,7 +703,17 @@ function renderRevenueReport(sales) {
 }
 
 function isProductAvailable(product) {
-  return product && toNumber(product.estoque) > 0 && product.ativo !== false;
+  if (!product) return false;
+  const estoque = Number(product.estoque ?? 0);
+  const preco = Number(product.preco);
+  const id = String(product.id ?? "").trim();
+  return Number.isFinite(estoque)
+    && estoque > 0
+    && product.ativo !== false
+    && !product.deleted_at
+    && Number.isFinite(preco)
+    && preco > 0
+    && id !== "";
 }
 
 function saleProducts(selected = "") {
