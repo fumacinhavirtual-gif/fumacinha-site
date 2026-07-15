@@ -256,7 +256,8 @@ function filteredSales() {
 }
 
 function filteredExpenses() {
-  const { start, end } = periodRange();
+  const start = startOfDay(new Date());
+  const end = endOfDay(new Date());
   return app.expenses.filter((expense) => {
     const date = new Date(`${expense.data_despesa || dateValue()}T12:00:00`);
     return date >= start && date <= end;
@@ -328,9 +329,9 @@ function orderWhatsappUrl(order) {
 }
 
 function scrollToOrder(orderId) {
-  switchTab("sales");
+  switchTab("orders");
   app.orderStatusFilter = "pending";
-  renderSalesHistory();
+  renderPendingOrders();
   window.requestAnimationFrame(() => {
     const row = document.querySelector(`[data-order-row="${orderId}"]`);
     row?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -365,7 +366,8 @@ async function handleRealtimeOrder(order, shouldNotify = true) {
   const existed = app.orders.some((current) => String(current.id) === id);
   app.orders = [order, ...app.orders.filter((current) => String(current.id) !== id)];
   await fetchOrderItemsFor(order.id).catch(() => {});
-  renderSalesHistory();
+  renderPendingOrders();
+  renderDashboard();
   renderFinance();
   if (!existed && shouldNotify && !app.seenOrderIds.has(id)) notifyNewOrder(order);
   app.seenOrderIds.add(id);
@@ -385,7 +387,8 @@ async function pollOrdersLight() {
     notifyNewOrder(order);
     app.seenOrderIds.add(String(order.id));
   });
-  renderSalesHistory();
+  renderPendingOrders();
+  renderDashboard();
   renderFinance();
 }
 
@@ -583,6 +586,7 @@ function renderAll() {
   renderSaleItems();
   updateSaleItemPrices();
   updateSaleTotal();
+  renderPendingOrders();
   renderSalesHistory();
   renderStock();
   renderFinance();
@@ -630,16 +634,33 @@ function renderDashboard() {
   const selected = filteredSales();
   const selectedSummary = summaryFor(selected);
   const today = summaryFor(todaySales(), []);
+  const todayRows = todaySales();
+  const linkedSaleIds = new Set(app.orders.map((order) => String(order.venda_id || "")));
+  const manualToday = todayRows.filter((sale) => !linkedSaleIds.has(String(sale.id))).length;
+  const { start, end } = periodRange();
+  const pending = pendingOrders();
+  const confirmedToday = app.orders.filter((order) => {
+    const status = normalizeOrderStatus(order.status);
+    const date = new Date(order.confirmado_em || order.updated_at || order.created_at || Date.now());
+    return status === "confirmado" && date >= start && date <= end;
+  });
+  const cancelled = app.orders.filter((order) => {
+    const status = normalizeOrderStatus(order.status);
+    const date = new Date(order.cancelado_em || order.updated_at || order.created_at || Date.now());
+    return status === "cancelado" && date >= start && date <= end;
+  });
   const lowStock = app.products.filter((product) => toNumber(product.estoque) <= 5).length;
 
-  $("[data-kpi-sales-today]").textContent = String(today.count);
+  $("[data-kpi-pending-orders]").textContent = String(pending.length);
+  $("[data-kpi-manual-sales-today]").textContent = String(manualToday);
+  $("[data-kpi-confirmed-orders-today]").textContent = String(confirmedToday.length);
+  $("[data-kpi-cancelled-orders]").textContent = String(cancelled.length);
   $("[data-kpi-revenue-today]").textContent = currency.format(today.revenue);
   $("[data-kpi-ticket]").textContent = currency.format(selectedSummary.ticket);
   $("[data-kpi-received]").textContent = currency.format(selectedSummary.received);
   $("[data-kpi-delivery]").textContent = currency.format(selectedSummary.delivery);
   $("[data-kpi-commission]").textContent = currency.format(selectedSummary.commission);
   $("[data-kpi-profit]").textContent = currency.format(selectedSummary.net);
-  $("[data-kpi-sales-count]").textContent = String(selectedSummary.count);
   $("[data-kpi-low-stock]").textContent = String(lowStock);
 
   renderList("[data-report-top-products]", rankedProducts(selected).slice(0, 5), "Nenhuma venda no periodo.");
@@ -1254,6 +1275,7 @@ function saleMatchesPeriod(sale) {
 function renderPendingOrders() {
   if (!pendingOrdersRoot) return;
   updatePendingBadges();
+  if (salesStatusFilter) salesStatusFilter.value = app.orderStatusFilter;
   if (orderSearchInput) orderSearchInput.value = app.orderSearch;
   if (orderSortSelect) orderSortSelect.value = app.orderSort;
   const search = app.orderSearch.trim().toLowerCase();
@@ -1274,7 +1296,9 @@ function renderPendingOrders() {
             <span>${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}</span>
             <span>${currency.format(order.valor_produtos || 0)}</span>
             <span>${escapeHtml(order.origem || "Site")}</span>
+            ${order.data_entrega || order.horario_rota ? `<span>Entrega: ${escapeHtml(formatDateBR(order.data_entrega || localDateValue()))} as ${escapeHtml(order.horario_rota || "--:--")}</span>` : ""}
           </div>
+          <span>${items.map((item) => `${toNumber(item.quantidade)}x ${escapeHtml(item.produto_nome)}`).join(" | ") || "Sem itens"}</span>
           ${order.motivo_cancelamento ? `<span>Motivo: ${escapeHtml(order.motivo_cancelamento)}</span>` : ""}
           <div class="history-actions">
             <button type="button" data-view-order="${order.id}">Ver detalhes</button>
@@ -1289,9 +1313,7 @@ function renderPendingOrders() {
 
 function renderSalesHistory() {
   if (!salesHistory) return;
-  if (salesStatusFilter) salesStatusFilter.value = app.orderStatusFilter;
-  renderPendingOrders();
-  const rows = app.sales.filter(saleMatchesPeriod).filter(saleMatchesStatusFilter);
+  const rows = app.sales.filter(saleMatchesPeriod);
   salesHistory.innerHTML = rows.length
     ? rows.slice(0, 40).map((sale) => `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
@@ -1477,7 +1499,7 @@ async function saveOrderEdit(event) {
     app.confirmingOrderId = null;
     app.editingSaleId = null;
     confirmEditedOrderButton?.classList.remove("hidden");
-    renderSalesHistory();
+    renderPendingOrders();
     showToast("Pedido atualizado com sucesso.", "success");
     setStatus("Pedido atualizado com sucesso. Confira os dados e toque em Confirmar pedido para registrar a venda.", "success");
   } catch (error) {
@@ -2381,6 +2403,11 @@ document.addEventListener("click", async (event) => {
     renderAll();
   }
   if (event.target.closest("[data-refresh]")) loadAll();
+  if (event.target.closest("[data-open-orders]")) {
+    app.orderStatusFilter = "pending";
+    switchTab("orders");
+    renderPendingOrders();
+  }
   if (event.target.closest("[data-add-sale-item]")) {
     saleItemsRoot?.insertAdjacentHTML("beforeend", saleItemTemplate());
     updateSaleItemPrices();
@@ -2463,7 +2490,7 @@ document.addEventListener("input", (event) => {
   }
   if (event.target.matches("[data-order-search]")) {
     app.orderSearch = event.target.value;
-    renderSalesHistory();
+    renderPendingOrders();
   }
   if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
   if (event.target.closest("[data-cash-form]")) {
@@ -2504,11 +2531,11 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.matches("[data-sales-status-filter]")) {
     app.orderStatusFilter = event.target.value;
-    renderSalesHistory();
+    renderPendingOrders();
   }
   if (event.target.matches("[data-order-sort]")) {
     app.orderSort = event.target.value;
-    renderSalesHistory();
+    renderPendingOrders();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
   if (event.target.name === "entregador_id") {

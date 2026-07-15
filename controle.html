@@ -60,14 +60,16 @@
 
         <section class="tab-panel" data-panel="home">
           <div class="kpi-grid">
-            <article><span>Vendas de hoje</span><strong data-kpi-sales-today>0</strong></article>
+            <article class="kpi-clickable" data-open-orders><span>Pedidos pendentes</span><strong data-kpi-pending-orders>0</strong></article>
+            <article><span>Vendas manuais hoje</span><strong data-kpi-manual-sales-today>0</strong></article>
+            <article><span>Pedidos confirmados hoje</span><strong data-kpi-confirmed-orders-today>0</strong></article>
             <article><span>Faturamento produtos hoje</span><strong data-kpi-revenue-today>R$ 0,00</strong></article>
+            <article><span>Pedidos cancelados</span><strong data-kpi-cancelled-orders>0</strong></article>
             <article><span>Ticket medio</span><strong data-kpi-ticket>R$ 0,00</strong></article>
             <article><span>Valor recebido</span><strong data-kpi-received>R$ 0,00</strong></article>
             <article><span>Taxas de entrega</span><strong data-kpi-delivery>R$ 0,00</strong></article>
             <article><span>Comissao vendedoras</span><strong data-kpi-commission>R$ 0,00</strong></article>
             <article><span>Lucro liquido loja</span><strong data-kpi-profit>R$ 0,00</strong></article>
-            <article><span>Quantidade de vendas</span><strong data-kpi-sales-count>0</strong></article>
             <article><span>Estoque baixo</span><strong data-kpi-low-stock>0</strong></article>
           </div>
 
@@ -86,7 +88,7 @@
         <section class="tab-panel hidden" data-panel="sales">
           <div class="section-head">
             <div>
-              <p class="eyebrow">Vendas</p>
+              <p class="eyebrow">Vender</p>
               <h2>Registrar venda manual</h2>
             </div>
             <button class="ghost-action" type="button" data-add-sale-item>Adicionar produto</button>
@@ -175,21 +177,33 @@
           <section class="panel-card">
             <div class="section-head">
               <div>
-                <p class="eyebrow">Pedidos e vendas</p>
-                <h2>Fluxo de atendimento</h2>
+                <p class="eyebrow">Historico</p>
+                <h2>Vendas registradas</h2>
+              </div>
+            </div>
+            <div data-sales-history></div>
+          </section>
+        </section>
+
+        <section class="tab-panel hidden" data-panel="orders">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Pedidos do site</p>
+                <h2>Pedidos recebidos</h2>
               </div>
               <select data-sales-status-filter>
-                <option value="all">Todos</option>
                 <option value="pending" selected>Pedidos pendentes</option>
                 <option value="confirmed">Confirmados</option>
                 <option value="separation">Em separacao</option>
                 <option value="route">Em rota</option>
                 <option value="delivered">Entregues</option>
                 <option value="cancelled">Cancelados</option>
+                <option value="all">Todos</option>
               </select>
             </div>
             <div class="order-tools">
-              <input type="search" data-order-search placeholder="Buscar por cliente ou codigo do pedido" />
+              <input type="search" data-order-search placeholder="Buscar pedido por cliente ou codigo" />
               <select data-order-sort>
                 <option value="recent">Mais recentes primeiro</option>
                 <option value="oldest">Mais antigos primeiro</option>
@@ -199,11 +213,8 @@
             </div>
             <h3 data-pending-title>Pedidos pendentes (0)</h3>
             <div data-pending-orders></div>
-            <h3>Vendas confirmadas</h3>
-            <div data-sales-history></div>
           </section>
         </section>
-
         <section class="tab-panel hidden" data-panel="stock">
           <div class="section-head">
             <div>
@@ -458,7 +469,8 @@
 
     <nav class="bottom-nav hidden" data-bottom-nav aria-label="Navegacao do controle">
       <button type="button" data-tab="home" class="active">Inicio</button>
-      <button type="button" data-tab="sales">Vendas <span class="nav-badge hidden" data-pending-nav-badge>0</span></button>
+      <button type="button" data-tab="sales">Vender</button>
+      <button type="button" data-tab="orders">Pedidos <span class="nav-badge hidden" data-pending-nav-badge>0</span></button>
       <button type="button" data-tab="stock">Estoque</button>
       <button type="button" data-tab="finance">Financeiro</button>
       <button type="button" data-tab="cash">Caixa</button>

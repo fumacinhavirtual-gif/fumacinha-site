@@ -309,6 +309,17 @@ textarea {
   padding: 16px;
 }
 
+.kpi-clickable {
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.kpi-clickable:hover,
+.kpi-clickable:focus-within {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 32px rgba(17, 17, 17, 0.12);
+}
+
 .kpi-grid span,
 .finance-grid span,
 .sale-summary-grid span,
@@ -811,20 +822,30 @@ textarea {
   right: 0;
   bottom: 0;
   z-index: 20;
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  display: flex;
   gap: 6px;
   padding: 10px 8px max(10px, env(safe-area-inset-bottom));
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 -12px 34px rgba(17, 17, 17, 0.12);
+  scrollbar-width: none;
+}
+
+.bottom-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .bottom-nav button {
   position: relative;
+  flex: 0 0 96px;
   min-height: 46px;
   border-radius: 14px;
   padding: 0 4px;
   font-size: 0.7rem;
+  scroll-snap-align: center;
 }
 
 .nav-badge {
@@ -925,9 +946,13 @@ textarea {
     left: 50%;
     right: auto;
     bottom: 16px;
-    width: min(680px, calc(100% - 32px));
+    width: min(820px, calc(100% - 32px));
     transform: translateX(-50%);
     border-radius: 22px;
+  }
+
+  .bottom-nav button {
+    flex: 1 1 0;
   }
 
 }
