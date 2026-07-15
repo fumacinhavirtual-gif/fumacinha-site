@@ -1736,8 +1736,8 @@ function renderOrderSummary() {
   const { count, normalTotal } = getCartSummary();
   orderSummary.innerHTML = `
     <h3>Resumo do pedido</h3>
-    <div class="order-summary-line"><span>Quantidade de produtos</span><strong>${count}</strong></div>
-    <div class="order-total-delivery"><span><strong>Total:</strong> ${currency.format(normalTotal)}</span><span>Taxa de entrega: A combinar</span></div>
+    <div class="order-summary-line"><span>Quantidade de produtos:</span><strong>${count}</strong></div>
+    <div class="order-total-delivery"><span><strong>Valor dos produtos:</strong> ${currency.format(normalTotal)}</span><span>Taxa de entrega: A combinar</span></div>
   `;
 }
 

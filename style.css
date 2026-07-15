@@ -1418,10 +1418,8 @@ body.store-offline .site-footer {
 
 .total-delivery-row,
 .order-total-delivery {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
+  display: grid;
+  gap: 7px;
 }
 
 .total-delivery-row span,
