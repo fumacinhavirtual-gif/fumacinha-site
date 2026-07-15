@@ -752,10 +752,15 @@ function isProductAvailable(product) {
     && id !== "";
 }
 
+function hasActiveSaleProductFilter() {
+  return Boolean(saleFilterText(app.saleProductSearch)) || app.saleProductCategory !== "all";
+}
+
 function saleProducts(selected = "") {
   const selectedText = String(selected || "");
+  const canKeepSelectedOutsideFilter = selectedText && !hasActiveSaleProductFilter();
   return app.products.filter((product) => {
-    const isSelected = selectedText && String(product.id) === selectedText;
+    const isSelected = canKeepSelectedOutsideFilter && String(product.id) === selectedText;
     if (!isProductAvailable(product) && !isSelected) return false;
     if (!isSelected && !productMatchesSaleFilters(product)) return false;
     return true;
@@ -786,7 +791,7 @@ function productOptions(selected = "") {
   const rows = saleProducts(selected);
   return rows.length
     ? rows.map((product) => `<option value="${product.id}" ${String(product.id) === String(selected) ? "selected" : ""}>${escapeHtml(product.nome)} (${toNumber(product.estoque)} un)</option>`).join("")
-    : '<option value="">Sem produtos em estoque</option>';
+    : '<option value="">Nenhum produto encontrado</option>';
 }
 
 function firstAvailableProduct() {
@@ -821,6 +826,24 @@ function syncSaleItemSelectionsWithFilters() {
   });
 }
 
+function updateSaleProductFilterStatus() {
+  const status = $("[data-sale-product-filter-status]");
+  if (!status) return;
+  const total = saleProducts().length;
+  if (!hasActiveSaleProductFilter()) {
+    status.textContent = `${total} produto${total === 1 ? "" : "s"} disponivel${total === 1 ? "" : "s"} para venda.`;
+    status.className = "sale-product-filter-status";
+    return;
+  }
+  if (!total) {
+    status.textContent = "Nenhum produto encontrado para essa busca e categoria.";
+    status.className = "sale-product-filter-status error";
+    return;
+  }
+  status.textContent = `${total} produto${total === 1 ? "" : "s"} encontrado${total === 1 ? "" : "s"} no filtro.`;
+  status.className = "sale-product-filter-status success";
+}
+
 function saleItemTemplate(item = {}) {
   const firstProduct = item.product || app.products.find((product) => String(product.id) === String(item.produto_id)) || firstAvailableProduct();
   return `
@@ -849,14 +872,20 @@ function renderSaleItems() {
 }
 
 function updateSaleItemPrices() {
+  updateSaleProductFilterStatus();
   $$(".sale-item").forEach((row) => {
     const select = row.querySelector('[name="produto_id"]');
     const price = row.querySelector('[name="valor_unitario"]');
-    const product = app.products.find((item) => String(item.id) === String(select?.value));
-    if (select) select.innerHTML = productOptions(select.value);
+    const previousProductId = String(select?.value || "");
+    let product = app.products.find((item) => String(item.id) === previousProductId);
+    if (select) {
+      select.innerHTML = productOptions(select.value);
+      product = app.products.find((item) => String(item.id) === String(select.value));
+    }
     const quantityInput = row.querySelector('[name="quantidade"]');
     if (quantityInput && product) quantityInput.max = Math.max(1, toNumber(product.estoque));
-    if (product && price && !price.value) price.value = toNumber(product.preco).toFixed(2);
+    if (product && price && (!price.value || String(product.id) !== previousProductId)) price.value = toNumber(product.preco).toFixed(2);
+    if (!product && price) price.value = "";
     updateSaleItemPreview(row, product);
   });
 }
