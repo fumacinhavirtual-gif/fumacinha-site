@@ -30,6 +30,8 @@ const settings = {
   bannerImage: "",
   homeText: "",
   showFeaturedProducts: true,
+  storeOnline: true,
+  closedStoreMessage: "Loja temporariamente fechada. Voltaremos em breve.",
   whatsapp: "62991877597",
   deliveryInfo: "Para todo o Brasil",
 };
@@ -95,6 +97,9 @@ const orderError = document.querySelector("[data-order-error]");
 const toastRegion = document.querySelector("[data-toast-region]");
 const searchInput = document.querySelector("[data-search]");
 const searchForm = document.querySelector(".search-form");
+const storeClosedScreen = document.querySelector("[data-store-closed]");
+const storeClosedMessage = document.querySelector("[data-store-closed-message]");
+const storeClosedWhatsapp = document.querySelector("[data-store-closed-whatsapp]");
 const benefitCarousel = document.querySelector("[data-benefit-carousel]");
 const benefitTrack = document.querySelector("[data-benefit-track]");
 const benefitPrev = document.querySelector("[data-benefit-prev]");
@@ -1161,6 +1166,7 @@ function renderSettings() {
   }
 
   setupWhatsAppDirectLinks();
+  applyStoreAvailability();
 }
 
 function mapSiteConfig(row) {
@@ -1172,6 +1178,8 @@ function mapSiteConfig(row) {
     bannerImage: row.banners || "",
     homeText: row.textos_pagina_inicial || "",
     showFeaturedProducts: row.mostrar_mais_procurados !== false,
+    storeOnline: row.loja_online !== false,
+    closedStoreMessage: row.mensagem_loja_fechada || settings.closedStoreMessage,
     whatsapp: row.whatsapp || settings.whatsapp,
     deliveryInfo: row.entrega || settings.deliveryInfo,
   });
@@ -1188,6 +1196,8 @@ function getSiteConfigPayload() {
     banners: settings.bannerImage,
     textos_pagina_inicial: settings.homeText,
     mostrar_mais_procurados: settings.showFeaturedProducts,
+    loja_online: settings.storeOnline,
+    mensagem_loja_fechada: settings.closedStoreMessage,
     whatsapp: settings.whatsapp,
     entrega: settings.deliveryInfo,
     carrossel_ativo: state.bannerCarousel.enabled,
@@ -1425,6 +1435,48 @@ function buildWhatsAppSendUrl(text) {
   return `https://api.whatsapp.com/send?phone=${settings.whatsapp}&text=${encodeURIComponent(text)}`;
 }
 
+function storeClosedText() {
+  return settings.closedStoreMessage || "Loja temporariamente fechada. Voltaremos em breve.";
+}
+
+function applyStoreAvailability() {
+  const isClosed = settings.storeOnline === false;
+  document.body.classList.toggle("store-offline", isClosed);
+  storeClosedScreen?.classList.toggle("hidden", !isClosed);
+  if (storeClosedMessage) storeClosedMessage.textContent = storeClosedText();
+  if (storeClosedWhatsapp) {
+    const message = "Olá, Fumacinha! Queria tirar uma dúvida.";
+    storeClosedWhatsapp.href = `https://api.whatsapp.com/send/?phone=${settings.whatsapp}&text=${encodeURIComponent(message)}`;
+  }
+  if (isClosed) {
+    closeCart();
+    closeOrderConfirmation();
+  }
+}
+
+async function refreshStoreAvailability() {
+  if (!supabaseClient) return settings.storeOnline !== false;
+  const { data, error } = await supabaseClient
+    .from(CONFIG_TABLE_NAME)
+    .select("loja_online,mensagem_loja_fechada")
+    .eq("id", 1)
+    .maybeSingle();
+  if (!error && data) {
+    settings.storeOnline = data.loja_online !== false;
+    settings.closedStoreMessage = data.mensagem_loja_fechada || settings.closedStoreMessage;
+    applyStoreAvailability();
+  }
+  return settings.storeOnline !== false;
+}
+
+async function ensureStoreIsOpen() {
+  const isOnline = await refreshStoreAvailability();
+  if (isOnline) return true;
+  showToast(storeClosedText());
+  applyStoreAvailability();
+  return false;
+}
+
 function buildWhatsAppProductLines(items) {
   return items.flatMap((item, index) => {
     const lines = [
@@ -1558,6 +1610,7 @@ function buildOrderWhatsAppUrl(customer = {}, order = {}) {
 
 async function savePendingSiteOrder(customer = {}) {
   if (!supabaseClient) throw new Error("Configure o Supabase para registrar pedidos.");
+  if (!(await refreshStoreAvailability())) throw new Error(storeClosedText());
   const { items, normalTotal } = getCartSummary();
   if (!items.length) throw new Error("Adicione produtos ao carrinho.");
 
@@ -2892,7 +2945,7 @@ function setupWhatsAppDirectLinks() {
   });
 }
 
-document.addEventListener("click", (event) => {
+document.addEventListener("click", async (event) => {
   const editProductButton = event.target.closest("[data-edit-product]");
   if (editProductButton) {
     event.preventDefault();
@@ -2942,7 +2995,10 @@ document.addEventListener("click", (event) => {
   if (productQtyButton) setProductQuantity(Number(productQtyButton.dataset.productQty));
 
   const addProductButton = event.target.closest("[data-add-product]");
-  if (addProductButton) addToCart(addProductButton.dataset.addProduct, state.productQuantity);
+  if (addProductButton) {
+    if (!(await ensureStoreIsOpen())) return;
+    addToCart(addProductButton.dataset.addProduct, state.productQuantity);
+  }
 
   const cartQtyButton = event.target.closest("[data-cart-qty]");
   if (cartQtyButton) updateCartQuantity(cartQtyButton.dataset.cartQty, Number(cartQtyButton.dataset.change));
@@ -2950,10 +3006,19 @@ document.addEventListener("click", (event) => {
   const removeButton = event.target.closest("[data-remove]");
   if (removeButton) removeFromCart(removeButton.dataset.remove);
 
-  if (event.target.closest("[data-open-cart]")) openCart();
-  if (event.target.closest("[data-toast-cart]")) openCart();
+  if (event.target.closest("[data-open-cart]")) {
+    if (!(await ensureStoreIsOpen())) return;
+    openCart();
+  }
+  if (event.target.closest("[data-toast-cart]")) {
+    if (!(await ensureStoreIsOpen())) return;
+    openCart();
+  }
   if (event.target.closest("[data-retry-products]")) loadProducts({ force: true });
-  if (event.target.closest("[data-checkout]") && !checkout.classList.contains("disabled")) openOrderConfirmation();
+  if (event.target.closest("[data-checkout]") && !checkout.classList.contains("disabled")) {
+    if (!(await ensureStoreIsOpen())) return;
+    openOrderConfirmation();
+  }
   if (event.target.closest("[data-close-cart]")) closeCart();
   if (event.target === cartDrawer) closeCart();
   if (event.target.closest("[data-close-order-confirmation]")) closeOrderConfirmation();
@@ -3164,6 +3229,11 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
   }
 
   if (orderError) orderError.textContent = "";
+  if (!(await ensureStoreIsOpen())) {
+    if (orderError) orderError.textContent = storeClosedText();
+    return;
+  }
+
   try {
     setOrderSubmitState(true, "Registrando pedido...");
     const order = await savePendingSiteOrder(customer);
@@ -3400,4 +3470,5 @@ renderCart();
 setupWhatsAppDirectLinks();
 renderProductSkeletons();
 Promise.allSettled([loadProducts(), loadBannerConfig(), loadBenefits(), loadSiteConfig()]);
+if (supabaseClient) window.setInterval(refreshStoreAvailability, 30000);
 handleSecretAdminAccess();

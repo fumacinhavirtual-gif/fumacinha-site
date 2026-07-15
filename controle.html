@@ -402,6 +402,25 @@
         </section>
 
         <section class="tab-panel hidden" data-panel="more">
+          <section class="panel-card store-status-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Status da loja</p>
+                <h2>Ativar ou desativar pedidos</h2>
+              </div>
+              <span class="store-status-pill online" data-store-status-label>Loja online</span>
+            </div>
+            <p class="store-status-helper" data-store-status-helper>Clientes conseguem ver produtos, usar carrinho e finalizar pedidos.</p>
+            <label>
+              Mensagem da loja fechada
+              <textarea data-store-closed-message rows="3">Loja temporariamente fechada. Voltaremos em breve.</textarea>
+            </label>
+            <div class="store-status-actions">
+              <button class="danger-action" type="button" data-store-status-toggle>Desativar loja</button>
+              <button class="ghost-action" type="button" data-store-message-save>Salvar mensagem</button>
+            </div>
+          </section>
+
           <section class="panel-card routes-panel">
             <div class="section-head">
               <div>

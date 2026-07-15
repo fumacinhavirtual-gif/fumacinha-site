@@ -17,6 +17,7 @@ const TABLES = {
   cashMovements: "MOVIMENTACOES_CAIXA",
   changeBox: "CAIXA_TROCO",
   changeMoves: "MOVIMENTACOES_TROCO",
+  siteConfig: "SITE_CONFIG",
 };
 
 const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
@@ -40,6 +41,11 @@ const app = {
   cashMovements: [],
   changeBox: null,
   changeMoves: [],
+  siteConfig: {
+    loja_online: true,
+    mensagem_loja_fechada: "Loja temporariamente fechada. Voltaremos em breve.",
+  },
+  storeStatusSaving: false,
   deliveryManuallyEdited: false,
   saleReceivedTouched: false,
   saleSaving: false,
@@ -562,7 +568,7 @@ async function ensureDukeAvailability(products) {
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult] = await Promise.allSettled([
+  const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
@@ -577,9 +583,10 @@ async function loadAll() {
     supabaseClient.from(TABLES.cashMovements).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
-  const errors = [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult]
+  const errors = [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult]
     .filter((result) => result.status === "fulfilled" && result.value.error)
     .map((result) => result.value.error.message);
 
@@ -608,6 +615,10 @@ async function loadAll() {
   app.cashMovements = cashMovesResult.value.data || [];
   app.changeBox = changeBoxResult.value.data?.[0] || null;
   app.changeMoves = changeMovesResult.value.data || [];
+  app.siteConfig = {
+    loja_online: siteConfigResult.value.data?.loja_online !== false,
+    mensagem_loja_fechada: siteConfigResult.value.data?.mensagem_loja_fechada || "Loja temporariamente fechada. Voltaremos em breve.",
+  };
   markOrdersSeen();
   setupOrdersRealtime();
   setStatus("Controle atualizado.", "success");
@@ -629,6 +640,94 @@ function renderAll() {
   renderReports();
   renderCashClosing();
   renderRoutes();
+  renderStoreStatus();
+}
+
+function renderStoreStatus() {
+  const config = app.siteConfig || {};
+  const isOnline = config.loja_online !== false;
+  const status = $("[data-store-status-label]");
+  const helper = $("[data-store-status-helper]");
+  const toggle = $("[data-store-status-toggle]");
+  const message = $("[data-store-closed-message]");
+
+  if (status) {
+    status.textContent = isOnline ? "Loja online" : "Loja fora do ar";
+    status.className = `store-status-pill ${isOnline ? "online" : "offline"}`;
+  }
+  if (helper) {
+    helper.textContent = isOnline
+      ? "Clientes conseguem ver produtos, usar carrinho e finalizar pedidos."
+      : "Clientes veem somente o aviso de loja fechada. Admin e Controle continuam funcionando.";
+  }
+  if (toggle) {
+    toggle.textContent = isOnline ? "Desativar loja" : "Ativar loja";
+    toggle.className = isOnline ? "danger-action" : "primary-action";
+    toggle.disabled = app.storeStatusSaving;
+  }
+  if (message && document.activeElement !== message) {
+    message.value = config.mensagem_loja_fechada || "Loja temporariamente fechada. Voltaremos em breve.";
+  }
+}
+
+async function saveStoreStatus(patch, successMessage) {
+  if (app.storeStatusSaving) return;
+  if (!(await requireAuth())) return;
+  app.storeStatusSaving = true;
+  renderStoreStatus();
+  try {
+    const payload = {
+      id: 1,
+      loja_online: app.siteConfig?.loja_online !== false,
+      mensagem_loja_fechada: app.siteConfig?.mensagem_loja_fechada || "Loja temporariamente fechada. Voltaremos em breve.",
+      ...patch,
+    };
+    let { data, error } = await supabaseClient
+      .from(TABLES.siteConfig)
+      .update(patch)
+      .eq("id", 1)
+      .select("loja_online,mensagem_loja_fechada")
+      .maybeSingle();
+    if (!error && !data) {
+      const inserted = await supabaseClient
+        .from(TABLES.siteConfig)
+        .upsert(payload, { onConflict: "id" })
+        .select("loja_online,mensagem_loja_fechada")
+        .single();
+      data = inserted.data;
+      error = inserted.error;
+    }
+    if (error) throw error;
+    app.siteConfig = {
+      loja_online: data?.loja_online !== false,
+      mensagem_loja_fechada: data?.mensagem_loja_fechada || payload.mensagem_loja_fechada,
+    };
+    setStatus(successMessage, "success");
+    showToast(successMessage);
+  } catch (error) {
+    setStatus(error.message || "Nao foi possivel atualizar o status da loja.", "error");
+  } finally {
+    app.storeStatusSaving = false;
+    renderStoreStatus();
+  }
+}
+
+async function toggleStoreStatus() {
+  const isOnline = app.siteConfig?.loja_online !== false;
+  const nextOnline = !isOnline;
+  const question = nextOnline
+    ? "Ativar a loja agora? Os clientes poderao fazer pedidos novamente."
+    : "Desativar a loja agora? Os clientes nao poderao fazer pedidos enquanto ela estiver fora do ar.";
+  if (!window.confirm(question)) return;
+  await saveStoreStatus(
+    { loja_online: nextOnline },
+    nextOnline ? "Loja ativada com sucesso." : "Loja desativada com sucesso."
+  );
+}
+
+async function saveClosedStoreMessage() {
+  const message = $("[data-store-closed-message]")?.value.trim() || "Loja temporariamente fechada. Voltaremos em breve.";
+  await saveStoreStatus({ mensagem_loja_fechada: message }, "Mensagem da loja fechada salva.");
 }
 
 function renderPeriods() {
@@ -2531,6 +2630,8 @@ document.addEventListener("click", async (event) => {
     renderAll();
   }
   if (event.target.closest("[data-refresh]")) loadAll();
+  if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
+  if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
   if (event.target.closest("[data-open-orders]")) {
     app.orderStatusFilter = "pending";
     switchTab("orders");
