@@ -144,10 +144,6 @@ begin
     raise exception 'Informe o nome do cliente.';
   end if;
 
-  if coalesce(trim(p_pedido->>'cliente_bairro'), '') = '' then
-    raise exception 'Informe o bairro do cliente.';
-  end if;
-
   if jsonb_typeof(coalesce(p_itens, '[]'::jsonb)) <> 'array' or jsonb_array_length(coalesce(p_itens, '[]'::jsonb)) = 0 then
     raise exception 'Pedido sem produtos.';
   end if;
@@ -170,7 +166,7 @@ begin
   )
   values (
     trim(p_pedido->>'cliente_nome'),
-    trim(p_pedido->>'cliente_bairro'),
+    coalesce(trim(p_pedido->>'cliente_bairro'), ''),
     coalesce(nullif(regexp_replace(coalesce(p_pedido->>'cliente_telefone', ''), '\D', '', 'g'), ''), ''),
     coalesce(nullif(trim(p_pedido->>'origem'), ''), 'Site'),
     'Aguardando confirmacao',

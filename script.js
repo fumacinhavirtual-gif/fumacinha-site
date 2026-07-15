@@ -1613,6 +1613,7 @@ async function savePendingSiteOrder(customer = {}) {
   const pedido = {
     cliente_nome: customer.nome,
     cliente_bairro: customer.bairro || "",
+    cliente_telefone: customer.telefone || "",
     origem: "Site",
     status: "Aguardando confirmacao",
     valor_produtos: normalTotal,
@@ -3220,6 +3221,7 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
   const customer = {
     nome: form.elements.nome.value.trim(),
     bairro: "",
+    telefone: String(form.elements.telefone?.value || "").replace(/\D/g, ""),
   };
 
   form.elements.nome.classList.toggle("field-invalid", !customer.nome);

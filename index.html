@@ -146,13 +146,17 @@
         <button class="back-to-cart-button" type="button" data-back-to-cart>&larr; Voltar ao carrinho</button>
         <p class="eyebrow">Pedido Fumacinha</p>
         <h2 id="order-confirmation-title">Confirmar Dados do Pedido</h2>
-        <p class="order-confirmation-note">Seu pedido sera registrado no controle da loja ao tocar em Finalizar pedido no WhatsApp.</p>
         <form class="order-confirmation-form" data-order-confirmation-form novalidate>
           <div class="order-fields">
             <label>
-              Nome <span>*</span>
+              Nome
               <input type="text" name="nome" autocomplete="name" required />
               <small>Campo obrigatório</small>
+            </label>
+            <label>
+              WhatsApp
+              <input type="tel" name="telefone" inputmode="tel" autocomplete="tel" placeholder="62991877597" />
+              <small>Opcional. Usado apenas para identificar seu pedido.</small>
             </label>
           </div>
           <p class="order-form-error" data-order-error></p>
