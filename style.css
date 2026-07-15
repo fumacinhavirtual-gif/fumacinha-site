@@ -19,6 +19,8 @@
 html {
   scroll-behavior: smooth;
   min-height: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
   overscroll-behavior-y: none;
 }
 
@@ -26,7 +28,9 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 100dvh;
+  max-width: 100%;
   margin: 0;
+  overflow-x: hidden;
   background: var(--white);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
@@ -2922,17 +2926,25 @@ main {
 }
 
 @media (max-width: 768px) {
+  .featured-products .featured-products-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+  }
+
   .featured-products .featured-products-scroll {
     display: flex;
     grid-template-columns: none;
     flex-wrap: nowrap;
     align-items: stretch;
-    gap: 16px;
-    margin-inline: -14px;
-    padding: 0 14px 8px;
+    width: 100%;
+    max-width: 100%;
+    gap: 12px;
+    padding: 0 16px 8px;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: x mandatory;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
   }
@@ -2942,15 +2954,22 @@ main {
   }
 
   .featured-products .featured-products-scroll .product-card {
-    flex: 0 0 calc(50% - 12px);
-    min-width: calc(50% - 12px);
-    max-width: calc(50% - 12px);
+    flex: 0 0 calc(50% - 14px);
+    width: calc(50% - 14px);
+    min-width: 0;
+    max-width: calc(50% - 14px);
+    box-sizing: border-box;
     scroll-snap-align: start;
   }
 
   .featured-products .featured-products-scroll .product-card:only-child {
-    flex-basis: min(240px, calc(100vw - 28px));
-    min-width: min(240px, calc(100vw - 28px));
-    max-width: min(240px, calc(100vw - 28px));
+    flex-basis: min(240px, 100%);
+    width: min(240px, 100%);
+    max-width: min(240px, 100%);
+  }
+
+  .featured-products .featured-products-scroll::after {
+    content: "";
+    flex: 0 0 4px;
   }
 }

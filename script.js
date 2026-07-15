@@ -1227,7 +1227,9 @@ function renderProductsByCategory() {
             <p class="eyebrow">Destaques</p>
             <h3>Mais Procurados da Fumacinha</h3>
           </div>
-          <div class="products-grid featured-products-scroll">${featuredProducts.map(productCard).join("")}</div>
+          <div class="featured-products-wrapper">
+            <div class="products-grid featured-products-scroll">${featuredProducts.map(productCard).join("")}</div>
+          </div>
         </section>
       `
     : "";
