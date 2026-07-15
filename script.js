@@ -1264,7 +1264,9 @@ function renderProductsByCategory() {
     ? `
         <section class="product-category featured-products" id="mais-procurados">
           <div class="featured-products-wrapper">
+            <button class="featured-carousel-arrow prev" type="button" data-featured-carousel="prev" aria-label="Ver destaques anteriores">&lsaquo;</button>
             <div class="products-grid featured-products-scroll">${featuredProducts.map((product, index) => productCard(product, index, "featured-product-card")).join("")}</div>
+            <button class="featured-carousel-arrow next" type="button" data-featured-carousel="next" aria-label="Ver proximos destaques">&rsaquo;</button>
           </div>
         </section>
       `
@@ -1286,7 +1288,36 @@ function renderProductsByCategory() {
     .join("");
 
   productRoot.innerHTML = `${featuredSection}${categorySections}`;
+  setupFeaturedCarouselControls();
   renderAdminProductPanel();
+}
+
+function updateFeaturedCarouselArrows() {
+  const carousel = document.querySelector(".featured-products-scroll");
+  const wrapper = document.querySelector(".featured-products-wrapper");
+  if (!carousel || !wrapper) return;
+
+  const prevButton = wrapper.querySelector('[data-featured-carousel="prev"]');
+  const nextButton = wrapper.querySelector('[data-featured-carousel="next"]');
+  const maxScroll = carousel.scrollWidth - carousel.clientWidth;
+  const hasOverflow = maxScroll > 2;
+  const atStart = carousel.scrollLeft <= 2;
+  const atEnd = carousel.scrollLeft >= maxScroll - 2;
+
+  [prevButton, nextButton].forEach((button) => {
+    if (!button) return;
+    button.classList.toggle("hidden", !hasOverflow);
+  });
+
+  prevButton?.toggleAttribute("disabled", !hasOverflow || atStart);
+  nextButton?.toggleAttribute("disabled", !hasOverflow || atEnd);
+}
+
+function setupFeaturedCarouselControls() {
+  const carousel = document.querySelector(".featured-products-scroll");
+  if (!carousel) return;
+  carousel.addEventListener("scroll", updateFeaturedCarouselArrows, { passive: true });
+  window.requestAnimationFrame(updateFeaturedCarouselArrows);
 }
 
 function showHome(scroll = true) {
@@ -2823,6 +2854,19 @@ document.addEventListener("click", (event) => {
     const scrollTarget =
       state.activeCategory === ALL_CATEGORY_ID ? document.querySelector("#produtos") : document.querySelector(`#cat-${state.activeCategory}`);
     scrollTarget?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const featuredCarouselButton = event.target.closest("[data-featured-carousel]");
+  if (featuredCarouselButton) {
+    const carousel = document.querySelector(".featured-products-scroll");
+    if (!carousel) return;
+    const firstCard = carousel.querySelector(".product-card");
+    const gap = Number.parseFloat(getComputedStyle(carousel).columnGap || getComputedStyle(carousel).gap || "0") || 0;
+    const cardWidth = firstCard?.getBoundingClientRect().width || carousel.clientWidth / 4;
+    const direction = featuredCarouselButton.dataset.featuredCarousel === "next" ? 1 : -1;
+    carousel.scrollBy({ left: direction * (cardWidth + gap), behavior: "smooth" });
+    window.setTimeout(updateFeaturedCarouselArrows, 320);
+    return;
   }
 
   const viewProductButton = event.target.closest("[data-view-product]");
