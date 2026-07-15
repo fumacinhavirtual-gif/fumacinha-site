@@ -2920,3 +2920,37 @@ main {
     font-size: 0.86rem !important;
   }
 }
+
+@media (max-width: 768px) {
+  .featured-products .featured-products-scroll {
+    display: flex;
+    grid-template-columns: none;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 16px;
+    margin-inline: -14px;
+    padding: 0 14px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .featured-products .featured-products-scroll::-webkit-scrollbar {
+    display: none;
+  }
+
+  .featured-products .featured-products-scroll .product-card {
+    flex: 0 0 calc(50% - 12px);
+    min-width: calc(50% - 12px);
+    max-width: calc(50% - 12px);
+    scroll-snap-align: start;
+  }
+
+  .featured-products .featured-products-scroll .product-card:only-child {
+    flex-basis: min(240px, calc(100vw - 28px));
+    min-width: min(240px, calc(100vw - 28px));
+    max-width: min(240px, calc(100vw - 28px));
+  }
+}
