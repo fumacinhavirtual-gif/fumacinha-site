@@ -257,9 +257,20 @@ textarea {
   transition: opacity 180ms ease, transform 180ms ease;
 }
 
+.control-toast.clickable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
 .control-toast.visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+.control-toast.order {
+  color: #2f2100;
+  background: #fff8e1;
+  border-left: 5px solid #f59e0b;
 }
 
 .control-toast.error {
@@ -322,6 +333,13 @@ textarea {
 .sale-items {
   display: grid;
   gap: 10px;
+}
+
+.order-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 10px;
+  margin: 4px 0 8px;
 }
 
 .sale-item,
@@ -709,6 +727,38 @@ textarea {
   opacity: 0.64;
 }
 
+.history-row.pending-order {
+  border-left: 4px solid #f59e0b;
+  background: #fff8e1;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 26px;
+  border-radius: 999px;
+  padding: 0 10px;
+  color: #8a5200;
+  background: #ffedd5;
+  font-size: 0.76rem;
+  font-weight: 950;
+}
+
+.pending-order-main {
+  display: grid;
+  gap: 4px;
+}
+
+.pending-order-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
 .history-row button {
   width: fit-content;
   min-height: 38px;
@@ -754,10 +804,26 @@ textarea {
 }
 
 .bottom-nav button {
+  position: relative;
   min-height: 46px;
   border-radius: 14px;
   padding: 0 4px;
   font-size: 0.7rem;
+}
+
+.nav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  margin-left: 4px;
+  border-radius: 999px;
+  padding: 0 6px;
+  color: #111;
+  background: #f59e0b;
+  font-size: 0.68rem;
+  font-weight: 950;
 }
 
 @media (min-width: 760px) {
@@ -846,5 +912,12 @@ textarea {
     width: min(680px, calc(100% - 32px));
     transform: translateX(-50%);
     border-radius: 22px;
+  }
+
+}
+
+@media (max-width: 759px) {
+  .order-tools {
+    grid-template-columns: 1fr;
   }
 }

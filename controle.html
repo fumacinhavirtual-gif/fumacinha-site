@@ -173,7 +173,16 @@
                 <option value="cancelled">Cancelados</option>
               </select>
             </div>
-            <h3>Pedidos pendentes</h3>
+            <div class="order-tools">
+              <input type="search" data-order-search placeholder="Buscar por cliente ou codigo do pedido" />
+              <select data-order-sort>
+                <option value="recent">Mais recentes primeiro</option>
+                <option value="oldest">Mais antigos primeiro</option>
+                <option value="value-desc">Maior valor</option>
+                <option value="value-asc">Menor valor</option>
+              </select>
+            </div>
+            <h3 data-pending-title>Pedidos pendentes (0)</h3>
             <div data-pending-orders></div>
             <h3>Vendas confirmadas</h3>
             <div data-sales-history></div>
@@ -434,7 +443,7 @@
 
     <nav class="bottom-nav hidden" data-bottom-nav aria-label="Navegacao do controle">
       <button type="button" data-tab="home" class="active">Inicio</button>
-      <button type="button" data-tab="sales">Vendas</button>
+      <button type="button" data-tab="sales">Vendas <span class="nav-badge hidden" data-pending-nav-badge>0</span></button>
       <button type="button" data-tab="stock">Estoque</button>
       <button type="button" data-tab="finance">Financeiro</button>
       <button type="button" data-tab="cash">Caixa</button>

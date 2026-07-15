@@ -45,6 +45,12 @@ const app = {
   editingSaleId: null,
   confirmingOrderId: null,
   orderStatusFilter: "pending",
+  orderSearch: "",
+  orderSort: "recent",
+  seenOrderIds: new Set(),
+  notifiedOrderIds: new Set(),
+  realtimeChannel: null,
+  ordersPollTimer: null,
   cashDate: "",
   cashEditing: false,
   routesDate: "",
@@ -76,6 +82,10 @@ const stockHistory = $("[data-stock-history]");
 const salesHistory = $("[data-sales-history]");
 const pendingOrdersRoot = $("[data-pending-orders]");
 const salesStatusFilter = $("[data-sales-status-filter]");
+const orderSearchInput = $("[data-order-search]");
+const orderSortSelect = $("[data-order-sort]");
+const pendingTitle = $("[data-pending-title]");
+const pendingNavBadge = $("[data-pending-nav-badge]");
 const expenseForm = $("[data-expense-form]");
 const expenseList = $("[data-expense-list]");
 const sellerSelect = $("[data-seller-select]");
@@ -112,7 +122,7 @@ function setLoginStatus(message = "", type = "") {
   loginStatus.className = `form-status ${type}`.trim();
 }
 
-function showToast(message, type = "success") {
+function showToast(message, type = "success", options = {}) {
   let toast = $("[data-control-toast]");
   if (!toast) {
     toast = document.createElement("div");
@@ -120,10 +130,12 @@ function showToast(message, type = "success") {
     document.body.appendChild(toast);
   }
   toast.textContent = message;
-  toast.className = `control-toast ${type} visible`;
+  toast.className = `control-toast ${type} visible ${options.clickable ? "clickable" : ""}`.trim();
+  toast.onclick = options.onClick || null;
   window.clearTimeout(toastTimer);
   toastTimer = window.setTimeout(() => {
     toast.classList.remove("visible");
+    toast.onclick = null;
   }, 3000);
 }
 
@@ -254,6 +266,129 @@ function filteredOrders() {
     const date = new Date(order.created_at || Date.now());
     return date >= start && date <= end;
   });
+}
+
+function pendingOrderCount() {
+  return pendingOrders().length;
+}
+
+function updatePendingBadges() {
+  const count = pendingOrderCount();
+  if (pendingTitle) pendingTitle.textContent = `Pedidos pendentes (${count})`;
+  if (pendingNavBadge) {
+    pendingNavBadge.textContent = String(count);
+    pendingNavBadge.classList.toggle("hidden", count <= 0);
+  }
+}
+
+function orderSearchText(order) {
+  return [
+    order.codigo,
+    order.cliente_nome,
+    order.cliente_bairro,
+    order.cliente_telefone,
+    order.telefone,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function sortedOrders(rows) {
+  const sorted = [...rows];
+  sorted.sort((a, b) => {
+    if (app.orderSort === "oldest") return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    if (app.orderSort === "value-desc") return toNumber(b.valor_produtos) - toNumber(a.valor_produtos);
+    if (app.orderSort === "value-asc") return toNumber(a.valor_produtos) - toNumber(b.valor_produtos);
+    return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+  });
+  return sorted;
+}
+
+function normalizePhone(value = "") {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  return digits.startsWith("55") ? digits : `55${digits}`;
+}
+
+function orderPhone(order) {
+  return normalizePhone(order.cliente_telefone || order.telefone || "");
+}
+
+function orderWhatsappUrl(order) {
+  const phone = orderPhone(order);
+  if (!phone) return "";
+  const text = `Ola, ${order.cliente_nome || "cliente"}! Estou entrando em contato sobre o pedido ${order.codigo || order.id} da Fumacinha.`;
+  return `https://api.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(text)}`;
+}
+
+function scrollToOrder(orderId) {
+  switchTab("sales");
+  app.orderStatusFilter = "pending";
+  renderSalesHistory();
+  window.requestAnimationFrame(() => {
+    const row = document.querySelector(`[data-order-row="${orderId}"]`);
+    row?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+function markOrdersSeen() {
+  app.orders.forEach((order) => app.seenOrderIds.add(String(order.id)));
+}
+
+function notifyNewOrder(order) {
+  const id = String(order.id);
+  if (!id || app.notifiedOrderIds.has(id)) return;
+  app.notifiedOrderIds.add(id);
+  const receivedAt = new Date(order.created_at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  showToast(
+    `🔔 Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${order.cliente_nome || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
+    "order",
+    { clickable: true, onClick: () => scrollToOrder(order.id) }
+  );
+}
+
+async function fetchOrderItemsFor(orderId) {
+  const { data, error } = await supabaseClient.from(TABLES.orderItems).select("*").eq("pedido_id", orderId).order("created_at", { ascending: true });
+  if (error) throw error;
+  app.orderItems = [...app.orderItems.filter((item) => String(item.pedido_id) !== String(orderId)), ...(data || [])];
+}
+
+async function handleRealtimeOrder(order, shouldNotify = true) {
+  if (!order?.id) return;
+  const id = String(order.id);
+  const existed = app.orders.some((current) => String(current.id) === id);
+  app.orders = [order, ...app.orders.filter((current) => String(current.id) !== id)];
+  await fetchOrderItemsFor(order.id).catch(() => {});
+  renderSalesHistory();
+  renderFinance();
+  if (!existed && shouldNotify && !app.seenOrderIds.has(id)) notifyNewOrder(order);
+  app.seenOrderIds.add(id);
+}
+
+async function pollOrdersLight() {
+  if (!supabaseClient || !app.user) return;
+  const { data, error } = await supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(20);
+  if (error) return;
+  const newRows = (data || []).filter((order) => !app.seenOrderIds.has(String(order.id)));
+  if (!newRows.length) return;
+  const ids = newRows.map((order) => order.id);
+  const { data: items } = await supabaseClient.from(TABLES.orderItems).select("*").in("pedido_id", ids);
+  app.orderItems = [...app.orderItems.filter((item) => !ids.some((id) => String(id) === String(item.pedido_id))), ...(items || [])];
+  newRows.reverse().forEach((order) => {
+    app.orders = [order, ...app.orders.filter((current) => String(current.id) !== String(order.id))];
+    notifyNewOrder(order);
+    app.seenOrderIds.add(String(order.id));
+  });
+  renderSalesHistory();
+  renderFinance();
+}
+
+function setupOrdersRealtime() {
+  if (!supabaseClient || app.realtimeChannel) return;
+  app.realtimeChannel = supabaseClient
+    .channel("fumacinha-pedidos")
+    .on("postgres_changes", { event: "INSERT", schema: "public", table: TABLES.orders }, (payload) => handleRealtimeOrder(payload.new, true))
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: TABLES.orders }, (payload) => handleRealtimeOrder(payload.new, false))
+    .subscribe();
+  if (!app.ordersPollTimer) app.ordersPollTimer = window.setInterval(pollOrdersLight, 20000);
 }
 
 function productCost(product) {
@@ -427,6 +562,8 @@ async function loadAll() {
   app.cashMovements = cashMovesResult.value.data || [];
   app.changeBox = changeBoxResult.value.data?.[0] || null;
   app.changeMoves = changeMovesResult.value.data || [];
+  markOrdersSeen();
+  setupOrdersRealtime();
   setStatus("Controle atualizado.", "success");
   renderAll();
 }
@@ -1098,22 +1235,33 @@ function saleMatchesPeriod(sale) {
 
 function renderPendingOrders() {
   if (!pendingOrdersRoot) return;
-  const rows = filteredOrders().filter(orderMatchesFilter);
+  updatePendingBadges();
+  if (orderSearchInput) orderSearchInput.value = app.orderSearch;
+  if (orderSortSelect) orderSortSelect.value = app.orderSort;
+  const search = app.orderSearch.trim().toLowerCase();
+  const rows = sortedOrders(filteredOrders()
+    .filter(orderMatchesFilter)
+    .filter((order) => !search || orderSearchText(order).includes(search)));
   pendingOrdersRoot.innerHTML = rows.length
     ? rows.map((order) => {
       const items = orderItems(order.id);
       const isPending = normalizeOrderStatus(order.status) === "aguardando confirmacao";
+      const phoneUrl = orderWhatsappUrl(order);
       return `
-        <article class="history-row ${normalizeOrderStatus(order.status) === "cancelado" ? "cancelled" : ""}">
-          <strong>${escapeHtml(order.codigo || `Pedido #${order.id}`)} - ${escapeHtml(order.cliente_nome || "Cliente")}</strong>
-          <span>Bairro: ${escapeHtml(order.cliente_bairro || "Nao informado")}</span>
-          <span>${items.map((item) => `${toNumber(item.quantidade)}x ${escapeHtml(item.produto_nome)}`).join(" | ") || "Sem itens"}</span>
-          <span>Valor dos produtos: ${currency.format(order.valor_produtos || 0)}</span>
-          <span>Origem: ${escapeHtml(order.origem || "Site")} | Status: ${escapeHtml(order.status || "Aguardando confirmacao")}</span>
-          <span>Recebido em: ${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}</span>
+        <article class="history-row ${isPending ? "pending-order" : ""} ${normalizeOrderStatus(order.status) === "cancelado" ? "cancelled" : ""}" data-order-row="${order.id}">
+          <div class="pending-order-main">
+            <strong>${escapeHtml(order.codigo || `Pedido #${order.id}`)} - ${escapeHtml(order.cliente_nome || "Cliente")}</strong>
+            ${isPending ? `<span class="status-badge">Aguardando confirmacao</span>` : `<span class="status-badge">${escapeHtml(order.status || "Sem status")}</span>`}
+          </div>
+          <div class="pending-order-meta">
+            <span>${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}</span>
+            <span>${currency.format(order.valor_produtos || 0)}</span>
+            <span>${escapeHtml(order.origem || "Site")}</span>
+          </div>
           ${order.motivo_cancelamento ? `<span>Motivo: ${escapeHtml(order.motivo_cancelamento)}</span>` : ""}
           <div class="history-actions">
             <button type="button" data-view-order="${order.id}">Ver detalhes</button>
+            ${phoneUrl ? `<button type="button" data-open-order-whatsapp="${order.id}">Abrir conversa no WhatsApp</button>` : `<span>Telefone nao informado</span>`}
             ${isPending ? `<button type="button" data-confirm-order="${order.id}">Confirmar e registrar venda</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
           </div>
         </article>
@@ -1241,6 +1389,13 @@ async function cancelOrder(orderId) {
   showToast("Pedido cancelado com sucesso.", "success");
   setStatus("Pedido cancelado com sucesso.", "success");
   await loadAll();
+}
+
+function openOrderWhatsApp(orderId) {
+  const order = app.orders.find((item) => String(item.id) === String(orderId));
+  const url = order ? orderWhatsappUrl(order) : "";
+  if (!url) return setStatus("Telefone nao informado para este pedido.", "error");
+  window.location.href = url;
 }
 
 function renderStockFilters() {
@@ -2130,6 +2285,8 @@ document.addEventListener("click", async (event) => {
   if (confirmOrder) loadOrderForConfirmation(confirmOrder.dataset.confirmOrder);
   const cancelOrderButton = event.target.closest("[data-cancel-order]");
   if (cancelOrderButton) cancelOrder(cancelOrderButton.dataset.cancelOrder);
+  const orderWhatsapp = event.target.closest("[data-open-order-whatsapp]");
+  if (orderWhatsapp) openOrderWhatsApp(orderWhatsapp.dataset.openOrderWhatsapp);
   if (event.target.closest("[data-cancel-edit-sale]")) resetSaleForm();
   const editTeam = event.target.closest("[data-team-edit]");
   if (editTeam) editTeamMember(editTeam.dataset.teamEdit, editTeam.dataset.teamId);
@@ -2171,6 +2328,10 @@ document.addEventListener("input", (event) => {
     app.delivererSearch = event.target.value;
     renderTeamLists();
   }
+  if (event.target.matches("[data-order-search]")) {
+    app.orderSearch = event.target.value;
+    renderSalesHistory();
+  }
   if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
   if (event.target.closest("[data-cash-form]")) {
     app.cashEditing = true;
@@ -2210,6 +2371,10 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.matches("[data-sales-status-filter]")) {
     app.orderStatusFilter = event.target.value;
+    renderSalesHistory();
+  }
+  if (event.target.matches("[data-order-sort]")) {
+    app.orderSort = event.target.value;
     renderSalesHistory();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);

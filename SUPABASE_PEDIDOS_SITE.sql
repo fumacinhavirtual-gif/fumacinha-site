@@ -9,6 +9,7 @@ create table if not exists public."PEDIDOS" (
   codigo text not null default ('FUM-' || lpad(nextval('public.pedidos_codigo_seq')::text, 6, '0')),
   cliente_nome text not null default '',
   cliente_bairro text not null default '',
+  cliente_telefone text not null default '',
   origem text not null default 'Site',
   status text not null default 'Aguardando confirmacao',
   valor_produtos numeric(12, 2) not null default 0,
@@ -23,6 +24,7 @@ create table if not exists public."PEDIDOS" (
 alter table public."PEDIDOS" add column if not exists codigo text not null default ('FUM-' || lpad(nextval('public.pedidos_codigo_seq')::text, 6, '0'));
 alter table public."PEDIDOS" add column if not exists cliente_nome text not null default '';
 alter table public."PEDIDOS" add column if not exists cliente_bairro text not null default '';
+alter table public."PEDIDOS" add column if not exists cliente_telefone text not null default '';
 alter table public."PEDIDOS" add column if not exists origem text not null default 'Site';
 alter table public."PEDIDOS" add column if not exists status text not null default 'Aguardando confirmacao';
 alter table public."PEDIDOS" add column if not exists valor_produtos numeric(12, 2) not null default 0;
@@ -91,6 +93,7 @@ create index if not exists pedidos_status_idx on public."PEDIDOS" (status);
 create index if not exists pedidos_created_at_idx on public."PEDIDOS" (created_at desc);
 create index if not exists pedidos_origem_idx on public."PEDIDOS" (origem);
 create index if not exists pedidos_venda_id_idx on public."PEDIDOS" (venda_id);
+create index if not exists pedidos_cliente_telefone_idx on public."PEDIDOS" (cliente_telefone);
 create index if not exists itens_pedido_pedido_id_idx on public."ITENS_PEDIDO" (pedido_id);
 create index if not exists itens_pedido_produto_id_idx on public."ITENS_PEDIDO" (produto_id);
 
@@ -160,6 +163,7 @@ begin
   insert into public."PEDIDOS" (
     cliente_nome,
     cliente_bairro,
+    cliente_telefone,
     origem,
     status,
     valor_produtos
@@ -167,6 +171,7 @@ begin
   values (
     trim(p_pedido->>'cliente_nome'),
     trim(p_pedido->>'cliente_bairro'),
+    coalesce(nullif(regexp_replace(coalesce(p_pedido->>'cliente_telefone', ''), '\D', '', 'g'), ''), ''),
     coalesce(nullif(trim(p_pedido->>'origem'), ''), 'Site'),
     'Aguardando confirmacao',
     v_total
