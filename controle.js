@@ -1377,12 +1377,19 @@ async function updateEditedSale(event) {
   if (app.saleSaving || !app.editingSaleId) return;
   const sale = app.sales.find((item) => String(item.id) === String(app.editingSaleId));
   if (!sale || sale.cancelada) return setStatus("Venda cancelada nao pode ser editada.", "error");
-  const motive = saleForm.elements.motivo_alteracao.value.trim();
-  if (!motive) return setStatus("Informe o motivo da alteracao.", "error");
+  const motive = saleForm.elements.motivo_alteracao.value.trim() || "Ajuste manual da venda";
   app.saleSaving = true;
   if (saleSubmit) {
     saleSubmit.disabled = true;
     saleSubmit.textContent = "Salvando alteracoes...";
+  }
+  if (saleWarning) {
+    saleWarning.textContent = "";
+    saleWarning.className = "form-status";
+  }
+  if (saleSuccess) {
+    saleSuccess.textContent = "";
+    saleSuccess.className = "form-status";
   }
   setStatus("Salvando alteracoes...", "loading");
   try {
@@ -1413,7 +1420,12 @@ async function updateEditedSale(event) {
       }, 8000);
     }
   } catch (error) {
-    setStatus(error.message || "Erro ao editar venda.", "error");
+    const message = error.message || "Erro ao editar venda.";
+    setStatus(message, "error");
+    if (saleWarning) {
+      saleWarning.textContent = message;
+      saleWarning.className = "form-status error";
+    }
   } finally {
     app.saleSaving = false;
     if (saleSubmit) {
