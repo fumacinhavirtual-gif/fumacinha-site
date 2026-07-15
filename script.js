@@ -1541,7 +1541,6 @@ function buildConfirmedWhatsAppUrl(customer = {}) {
   ]);
   const lines = [
     `Nome: ${customer.nome}`,
-    `Bairro: ${customer.bairro}`,
     "",
     "Pedido:",
     ...productLines,
@@ -1564,9 +1563,6 @@ function buildConfirmedWhatsAppUrlWithImages(customer = {}) {
     "\uD83D\uDC64 *Cliente:*",
     customer.nome,
     "",
-    "\uD83D\uDCCD *Bairro:*",
-    customer.bairro,
-    "",
     "\uD83D\uDCB0 *Valor do Pedido:*",
     currency.format(normalTotal),
     "",
@@ -1585,9 +1581,6 @@ function buildOrderWhatsAppUrl(customer = {}, order = {}) {
     "",
     "\uD83D\uDC64 *Cliente:*",
     customer.nome,
-    "",
-    "\uD83D\uDCCD *Bairro:*",
-    customer.bairro,
     "",
     "*Produtos:*",
     ...items.flatMap((item) => [
@@ -1619,7 +1612,7 @@ async function savePendingSiteOrder(customer = {}) {
 
   const pedido = {
     cliente_nome: customer.nome,
-    cliente_bairro: customer.bairro,
+    cliente_bairro: customer.bairro || "",
     origem: "Site",
     status: "Aguardando confirmacao",
     valor_produtos: normalTotal,
@@ -1713,7 +1706,6 @@ function isOverlayOpen(element) {
 function syncPageScrollLock() {
   const shouldLock =
     cartDrawer?.classList.contains("open") ||
-    isOverlayOpen(orderConfirmation) ||
     isOverlayOpen(policyModal);
 
   document.body.classList.toggle("no-scroll", Boolean(shouldLock));
@@ -1748,15 +1740,17 @@ function openOrderConfirmation() {
   if (orderError) orderError.textContent = "";
   setOrderSubmitState(false);
   closeCart();
+  document.body.classList.add("order-confirmation-view");
   orderConfirmation.classList.remove("hidden");
   orderConfirmation.setAttribute("aria-hidden", "false");
   syncPageScrollLock();
-  orderConfirmationForm?.elements.nome?.focus();
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function closeOrderConfirmation() {
   orderConfirmation?.classList.add("hidden");
   orderConfirmation?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("order-confirmation-view");
   if (orderError) orderError.textContent = "";
   orderConfirmationForm?.querySelectorAll(".field-invalid").forEach((field) => field.classList.remove("field-invalid"));
   setOrderSubmitState(false);
@@ -3024,9 +3018,14 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-close-cart]")) closeCart();
   if (event.target === cartDrawer) closeCart();
-  if (event.target.closest("[data-close-order-confirmation]")) closeOrderConfirmation();
-  if (event.target === orderConfirmation) closeOrderConfirmation();
-  if (event.target.closest("[data-home-link]")) showHome();
+  if (event.target.closest("[data-back-to-cart]")) {
+    closeOrderConfirmation();
+    openCart();
+  }
+  if (event.target.closest("[data-home-link]")) {
+    closeOrderConfirmation();
+    showHome();
+  }
   if (event.target.closest("[data-close-edit-login]")) closeLogin();
   if (event.target === editLogin) closeLogin();
   if (event.target.closest("[data-admin-mobile-toggle]")) toggleAdminMobileMenu();
@@ -3220,13 +3219,12 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
 
   const customer = {
     nome: form.elements.nome.value.trim(),
-    bairro: form.elements.bairro.value.trim(),
+    bairro: "",
   };
 
   form.elements.nome.classList.toggle("field-invalid", !customer.nome);
-  form.elements.bairro.classList.toggle("field-invalid", !customer.bairro);
 
-  if (!customer.nome || !customer.bairro) {
+  if (!customer.nome) {
     if (orderError) orderError.textContent = "Preencha os campos obrigatórios para continuar.";
     return;
   }

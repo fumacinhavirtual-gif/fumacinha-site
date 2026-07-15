@@ -72,6 +72,13 @@ body.store-offline .site-footer {
   display: none !important;
 }
 
+body.order-confirmation-view main,
+body.order-confirmation-view .site-footer,
+body.order-confirmation-view .back-to-top-wrap,
+body.order-confirmation-view .whatsapp-float {
+  display: none !important;
+}
+
 .store-closed-screen {
   display: grid;
   min-height: calc(100dvh - 72px);
@@ -1596,31 +1603,50 @@ body.store-offline .site-footer {
 }
 
 .order-confirmation {
-  position: fixed;
-  inset: 0;
-  z-index: 86;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(17, 17, 17, 0.58);
+  display: block;
+  flex: 1 0 auto;
+  width: 100%;
+  padding: clamp(18px, 4vw, 42px) 20px 56px;
+  background: var(--white);
 }
 
 .order-confirmation-dialog {
-  position: relative;
   width: min(760px, 100%);
-  max-height: calc(100vh - 36px);
-  overflow: auto;
-  padding: 30px;
-  border-radius: 18px;
+  margin: 0 auto;
+  padding: 0;
+  border-radius: 0;
   background: var(--white);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.28);
+  box-shadow: none;
 }
 
 .order-confirmation-dialog h2 {
-  margin: 0 44px 20px 0;
+  margin: 12px 0 20px;
   color: var(--black);
   font-size: clamp(1.7rem, 4vw, 2.35rem);
   line-height: 1.1;
+}
+
+.back-to-cart-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: fit-content;
+  min-height: 44px;
+  margin-bottom: 18px;
+  border: 0;
+  border-radius: 999px;
+  padding: 10px 18px;
+  color: var(--white);
+  background: var(--red);
+  font-weight: 900;
+  cursor: pointer;
+  transition: background 200ms ease, transform 200ms ease;
+}
+
+.back-to-cart-button:hover,
+.back-to-cart-button:focus-visible {
+  background: #a91b20;
+  transform: translateY(-1px);
 }
 
 .order-confirmation-note {
@@ -1638,7 +1664,7 @@ body.store-offline .site-footer {
 
 .order-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 
