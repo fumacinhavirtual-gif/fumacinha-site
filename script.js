@@ -27,6 +27,7 @@ const settings = {
   logoUrl: "",
   bannerImage: "",
   homeText: "",
+  showFeaturedProducts: true,
   whatsapp: "62991877597",
   deliveryInfo: "Para todo o Brasil",
 };
@@ -278,7 +279,7 @@ function getVisibleProducts() {
 }
 
 function getFeaturedProducts() {
-  if (state.search.trim() || !isAllCategorySelected()) return [];
+  if (!settings.showFeaturedProducts || state.search.trim() || !isAllCategorySelected()) return [];
   return state.products.filter((product) => {
     return product.ativo && product.estoque > 0 && product.destaque_home && !product.ocultar_home;
   });
@@ -1157,6 +1158,7 @@ function mapSiteConfig(row) {
     logoUrl: row.logo_url || "",
     bannerImage: row.banners || "",
     homeText: row.textos_pagina_inicial || "",
+    showFeaturedProducts: row.mostrar_mais_procurados !== false,
     whatsapp: row.whatsapp || settings.whatsapp,
     deliveryInfo: row.entrega || settings.deliveryInfo,
   });
@@ -1172,6 +1174,7 @@ function getSiteConfigPayload() {
     logo_url: settings.logoUrl,
     banners: settings.bannerImage,
     textos_pagina_inicial: settings.homeText,
+    mostrar_mais_procurados: settings.showFeaturedProducts,
     whatsapp: settings.whatsapp,
     entrega: settings.deliveryInfo,
     carrossel_ativo: state.bannerCarousel.enabled,
@@ -1196,6 +1199,7 @@ async function loadSiteConfig() {
   mapSiteConfig(data);
   renderSettings();
   renderHomeBannerCarousel();
+  if (state.productsLoaded || state.products.length) renderProductsByCategory();
 }
 
 function renderCategories() {
@@ -2089,6 +2093,7 @@ function openSiteEditor() {
   siteEditorForm.elements.logoUrl.value = settings.logoUrl || "";
   siteEditorForm.elements.bannerImage.value = settings.bannerImage || "";
   siteEditorForm.elements.homeText.value = settings.homeText || "";
+  siteEditorForm.elements.showFeaturedProducts.checked = settings.showFeaturedProducts;
   siteEditorForm.elements.whatsapp.value = settings.whatsapp || "";
   siteEditorForm.elements.deliveryInfo.value = settings.deliveryInfo || "";
   siteLogoFileInputs.forEach((input) => (input.value = ""));
@@ -2682,6 +2687,7 @@ async function saveSiteContent(event) {
       logoUrl,
       bannerImage: form.elements.bannerImage.value.trim(),
       homeText: form.elements.homeText.value.trim(),
+      showFeaturedProducts: form.elements.showFeaturedProducts.checked,
       whatsapp: form.elements.whatsapp.value.replace(/\D/g, "") || settings.whatsapp,
       deliveryInfo: form.elements.deliveryInfo.value.trim() || settings.deliveryInfo,
     });
@@ -2692,6 +2698,7 @@ async function saveSiteContent(event) {
     state.selectedSiteLogoFile = null;
     state.removeSiteLogo = false;
     renderSettings();
+    renderProductsByCategory();
     closeEditorModal(siteEditor);
     showToast("Configuracoes salvas");
   } catch (error) {
