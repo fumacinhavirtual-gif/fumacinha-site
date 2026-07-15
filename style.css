@@ -2940,10 +2940,11 @@ main {
     width: 100%;
     max-width: 100%;
     gap: 12px;
-    padding: 0 16px 8px;
+    padding: 0 0 12px;
     overflow-x: auto;
     overflow-y: hidden;
-    scroll-snap-type: x proximity;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: 0;
     overscroll-behavior-inline: contain;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
@@ -2953,23 +2954,24 @@ main {
     display: none;
   }
 
-  .featured-products .featured-products-scroll .product-card {
-    flex: 0 0 calc(50% - 14px);
-    width: calc(50% - 14px);
-    min-width: 0;
-    max-width: calc(50% - 14px);
+  .featured-products .featured-products-scroll .featured-product-card {
+    flex: 0 0 calc((100% - 12px) / 2);
+    width: calc((100% - 12px) / 2);
+    min-width: calc((100% - 12px) / 2);
+    max-width: calc((100% - 12px) / 2);
     box-sizing: border-box;
     scroll-snap-align: start;
   }
 
-  .featured-products .featured-products-scroll .product-card:only-child {
+  .featured-products .featured-products-scroll .featured-product-card:only-child {
     flex-basis: min(240px, 100%);
     width: min(240px, 100%);
+    min-width: min(240px, 100%);
     max-width: min(240px, 100%);
   }
 
   .featured-products .featured-products-scroll::after {
     content: "";
-    flex: 0 0 4px;
+    flex: 0 0 6px;
   }
 }

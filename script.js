@@ -1088,9 +1088,9 @@ function productImage(product, large = false, priority = false) {
   `;
 }
 
-function productCard(product, index = 0) {
+function productCard(product, index = 0, extraClass = "") {
   return `
-    <article class="product-card">
+    <article class="product-card${extraClass ? ` ${extraClass}` : ""}">
       ${
         state.editMode
           ? `<div class="edit-card-actions">
@@ -1228,7 +1228,7 @@ function renderProductsByCategory() {
             <h3>Mais Procurados da Fumacinha</h3>
           </div>
           <div class="featured-products-wrapper">
-            <div class="products-grid featured-products-scroll">${featuredProducts.map(productCard).join("")}</div>
+            <div class="products-grid featured-products-scroll">${featuredProducts.map((product, index) => productCard(product, index, "featured-product-card")).join("")}</div>
           </div>
         </section>
       `
