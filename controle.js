@@ -268,6 +268,11 @@ function filteredOrders() {
   });
 }
 
+function ordersForCurrentStatusFilter() {
+  const base = app.orderStatusFilter === "pending" ? app.orders : filteredOrders();
+  return base.filter(orderMatchesFilter);
+}
+
 function pendingOrderCount() {
   return pendingOrders().length;
 }
@@ -1239,8 +1244,7 @@ function renderPendingOrders() {
   if (orderSearchInput) orderSearchInput.value = app.orderSearch;
   if (orderSortSelect) orderSortSelect.value = app.orderSort;
   const search = app.orderSearch.trim().toLowerCase();
-  const rows = sortedOrders(filteredOrders()
-    .filter(orderMatchesFilter)
+  const rows = sortedOrders(ordersForCurrentStatusFilter()
     .filter((order) => !search || orderSearchText(order).includes(search)));
   pendingOrdersRoot.innerHTML = rows.length
     ? rows.map((order) => {
