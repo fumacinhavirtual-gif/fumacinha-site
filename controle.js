@@ -1313,10 +1313,15 @@ function buildSalePayload(items, seller, deliverer) {
 }
 
 function resetSaleForm() {
+  const preservedProductSearch = app.saleProductSearch;
+  const preservedProductCategory = app.saleProductCategory;
   app.editingSaleId = null;
   app.editingOrderId = null;
   app.confirmingOrderId = null;
   saleForm.reset();
+  app.saleProductSearch = preservedProductSearch;
+  app.saleProductCategory = preservedProductCategory;
+  renderSaleProductFilters();
   saleForm.elements.desconto.value = "0";
   saleForm.elements.valor_recebido.value = "";
   saleForm.elements.troco.value = "";
