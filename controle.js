@@ -545,6 +545,11 @@ function saleDelivery(sale) {
 }
 
 function saleCommission(sale) {
+  const breakdown = salePaymentBreakdown(sale);
+  if (breakdown.length) {
+    const hasCard = breakdown.some((payment) => isCardPayment(payment.forma));
+    return COMMISSION_BASE + (hasCard ? COMMISSION_CARD_EXTRA : 0);
+  }
   return toNumber(sale.comissao_total || commissionForPayment(sale.forma_pagamento).total);
 }
 
@@ -559,9 +564,13 @@ function isCashPayment(payment) {
   return normalizePayment(payment) === "dinheiro";
 }
 
-function commissionForPayment(payment) {
+function isCardPayment(payment) {
   const normalized = normalizePayment(payment);
-  const card = normalized === "debito" || normalized === "credito";
+  return normalized === "debito" || normalized === "credito";
+}
+
+function commissionForPayment(payment) {
+  const card = isCardPayment(payment);
   const cardExtra = card ? COMMISSION_CARD_EXTRA : 0;
   return {
     base: COMMISSION_BASE,
@@ -1133,21 +1142,27 @@ function currentProductTotal() {
 function currentSaleDraft() {
   const productsValue = currentProductTotal();
   const payment = saleForm?.elements.forma_pagamento?.value || "Pix";
-  const cash = isCashPayment(payment);
+  const split = saleForm?.elements.pagamento_dividido?.checked || false;
+  const splitPayments = split ? splitPaymentsFromForm() : [];
+  const paymentLabel = split && splitPayments.length ? paymentBreakdownLabel(splitPayments) : payment;
+  const cash = split ? splitPayments.some((row) => isCashPayment(row.forma)) : isCashPayment(payment);
   const hasChange = saleForm?.elements.teve_troco?.value === "sim";
   const paidInput = saleForm?.elements.valor_recebido;
   const changeInput = saleForm?.elements.troco;
   const deliveryInput = saleForm?.elements.taxa_entrega;
-  if (paidInput && !app.saleReceivedTouched && productsValue > 0) {
+  if (paidInput && !split && !app.saleReceivedTouched && productsValue > 0) {
     paidInput.value = productsValue.toFixed(2).replace(".", ",");
   }
-  const paidValue = parseMoney(paidInput?.value);
+  const paidValue = split ? splitPayments.reduce((sum, row) => sum + row.valor, 0) : parseMoney(paidInput?.value);
   const changeValue = cash && hasChange ? parseMoney(changeInput?.value) : 0;
   const deliveryValue = paidValue - productsValue - changeValue;
   const totalSale = productsValue + Math.max(0, deliveryValue);
   return {
     productsValue,
     payment,
+    paymentLabel,
+    split,
+    splitPayments,
     cash,
     hasChange,
     paidValue,
@@ -1168,13 +1183,22 @@ function updateSaleTotal() {
   const draft = currentSaleDraft();
   const deliveryInput = saleForm?.elements.taxa_entrega;
   const changeInput = saleForm?.elements.troco;
+  const paidInput = saleForm?.elements.valor_recebido;
+  if (paidInput) {
+    paidInput.readOnly = draft.split;
+    if (draft.split) paidInput.value = draft.paidValue.toFixed(2).replace(".", ",");
+  }
+  const splitFields = $("[data-split-payment-fields]");
+  splitFields?.classList.toggle("hidden", !draft.split);
   if (deliveryInput) {
     deliveryInput.readOnly = true;
     if (draft.cash) deliveryInput.value = Math.max(0, draft.deliveryValue).toFixed(2).replace(".", ",");
     else deliveryInput.value = Math.max(0, draft.deliveryValue).toFixed(2).replace(".", ",");
   }
   if (changeInput && !draft.hasChange) changeInput.value = "";
-  const commission = commissionForPayment(draft.payment);
+  const commission = draft.split
+    ? { total: COMMISSION_BASE + (draft.splitPayments.some((payment) => isCardPayment(payment.forma)) ? COMMISSION_CARD_EXTRA : 0) }
+    : commissionForPayment(draft.payment);
   const receivedInvalid = app.saleReceivedTouched && draft.paidValue < draft.productsValue;
   const changeInvalid = draft.cash && draft.hasChange && (!String(changeInput?.value || "").trim() || draft.changeValue < 0);
   const deliveryInvalid = draft.deliveryValue < 0;
@@ -1184,7 +1208,7 @@ function updateSaleTotal() {
   $("[data-sale-delivery]").textContent = currency.format(Math.max(0, draft.deliveryValue));
   $("[data-sale-net-products]").textContent = currency.format(draft.productsValue);
   $("[data-sale-change]").textContent = currency.format(draft.changeValue);
-  $("[data-sale-payment]").textContent = draft.payment;
+  $("[data-sale-payment]").textContent = draft.paymentLabel || draft.payment;
   $("[data-sale-commission]").textContent = currency.format(commission.total);
   $("[data-sale-route-summary]").textContent = `${formatDateBR(draft.routeDate)} as ${draft.routeTime}`;
   $$("[data-sale-cash-only]").forEach((element) => element.classList.toggle("hidden", !draft.cash));
@@ -1279,16 +1303,27 @@ function buildSalePayload(items, seller, deliverer) {
   const draft = currentSaleDraft();
   const productsValue = Math.max(0, subtotal - discount);
   if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
+  if (draft.split && draft.splitPayments.length < 2) throw new Error("Informe as duas formas de pagamento dividido.");
   if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
   if (draft.cash && draft.hasChange && !String(saleForm.elements.troco.value || "").trim()) throw new Error("Informe o valor do troco entregue.");
   if (draft.cash && draft.changeValue < 0) throw new Error("Troco nao pode ser negativo.");
   if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
   const deliveryValue = Math.max(0, draft.deliveryValue);
   const totalSale = draft.productsValue + deliveryValue;
-  const paymentLabel = draft.payment;
+  const paymentLabel = draft.paymentLabel || draft.payment;
   const deliveredValue = draft.paidValue;
   const changeValue = draft.cash && draft.hasChange ? draft.changeValue : 0;
-  const commission = commissionForPayment(paymentLabel);
+  const commission = draft.split
+    ? {
+      base: COMMISSION_BASE,
+      card: draft.splitPayments.some((payment) => isCardPayment(payment.forma)) ? COMMISSION_CARD_EXTRA : 0,
+      total: COMMISSION_BASE + (draft.splitPayments.some((payment) => isCardPayment(payment.forma)) ? COMMISSION_CARD_EXTRA : 0),
+    }
+    : commissionForPayment(paymentLabel);
+  const observation = [
+    saleForm.elements.observacao.value.trim(),
+    draft.split ? `PAGAMENTOS_JSON:${JSON.stringify(draft.splitPayments)}` : "",
+  ].filter(Boolean).join("\n");
   const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
   const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
   const first = items[0];
@@ -1325,7 +1360,7 @@ function buildSalePayload(items, seller, deliverer) {
       comissao_cartao: commission.card,
       comissao_total: commission.total,
       cliente_nome: saleForm.elements.cliente.value.trim(),
-      observacao: saleForm.elements.observacao.value.trim(),
+      observacao: observation,
       data_entrega: draft.routeDate,
       horario_rota: draft.routeTime,
       rota_data_hora: routeDateTime,
@@ -1354,6 +1389,7 @@ function resetSaleForm() {
   saleForm.elements.troco.value = "";
   saleForm.elements.teve_troco.value = "nao";
   saleForm.elements.taxa_entrega.value = "";
+  setSplitPaymentFields([]);
   saleForm.elements.motivo_alteracao.value = "";
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = "";
   if (saleForm.elements.telefone) saleForm.elements.telefone.value = "";
@@ -1380,7 +1416,9 @@ function loadSaleForEdit(saleId) {
   switchTab("sales");
   saleItemsRoot.innerHTML = items.map((item) => saleItemTemplate(item)).join("");
   saleForm.elements.desconto.value = toNumber(sale.desconto).toFixed(2);
-  saleForm.elements.forma_pagamento.value = sale.forma_pagamento || "Pix";
+  const breakdown = salePaymentBreakdown(sale);
+  saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || sale.forma_pagamento || "Pix";
+  setSplitPaymentFields(breakdown);
   renderPeopleOptions();
   saleForm.elements.vendedora_id.value = sale.vendedora_id || "";
   saleForm.elements.entregador_id.value = sale.entregador_id || "";
@@ -1393,7 +1431,7 @@ function loadSaleForEdit(saleId) {
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = sale.cliente_bairro || "";
   if (saleForm.elements.telefone) saleForm.elements.telefone.value = sale.cliente_telefone || "";
   if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = sale.status_entrega || "Aguardando";
-  saleForm.elements.observacao.value = sale.observacao || "";
+  saleForm.elements.observacao.value = stripPaymentBreakdownText(sale.observacao || "");
   saleForm.elements.motivo_alteracao.value = "";
   saleEditBanner?.classList.remove("hidden");
   saleEditMotive?.classList.remove("hidden");
@@ -1625,6 +1663,73 @@ function saleHistoryProducts(sale) {
   };
 }
 
+function splitPaymentsFromForm() {
+  if (!saleForm?.elements.pagamento_dividido?.checked) return [];
+  return [1, 2]
+    .map((index) => ({
+      forma: saleForm.elements[`pagamento_${index}_forma`]?.value || "Pix",
+      valor: parseMoney(saleForm.elements[`pagamento_${index}_valor`]?.value),
+    }))
+    .filter((payment) => payment.valor > 0);
+}
+
+function paymentBreakdownLabel(payments) {
+  return payments.map((payment) => `${payment.forma} ${currency.format(payment.valor)}`).join(" + ");
+}
+
+function paymentBreakdownFromText(text = "") {
+  const observation = String(text || "");
+  const match = observation.match(/PAGAMENTOS_JSON:([^\n]+)/);
+  if (!match) return [];
+  try {
+    const rows = JSON.parse(match[1]);
+    return Array.isArray(rows)
+      ? rows
+        .map((payment) => ({ forma: payment.forma || "Outros", valor: toNumber(payment.valor) }))
+        .filter((payment) => payment.valor > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function stripPaymentBreakdownText(text = "") {
+  return String(text || "")
+    .split("\n")
+    .filter((line) => !line.startsWith("PAGAMENTOS_JSON:"))
+    .join("\n")
+    .trim();
+}
+
+function salePaymentBreakdown(sale) {
+  return paymentBreakdownFromText(sale?.observacao || "");
+}
+
+function setSplitPaymentFields(payments = []) {
+  const split = payments.length >= 2;
+  if (!saleForm) return;
+  saleForm.elements.pagamento_dividido.checked = split;
+  [1, 2].forEach((index) => {
+    const payment = payments[index - 1] || {};
+    if (saleForm.elements[`pagamento_${index}_forma`]) saleForm.elements[`pagamento_${index}_forma`].value = payment.forma || (index === 1 ? "Pix" : "Dinheiro");
+    if (saleForm.elements[`pagamento_${index}_valor`]) saleForm.elements[`pagamento_${index}_valor`].value = payment.valor ? toNumber(payment.valor).toFixed(2).replace(".", ",") : "";
+  });
+}
+
+function salePaymentMethods(sale) {
+  const breakdown = salePaymentBreakdown(sale);
+  return breakdown.length ? breakdown.map((payment) => payment.forma) : [sale.forma_pagamento || "Nao informado"];
+}
+
+function salePaymentValue(sale, method) {
+  const breakdown = salePaymentBreakdown(sale);
+  const normalized = normalizePayment(method);
+  if (!breakdown.length) return normalizePayment(sale.forma_pagamento) === normalized ? saleTotal(sale) : 0;
+  return breakdown
+    .filter((payment) => normalizePayment(payment.forma) === normalized)
+    .reduce((sum, payment) => sum + toNumber(payment.valor), 0);
+}
+
 function orderHistoryProducts(order) {
   const items = orderItems(order.id);
   if (!items.length) {
@@ -1771,6 +1876,7 @@ function viewSaleDetails(saleId) {
   const sale = app.sales.find((item) => String(item.id) === String(saleId));
   if (!sale) return;
   const items = saleItemsForSale(saleId);
+  const paymentDetails = paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Nao informado";
   window.alert([
     `Venda #${sale.id}`,
     `Cliente: ${sale.cliente_nome || "Nao informado"}`,
@@ -1778,7 +1884,7 @@ function viewSaleDetails(saleId) {
     `Valor produtos: ${currency.format(saleTotal(sale))}`,
     `Valor pago: ${currency.format(saleDeliveredValue(sale))}`,
     `Taxa entrega: ${currency.format(saleDelivery(sale))}`,
-    `Pagamento: ${sale.forma_pagamento || "Nao informado"}`,
+    `Pagamento: ${paymentDetails}`,
     `Entrega: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}`,
     `Status: ${sale.status_entrega || sale.status || "Nao informado"}`,
   ].join("\n"));
@@ -1821,7 +1927,9 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
     });
   }).join("");
   saleForm.elements.desconto.value = toNumber(order.desconto || 0).toFixed(2).replace(".", ",");
-  saleForm.elements.forma_pagamento.value = order.forma_pagamento || "Pix";
+  const breakdown = paymentBreakdownFromText(order.observacao_interna || "");
+  saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || order.forma_pagamento || "Pix";
+  setSplitPaymentFields(breakdown);
   saleForm.elements.valor_recebido.value = toNumber(order.valor_pago_cliente || order.valor_produtos).toFixed(2).replace(".", ",");
   saleForm.elements.teve_troco.value = order.teve_troco || toNumber(order.troco) > 0 ? "sim" : "nao";
   saleForm.elements.troco.value = toNumber(order.troco || 0) ? toNumber(order.troco).toFixed(2).replace(".", ",") : "";
@@ -1830,7 +1938,7 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = order.cliente_bairro || "";
   if (saleForm.elements.telefone) saleForm.elements.telefone.value = order.cliente_telefone || "";
   if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = order.status_entrega || "Aguardando";
-  saleForm.elements.observacao.value = order.observacao_interna || `Pedido ${order.codigo || order.id} recebido pelo site. Bairro: ${order.cliente_bairro || ""}`;
+  saleForm.elements.observacao.value = stripPaymentBreakdownText(order.observacao_interna || "") || `Pedido ${order.codigo || order.id} recebido pelo site. Bairro: ${order.cliente_bairro || ""}`;
   saleForm.elements.motivo_alteracao.value = "";
   app.saleReceivedTouched = true;
   renderPeopleOptions();
@@ -1886,6 +1994,7 @@ async function saveOrderEdit(event) {
     const draft = currentSaleDraft();
     if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
     if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
+    if (draft.split && draft.splitPayments.length < 2) throw new Error("Informe as duas formas de pagamento dividido.");
     const previous = {
       pedido: order,
       itens: orderItems(order.id),
@@ -1895,7 +2004,7 @@ async function saveOrderEdit(event) {
       cliente_nome: saleForm.elements.cliente.value.trim(),
       cliente_bairro: saleForm.elements.bairro?.value.trim() || "",
       cliente_telefone: String(saleForm.elements.telefone?.value || "").replace(/\D/g, ""),
-      forma_pagamento: draft.payment,
+      forma_pagamento: draft.paymentLabel || draft.payment,
       valor_pago_cliente: draft.paidValue,
       teve_troco: draft.cash && draft.hasChange,
       troco: draft.cash && draft.hasChange ? draft.changeValue : 0,
@@ -1908,7 +2017,10 @@ async function saveOrderEdit(event) {
       horario_rota: draft.routeTime,
       rota_data_hora: routeIso(draft.routeDate, draft.routeTime),
       status_entrega: saleForm.elements.status_entrega?.value || "Aguardando",
-      observacao_interna: saleForm.elements.observacao.value.trim(),
+      observacao_interna: [
+        saleForm.elements.observacao.value.trim(),
+        draft.split ? `PAGAMENTOS_JSON:${JSON.stringify(draft.splitPayments)}` : "",
+      ].filter(Boolean).join("\n"),
       updated_at: new Date().toISOString(),
     };
     if (!payload.cliente_nome) throw new Error("Informe o nome do cliente.");
@@ -2361,8 +2473,16 @@ function renderReports() {
   );
   const paymentRows = Object.entries(
     sales.reduce((acc, sale) => {
-      const key = sale.forma_pagamento || "Nao informado";
-      acc[key] = (acc[key] || 0) + saleTotal(sale);
+      const breakdown = salePaymentBreakdown(sale);
+      if (breakdown.length) {
+        breakdown.forEach((payment) => {
+          const key = payment.forma || "Nao informado";
+          acc[key] = (acc[key] || 0) + toNumber(payment.valor);
+        });
+      } else {
+        const key = sale.forma_pagamento || "Nao informado";
+        acc[key] = (acc[key] || 0) + saleTotal(sale);
+      }
       return acc;
     }, {})
   ).map(([label, total]) => ({ label, total }));
@@ -2394,14 +2514,14 @@ function renderCommissionReport(sales) {
   const groups = new Map();
   sales.forEach((sale) => {
     const name = sale.vendedora_nome || personNameById(app.sellers, sale.vendedora_id) || "Sem vendedora";
-    const normalized = normalizePayment(sale.forma_pagamento);
-    const isCard = normalized === "debito" || normalized === "credito";
+    const methods = salePaymentMethods(sale).map(normalizePayment);
+    const isCard = methods.some((method) => method === "debito" || method === "credito");
     const current = groups.get(name) || { label: name, quantity: 0, pix: 0, cash: 0, debit: 0, credit: 0, base: 0, card: 0, total: 0 };
     current.quantity += 1;
-    current.pix += normalized === "pix" ? 1 : 0;
-    current.cash += normalized === "dinheiro" ? 1 : 0;
-    current.debit += normalized === "debito" ? 1 : 0;
-    current.credit += normalized === "credito" ? 1 : 0;
+    current.pix += methods.includes("pix") ? 1 : 0;
+    current.cash += methods.includes("dinheiro") ? 1 : 0;
+    current.debit += methods.includes("debito") ? 1 : 0;
+    current.credit += methods.includes("credito") ? 1 : 0;
     current.base += toNumber(sale.comissao_base || COMMISSION_BASE);
     current.card += toNumber(sale.comissao_cartao || (isCard ? COMMISSION_CARD_EXTRA : 0));
     current.total += saleCommission(sale);
@@ -2570,6 +2690,23 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     dinheiroLiquido: 0,
   };
   cashSalesForDate(dateKey).forEach((sale) => {
+    const breakdown = salePaymentBreakdown(sale);
+    if (breakdown.length) {
+      breakdown.forEach((row) => {
+        const payment = normalizePayment(row.forma);
+        const value = toNumber(row.valor);
+        if (payment === "pix") totals.pix += value;
+        else if (payment === "dinheiro") {
+          totals.dinheiro += value;
+          totals.dinheiroRecebido += value;
+        } else if (payment === "debito") totals.debito += value;
+        else if (payment === "credito") totals.credito += value;
+        else totals.outros += value;
+      });
+      totals.trocoDevolvido += saleChangeValue(sale);
+      return;
+    }
+
     const payment = normalizePayment(sale.forma_pagamento);
     const value = saleGrandTotal(sale);
     if (payment === "pix") totals.pix += value;
@@ -3002,7 +3139,7 @@ stockProductForm?.addEventListener("submit", saveStockProduct);
 saleForm?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
   event.preventDefault();
-  if (["valor_recebido", "taxa_entrega", "troco"].includes(event.target.name)) {
+  if (["valor_recebido", "taxa_entrega", "troco", "pagamento_1_valor", "pagamento_2_valor"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     app.saleReceivedTouched = event.target.name === "valor_recebido" ? true : app.saleReceivedTouched;
     updateSaleTotal();
@@ -3103,7 +3240,7 @@ document.addEventListener("input", (event) => {
     app.deliveryManuallyEdited = false;
     app.saleReceivedTouched = true;
   }
-  if (event.target.closest(".sale-item") || ["desconto", "valor_recebido", "taxa_entrega", "troco"].includes(event.target.name)) updateSaleTotal();
+  if (event.target.closest(".sale-item") || ["desconto", "valor_recebido", "taxa_entrega", "troco", "pagamento_1_valor", "pagamento_2_valor"].includes(event.target.name)) updateSaleTotal();
   if (event.target.matches("[data-stock-search]")) {
     app.stockSearch = event.target.value;
     renderStock();
@@ -3161,9 +3298,11 @@ document.addEventListener("change", (event) => {
     if (!isCashPayment(event.target.value)) app.saleReceivedTouched = false;
     updateSaleTotal();
   }
+  if (event.target.name === "pagamento_dividido") updateSaleTotal();
+  if (["pagamento_1_forma", "pagamento_2_forma"].includes(event.target.name)) updateSaleTotal();
   if (event.target.name === "teve_troco") updateSaleTotal();
   if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
-  if (["valor_recebido", "taxa_entrega", "troco"].includes(event.target.name)) {
+  if (["valor_recebido", "taxa_entrega", "troco", "pagamento_1_valor", "pagamento_2_valor"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     updateSaleTotal();
   }

@@ -122,6 +122,31 @@
               <label>Entregador <select name="entregador_id" data-deliverer-select></select></label>
               <input type="hidden" name="taxa_entrega" value="0" />
               <label>Valor pago pelo cliente <input type="text" name="valor_recebido" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              <label class="inline-check"><input type="checkbox" name="pagamento_dividido" /> Pagamento dividido</label>
+              <div class="split-payment-grid hidden" data-split-payment-fields>
+                <label>
+                  Forma 1
+                  <select name="pagamento_1_forma">
+                    <option value="Pix">Pix</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Debito">Debito</option>
+                    <option value="Credito">Credito</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </label>
+                <label>Valor 1 <input type="text" name="pagamento_1_valor" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+                <label>
+                  Forma 2
+                  <select name="pagamento_2_forma">
+                    <option value="Pix">Pix</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Debito">Debito</option>
+                    <option value="Credito">Credito</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </label>
+                <label>Valor 2 <input type="text" name="pagamento_2_valor" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              </div>
               <label data-sale-cash-only>
                 Teve troco?
                 <select name="teve_troco">
