@@ -89,3 +89,5 @@ begin
     );
   end if;
 end $$;
+
+select pg_notify('pgrst', 'reload schema');
