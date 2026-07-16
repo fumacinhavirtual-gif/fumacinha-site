@@ -106,19 +106,12 @@
             </div>
             <p class="sale-product-filter-status" data-sale-product-filter-status></p>
             <div class="sale-items" data-sale-items></div>
-            <div class="form-grid">
-              <label>Desconto <input type="number" name="desconto" min="0" step="0.01" value="0" /></label>
-              <label>
-                Forma de pagamento
-                <select name="forma_pagamento">
-                  <option value="Pix">Pix</option>
-                  <option value="Dinheiro">Dinheiro</option>
-                  <option value="Debito">Debito</option>
-                  <option value="Credito">Credito</option>
-                  <option value="Outros">Outros</option>
-                </select>
-              </label>
-              <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /> Pagamento dividido</label>
+            <section class="split-payment-panel" aria-label="Pagamento dividido">
+              <div>
+                <strong>Pagamento dividido</strong>
+                <span>Use quando o cliente pagar em duas formas, exemplo: Pix + Debito ou Dinheiro.</span>
+              </div>
+              <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /> Ativar pagamento dividido</label>
               <div class="split-payment-grid hidden" data-split-payment-fields>
                 <label>
                   Forma 1
@@ -143,6 +136,19 @@
                 </label>
                 <label>Valor 2 <input type="text" name="pagamento_2_valor" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
               </div>
+            </section>
+            <div class="form-grid">
+              <label>Desconto <input type="number" name="desconto" min="0" step="0.01" value="0" /></label>
+              <label>
+                Forma de pagamento
+                <select name="forma_pagamento">
+                  <option value="Pix">Pix</option>
+                  <option value="Dinheiro">Dinheiro</option>
+                  <option value="Debito">Debito</option>
+                  <option value="Credito">Credito</option>
+                  <option value="Outros">Outros</option>
+                </select>
+              </label>
               <label>Vendedora <select name="vendedora_id" required data-seller-select></select></label>
               <label>Entregador <select name="entregador_id" data-deliverer-select></select></label>
               <input type="hidden" name="taxa_entrega" value="0" />
