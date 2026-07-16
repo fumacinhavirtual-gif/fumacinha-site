@@ -1756,6 +1756,43 @@ function syncPageEnd() {
   document.documentElement.style.setProperty("--page-end-offset", offset);
 }
 
+let touchBoundaryStartY = 0;
+let touchBoundaryStartX = 0;
+
+function findScrollableTouchParent(target) {
+  let element = target instanceof Element ? target : null;
+  while (element && element !== document.body && element !== document.documentElement) {
+    const style = window.getComputedStyle(element);
+    const canScrollY = /(auto|scroll)/.test(style.overflowY);
+    if (canScrollY && element.scrollHeight > element.clientHeight + 1) return element;
+    element = element.parentElement;
+  }
+  return null;
+}
+
+function lockElasticScrollAtPageEdges(event) {
+  if (event.touches.length !== 1) return;
+  const touch = event.touches[0];
+  const deltaY = touch.clientY - touchBoundaryStartY;
+  const deltaX = touch.clientX - touchBoundaryStartX;
+  if (Math.abs(deltaX) > Math.abs(deltaY)) return;
+
+  const scrollableParent = findScrollableTouchParent(event.target);
+  if (scrollableParent) {
+    const maxScroll = scrollableParent.scrollHeight - scrollableParent.clientHeight;
+    const atTop = scrollableParent.scrollTop <= 0;
+    const atBottom = scrollableParent.scrollTop >= maxScroll - 1;
+    if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) event.preventDefault();
+    return;
+  }
+
+  const pageTop = window.scrollY || document.documentElement.scrollTop || 0;
+  const pageMax = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  const atPageTop = pageTop <= 0;
+  const atPageBottom = pageTop >= pageMax - 1;
+  if ((atPageTop && deltaY > 0) || (atPageBottom && deltaY < 0)) event.preventDefault();
+}
+
 function openCart() {
   cartDrawer.classList.add("open");
   cartDrawer.setAttribute("aria-hidden", "false");
@@ -3601,6 +3638,16 @@ window.addEventListener("focus", () => {
 });
 window.addEventListener("resize", syncPageEnd);
 window.addEventListener("orientationchange", () => window.setTimeout(syncPageEnd, 250));
+document.addEventListener(
+  "touchstart",
+  (event) => {
+    if (event.touches.length !== 1) return;
+    touchBoundaryStartY = event.touches[0].clientY;
+    touchBoundaryStartX = event.touches[0].clientX;
+  },
+  { passive: true }
+);
+document.addEventListener("touchmove", lockElasticScrollAtPageEdges, { passive: false });
 
 renderSettings();
 renderCart();
