@@ -1569,6 +1569,25 @@ function orderItems(orderId) {
   return app.orderItems.filter((item) => String(item.pedido_id) === String(orderId));
 }
 
+function saleItemsForSale(saleId) {
+  return app.saleItems.filter((item) => String(item.venda_id) === String(saleId));
+}
+
+function saleHistoryProducts(sale) {
+  const items = saleItemsForSale(sale.id);
+  if (!items.length) {
+    return {
+      title: sale.nome_produto || "Venda",
+      quantity: toNumber(sale.quantidade || 1),
+    };
+  }
+
+  return {
+    title: items.map((item) => `${toNumber(item.quantidade)}x ${item.nome_produto || "Produto"}`).join(" | "),
+    quantity: items.reduce((sum, item) => sum + toNumber(item.quantidade), 0),
+  };
+}
+
 function orderMatchesFilter(order) {
   const filter = app.orderStatusFilter;
   const status = normalizeOrderStatus(order.status);
@@ -1644,9 +1663,12 @@ function renderSalesHistory() {
   if (!salesHistory) return;
   const rows = app.sales.filter(saleMatchesPeriod);
   salesHistory.innerHTML = rows.length
-    ? rows.slice(0, 40).map((sale) => `
+    ? rows.slice(0, 40).map((sale) => {
+      const products = saleHistoryProducts(sale);
+      return `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
-        <strong>${escapeHtml(sale.nome_produto || "Venda")}</strong>
+        <strong>${escapeHtml(products.title)}</strong>
+        <span>Quantidade: ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"}</span>
         <span>Venda registrada em: ${new Date(sale.created_at || sale.data_venda || Date.now()).toLocaleString("pt-BR")}</span>
         <span>Entrega prevista: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}</span>
         <span>Produtos ${currency.format(saleTotal(sale))} | Valor pago ${currency.format(saleDeliveredValue(sale))}</span>
@@ -1658,14 +1680,15 @@ function renderSalesHistory() {
           ${sale.cancelada ? "" : `<button type="button" data-edit-sale="${sale.id}">Editar venda</button><button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
         </div>
       </article>
-    `).join("")
+    `;
+    }).join("")
     : "<p>Nenhuma venda confirmada para este filtro.</p>";
 }
 
 function viewSaleDetails(saleId) {
   const sale = app.sales.find((item) => String(item.id) === String(saleId));
   if (!sale) return;
-  const items = app.saleItems.filter((item) => String(item.venda_id) === String(saleId));
+  const items = saleItemsForSale(saleId);
   window.alert([
     `Venda #${sale.id}`,
     `Cliente: ${sale.cliente_nome || "Nao informado"}`,
