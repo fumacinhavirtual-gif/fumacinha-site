@@ -372,6 +372,20 @@ function saleLinkedOrder(sale) {
   return app.orders.find((order) => String(order.venda_id || "") === String(sale.id));
 }
 
+function isConfirmedOrder(order) {
+  return normalizeOrderStatus(order.status) === "confirmado";
+}
+
+function orderHistoryDate(order) {
+  return new Date(order.confirmado_em || order.updated_at || order.created_at || Date.now());
+}
+
+function orderMatchesPeriod(order) {
+  const { start, end } = periodRange();
+  const date = orderHistoryDate(order);
+  return date >= start && date <= end;
+}
+
 function clientRows() {
   const rank = new Map();
   filteredSales().forEach((sale) => {
@@ -1450,6 +1464,11 @@ async function registerSale(event) {
     else localStorage.removeItem(LAST_DELIVERER_KEY);
     await loadAll();
     resetSaleForm();
+    if (confirmingOrderId) {
+      switchTab("sales");
+      renderSalesHistory();
+      salesHistory?.closest(".panel-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
     const registeredAt = new Date(sale?.created_at || Date.now()).toLocaleString("pt-BR");
     const successMessage = confirmingOrderId
       ? `Pedido confirmado e venda registrada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime} | Registrada em ${registeredAt}.`
@@ -1606,6 +1625,21 @@ function saleHistoryProducts(sale) {
   };
 }
 
+function orderHistoryProducts(order) {
+  const items = orderItems(order.id);
+  if (!items.length) {
+    return {
+      title: order.codigo || "Pedido feito no site",
+      quantity: 0,
+    };
+  }
+
+  return {
+    title: items.map((item) => `${toNumber(item.quantidade)}x ${item.produto_nome || "Produto"}`).join(" | "),
+    quantity: items.reduce((sum, item) => sum + toNumber(item.quantidade), 0),
+  };
+}
+
 function orderMatchesFilter(order) {
   const filter = app.orderStatusFilter;
   const status = normalizeOrderStatus(order.status);
@@ -1679,13 +1713,43 @@ function renderPendingOrders() {
 
 function renderSalesHistory() {
   if (!salesHistory) return;
-  const rows = app.sales.filter(saleMatchesPeriod);
+  const sales = app.sales.filter(saleMatchesPeriod);
+  const saleIds = new Set(sales.map((sale) => String(sale.id)));
+  const confirmedSiteOrders = app.orders
+    .filter((order) => isConfirmedOrder(order) && orderMatchesPeriod(order))
+    .filter((order) => !order.venda_id || !saleIds.has(String(order.venda_id)));
+  const rows = [
+    ...sales.map((sale) => ({ type: "sale", date: saleDate(sale), sale })),
+    ...confirmedSiteOrders.map((order) => ({ type: "order", date: orderHistoryDate(order), order })),
+  ].sort((a, b) => b.date - a.date);
   salesHistory.innerHTML = rows.length
-    ? rows.slice(0, 40).map((sale) => {
+    ? rows.slice(0, 40).map((row) => {
+      if (row.type === "order") {
+        const order = row.order;
+        const products = orderHistoryProducts(order);
+        return `
+      <article class="history-row site-order-history">
+        <strong>${escapeHtml(products.title)}</strong>
+        <span class="status-badge">Pedido feito no site</span>
+        <span>Codigo: ${escapeHtml(order.codigo || `Pedido #${order.id}`)}</span>
+        <span>Quantidade: ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"}</span>
+        <span>Confirmado em: ${orderHistoryDate(order).toLocaleString("pt-BR")}</span>
+        <span>Cliente: ${escapeHtml(order.cliente_nome || "Cliente nao informado")}</span>
+        <span>Produtos ${currency.format(order.valor_produtos || 0)} | Status: ${escapeHtml(order.status || "Confirmado")}</span>
+        <div class="history-actions">
+          <button type="button" data-view-order="${order.id}">Ver detalhes</button>
+        </div>
+      </article>
+    `;
+      }
+
+      const sale = row.sale;
       const products = saleHistoryProducts(sale);
+      const linkedOrder = saleLinkedOrder(sale);
       return `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
         <strong>${escapeHtml(products.title)}</strong>
+        ${linkedOrder ? `<span class="status-badge">Pedido feito no site${linkedOrder.codigo ? ` - ${escapeHtml(linkedOrder.codigo)}` : ""}</span>` : ""}
         <span>Quantidade: ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"}</span>
         <span>Venda registrada em: ${new Date(sale.created_at || sale.data_venda || Date.now()).toLocaleString("pt-BR")}</span>
         <span>Entrega prevista: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}</span>
