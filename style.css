@@ -35,7 +35,7 @@ body {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: none;
-  background: var(--white);
+  background: var(--black);
   color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -63,6 +63,10 @@ main {
   flex: 1 0 auto;
   min-height: auto;
   overflow: visible;
+  background: var(--white);
+}
+
+[data-order-confirmation] {
   background: var(--white);
 }
 
