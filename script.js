@@ -98,6 +98,7 @@ const orderConfirmationForm = document.querySelector("[data-order-confirmation-f
 const orderSummary = document.querySelector("[data-order-summary]");
 const orderError = document.querySelector("[data-order-error]");
 const toastRegion = document.querySelector("[data-toast-region]");
+const backToTopWrap = document.querySelector(".back-to-top-wrap");
 const searchInput = document.querySelector("[data-search]");
 const searchForm = document.querySelector(".search-form");
 const storeClosedScreen = document.querySelector("[data-store-closed]");
@@ -1743,6 +1744,16 @@ function syncPageScrollLock() {
     isOverlayOpen(policyModal);
 
   document.body.classList.toggle("no-scroll", Boolean(shouldLock));
+}
+
+function syncPageEnd() {
+  if (!backToTopWrap || backToTopWrap.classList.contains("hidden")) return;
+  document.documentElement.style.setProperty("--page-end-offset", "0px");
+  const pageEnd = backToTopWrap.getBoundingClientRect().bottom + window.scrollY;
+  const scrollHeight = document.documentElement.scrollHeight;
+  const extraSpace = Math.round(scrollHeight - pageEnd);
+  const offset = extraSpace > 20 ? `-${extraSpace}px` : "0px";
+  document.documentElement.style.setProperty("--page-end-offset", offset);
 }
 
 function openCart() {
@@ -3580,13 +3591,22 @@ benefitPrev?.addEventListener("click", () => moveBenefits(-1));
 benefitNext?.addEventListener("click", () => moveBenefits(1));
 if (benefitTrack) window.setInterval(() => moveBenefits(1), 3600);
 
-window.addEventListener("pageshow", syncPageScrollLock);
-window.addEventListener("focus", syncPageScrollLock);
+window.addEventListener("pageshow", () => {
+  syncPageScrollLock();
+  syncPageEnd();
+});
+window.addEventListener("focus", () => {
+  syncPageScrollLock();
+  syncPageEnd();
+});
+window.addEventListener("resize", syncPageEnd);
+window.addEventListener("orientationchange", () => window.setTimeout(syncPageEnd, 250));
 
 renderSettings();
 renderCart();
 setupWhatsAppDirectLinks();
 renderProductSkeletons();
-Promise.allSettled([loadProducts(), loadBannerConfig(), loadBenefits(), loadSiteConfig()]);
+Promise.allSettled([loadProducts(), loadBannerConfig(), loadBenefits(), loadSiteConfig()]).then(syncPageEnd);
+window.setTimeout(syncPageEnd, 400);
 if (supabaseClient) window.setInterval(refreshStoreAvailability, 30000);
 handleSecretAdminAccess();
