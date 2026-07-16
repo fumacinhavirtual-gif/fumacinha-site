@@ -241,8 +241,14 @@
               <label>Preco de venda <input type="text" name="preco" inputmode="decimal" required placeholder="0,00" /></label>
               <label>Custo <input type="text" name="custo" inputmode="decimal" placeholder="0,00" /></label>
               <label>Estoque inicial <input type="number" name="estoque" min="0" step="1" required value="1" /></label>
-              <label>Imagem (URL opcional) <input type="url" name="imagem" placeholder="https://..." /></label>
+              <label>Imagem (URL opcional) <input type="url" name="imagem" placeholder="https://..." data-stock-product-image-url /></label>
+              <label>Foto da galeria/camera <input type="file" name="imagem_arquivo" accept="image/jpeg,image/png,image/webp" data-stock-product-image-file /></label>
             </div>
+            <div class="stock-product-preview" data-stock-product-image-preview>
+              <span data-stock-product-image-empty>Nenhuma imagem selecionada</span>
+              <img class="hidden" src="" alt="Previa do produto" data-stock-product-image-preview-img />
+            </div>
+            <button class="ghost-action stock-product-remove-image" type="button" data-stock-product-remove-image>Remover imagem</button>
             <label>Descricao <textarea name="descricao" rows="3" placeholder="Opcional"></textarea></label>
             <label class="inline-check"><input type="checkbox" name="ativo" checked /> Produto ativo</label>
             <p class="form-status" data-stock-product-status></p>

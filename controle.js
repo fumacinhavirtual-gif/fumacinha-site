@@ -24,6 +24,9 @@ const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "
 const COMMISSION_BASE = 0.5;
 const COMMISSION_CARD_EXTRA = 1;
 const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
+const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
+const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
+const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
 const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
 const app = {
@@ -75,6 +78,8 @@ const app = {
   stockFilter: "all",
   stockSort: "filter",
   stockProductSaving: false,
+  selectedStockProductImageFile: null,
+  stockProductPreviewUrl: "",
   user: null,
 };
 
@@ -96,6 +101,10 @@ const stockHistory = $("[data-stock-history]");
 const stockProductForm = $("[data-stock-product-form]");
 const stockProductStatus = $("[data-stock-product-status]");
 const stockProductSubmit = $("[data-stock-product-submit]");
+const stockProductImageFile = $("[data-stock-product-image-file]");
+const stockProductImagePreview = $("[data-stock-product-image-preview]");
+const stockProductImagePreviewImg = $("[data-stock-product-image-preview-img]");
+const stockProductImageEmpty = $("[data-stock-product-image-empty]");
 const salesHistory = $("[data-sales-history]");
 const pendingOrdersRoot = $("[data-pending-orders]");
 const salesStatusFilter = $("[data-sales-status-filter]");
@@ -1992,6 +2001,68 @@ function setStockProductStatus(message = "", type = "") {
   stockProductStatus.className = `form-status ${type}`.trim();
 }
 
+function validateStockProductImageFile(file) {
+  if (!file) return "";
+  if (!PRODUCT_IMAGE_TYPES.includes(file.type)) return "Use imagens JPG, JPEG, PNG ou WEBP.";
+  if (file.size > MAX_PRODUCT_IMAGE_SIZE) return "A imagem deve ter no maximo 5 MB.";
+  return "";
+}
+
+function stockProductImagePath(file) {
+  const extension = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "");
+  const safeExtension = extension === "jpeg" ? "jpg" : extension;
+  const random = Math.random().toString(36).slice(2);
+  return `produtos/${Date.now()}-${random}.${safeExtension || "jpg"}`;
+}
+
+function updateStockProductImagePreview(source = "") {
+  const value = source || stockProductForm?.elements.imagem?.value.trim() || "";
+  const hasImage = Boolean(value);
+  stockProductImagePreview?.classList.toggle("has-image", hasImage);
+  stockProductImageEmpty?.classList.toggle("hidden", hasImage);
+  stockProductImagePreviewImg?.classList.toggle("hidden", !hasImage);
+  if (stockProductImagePreviewImg) stockProductImagePreviewImg.src = hasImage ? value : "";
+}
+
+function clearStockProductImage() {
+  if (app.stockProductPreviewUrl) URL.revokeObjectURL(app.stockProductPreviewUrl);
+  app.stockProductPreviewUrl = "";
+  app.selectedStockProductImageFile = null;
+  if (stockProductImageFile) stockProductImageFile.value = "";
+  if (stockProductForm?.elements.imagem) stockProductForm.elements.imagem.value = "";
+  updateStockProductImagePreview("");
+}
+
+function selectStockProductImage(file) {
+  const validation = validateStockProductImageFile(file);
+  if (validation) {
+    clearStockProductImage();
+    setStockProductStatus(validation, "error");
+    return;
+  }
+  if (app.stockProductPreviewUrl) URL.revokeObjectURL(app.stockProductPreviewUrl);
+  app.selectedStockProductImageFile = file || null;
+  app.stockProductPreviewUrl = file ? URL.createObjectURL(file) : "";
+  setStockProductStatus("");
+  updateStockProductImagePreview(app.stockProductPreviewUrl);
+}
+
+async function uploadStockProductImage() {
+  const file = app.selectedStockProductImageFile;
+  if (!file) return stockProductForm?.elements.imagem?.value.trim() || "";
+  const validation = validateStockProductImageFile(file);
+  if (validation) throw new Error(validation);
+  const path = stockProductImagePath(file);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+  const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl || "";
+}
+
 function stockProductPayload(form) {
   const price = parseMoney(form.elements.preco.value);
   const cost = parseMoney(form.elements.custo.value);
@@ -2036,6 +2107,9 @@ async function saveStockProduct(event) {
   }
   setStockProductStatus("Cadastrando produto...", "loading");
   try {
+    if (app.selectedStockProductImageFile) setStockProductStatus("Enviando imagem...", "loading");
+    payload.imagem = await uploadStockProductImage();
+    setStockProductStatus("Cadastrando produto...", "loading");
     const { error } = await supabaseClient.from(TABLES.products).insert(payload);
     if (error) {
       const fallbackPayload = { ...payload };
@@ -2046,6 +2120,7 @@ async function saveStockProduct(event) {
     stockProductForm.reset();
     stockProductForm.elements.estoque.value = "1";
     stockProductForm.elements.ativo.checked = true;
+    clearStockProductImage();
     app.stockCategory = payload.categoria;
     app.saleProductCategory = payload.categoria;
     setStockProductStatus(`Produto "${payload.nome}" cadastrado com sucesso.`, "success");
@@ -2891,6 +2966,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-refresh]")) loadAll();
   if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
   if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
+  if (event.target.closest("[data-stock-product-remove-image]")) clearStockProductImage();
   if (event.target.closest("[data-open-orders]")) {
     app.orderStatusFilter = "pending";
     switchTab("orders");
@@ -2968,6 +3044,13 @@ document.addEventListener("input", (event) => {
     app.stockSearch = event.target.value;
     renderStock();
   }
+  if (event.target.matches("[data-stock-product-image-url]")) {
+    if (app.stockProductPreviewUrl) URL.revokeObjectURL(app.stockProductPreviewUrl);
+    app.stockProductPreviewUrl = "";
+    app.selectedStockProductImageFile = null;
+    if (stockProductImageFile) stockProductImageFile.value = "";
+    updateStockProductImagePreview(event.target.value.trim());
+  }
   if (event.target.matches("[data-seller-search]")) {
     app.sellerSearch = event.target.value;
     renderTeamLists();
@@ -2998,6 +3081,9 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-stock-product-image-file]")) {
+    selectStockProductImage(event.target.files?.[0] || null);
+  }
   if (event.target.closest(".sale-item")) {
     if (event.target.name === "produto_id") {
       const row = event.target.closest(".sale-item");
