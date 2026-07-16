@@ -131,6 +131,18 @@ textarea {
   resize: vertical;
 }
 
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+}
+
+.inline-check input {
+  width: auto;
+  min-height: auto;
+}
+
 .primary-action,
 .ghost-action,
 .danger-action,

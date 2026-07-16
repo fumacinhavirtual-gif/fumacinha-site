@@ -74,6 +74,7 @@ const app = {
   stockCategory: "all",
   stockFilter: "all",
   stockSort: "filter",
+  stockProductSaving: false,
   user: null,
 };
 
@@ -92,6 +93,9 @@ const saleProductSearchInput = $("[data-sale-product-search]");
 const saleProductCategorySelect = $("[data-sale-product-category]");
 const stockList = $("[data-stock-list]");
 const stockHistory = $("[data-stock-history]");
+const stockProductForm = $("[data-stock-product-form]");
+const stockProductStatus = $("[data-stock-product-status]");
+const stockProductSubmit = $("[data-stock-product-submit]");
 const salesHistory = $("[data-sales-history]");
 const pendingOrdersRoot = $("[data-pending-orders]");
 const salesStatusFilter = $("[data-sales-status-filter]");
@@ -1911,10 +1915,15 @@ function openOrderWhatsApp(orderId) {
 
 function renderStockFilters() {
   const categorySelect = $("[data-stock-category]");
-  if (!categorySelect) return;
+  const productCategories = $("[data-stock-product-categories]");
   const categories = [...new Set(app.products.map((product) => product.categoria || "Produtos"))].sort();
+  if (productCategories) {
+    productCategories.innerHTML = categories.map((category) => `<option value="${escapeHtml(category)}"></option>`).join("");
+  }
+  if (!categorySelect) return;
   categorySelect.innerHTML = `<option value="all">Todas as categorias</option>${categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
-  categorySelect.value = app.stockCategory;
+  categorySelect.value = categories.includes(app.stockCategory) || app.stockCategory === "all" ? app.stockCategory : "all";
+  if (categorySelect.value !== app.stockCategory) app.stockCategory = "all";
 }
 
 function stockProducts() {
@@ -1975,6 +1984,84 @@ function renderStockHistory() {
       </article>
     `).join("")
     : "<p>Nenhuma movimentacao registrada.</p>";
+}
+
+function setStockProductStatus(message = "", type = "") {
+  if (!stockProductStatus) return;
+  stockProductStatus.textContent = message;
+  stockProductStatus.className = `form-status ${type}`.trim();
+}
+
+function stockProductPayload(form) {
+  const price = parseMoney(form.elements.preco.value);
+  const cost = parseMoney(form.elements.custo.value);
+  const stock = Math.max(0, Number.parseInt(form.elements.estoque.value || "0", 10));
+  return {
+    nome: form.elements.nome.value.trim(),
+    categoria: form.elements.categoria.value.trim(),
+    preco: price,
+    pix: price,
+    custo: cost,
+    estoque: stock,
+    imagem: form.elements.imagem.value.trim(),
+    descricao: form.elements.descricao.value.trim(),
+    ativo: form.elements.ativo.checked,
+    destaque_home: false,
+    ocultar_home: false,
+  };
+}
+
+function validateStockProduct(payload) {
+  if (!payload.nome) return "Informe o nome do produto.";
+  if (!payload.categoria) return "Informe a categoria.";
+  if (!Number.isFinite(payload.preco) || payload.preco <= 0) return "Informe um preco de venda valido.";
+  if (!Number.isFinite(payload.custo) || payload.custo < 0) return "Informe um custo valido.";
+  if (!Number.isFinite(payload.estoque) || payload.estoque < 0) return "Informe um estoque valido.";
+  return "";
+}
+
+async function saveStockProduct(event) {
+  event.preventDefault();
+  if (app.stockProductSaving || !stockProductForm) return;
+  if (!(await requireAuth())) return;
+
+  const payload = stockProductPayload(stockProductForm);
+  const validation = validateStockProduct(payload);
+  if (validation) return setStockProductStatus(validation, "error");
+
+  app.stockProductSaving = true;
+  if (stockProductSubmit) {
+    stockProductSubmit.disabled = true;
+    stockProductSubmit.textContent = "Cadastrando...";
+  }
+  setStockProductStatus("Cadastrando produto...", "loading");
+  try {
+    const { error } = await supabaseClient.from(TABLES.products).insert(payload);
+    if (error) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.descricao;
+      const fallback = await supabaseClient.from(TABLES.products).insert(fallbackPayload);
+      if (fallback.error) throw fallback.error;
+    }
+    stockProductForm.reset();
+    stockProductForm.elements.estoque.value = "1";
+    stockProductForm.elements.ativo.checked = true;
+    app.stockCategory = payload.categoria;
+    app.saleProductCategory = payload.categoria;
+    setStockProductStatus(`Produto "${payload.nome}" cadastrado com sucesso.`, "success");
+    showToast(`Produto "${payload.nome}" cadastrado com sucesso.`, "success");
+    await loadAll();
+    switchTab("stock");
+  } catch (error) {
+    console.error("Erro ao cadastrar produto no controle:", error);
+    setStockProductStatus(error.message || "Nao foi possivel cadastrar o produto.", "error");
+  } finally {
+    app.stockProductSaving = false;
+    if (stockProductSubmit) {
+      stockProductSubmit.disabled = false;
+      stockProductSubmit.textContent = "Cadastrar produto";
+    }
+  }
 }
 
 async function saveStock(productId) {
@@ -2772,6 +2859,7 @@ loginForm?.addEventListener("submit", async (event) => {
 });
 
 saleForm?.addEventListener("submit", saveSale);
+stockProductForm?.addEventListener("submit", saveStockProduct);
 saleForm?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
   event.preventDefault();

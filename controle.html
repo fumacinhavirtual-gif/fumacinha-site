@@ -227,6 +227,27 @@
               <h2>Produtos e movimentacoes</h2>
             </div>
           </div>
+          <form class="panel-card stock-product-form" data-stock-product-form>
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Novo produto</p>
+                <h2>Cadastrar produto no controle</h2>
+              </div>
+            </div>
+            <div class="form-grid">
+              <label>Nome do produto <input type="text" name="nome" required placeholder="Ex.: ELF BAR..." /></label>
+              <label>Categoria <input type="text" name="categoria" required list="stock-product-categories" placeholder="Descartavel, Kit..." /></label>
+              <datalist id="stock-product-categories" data-stock-product-categories></datalist>
+              <label>Preco de venda <input type="text" name="preco" inputmode="decimal" required placeholder="0,00" /></label>
+              <label>Custo <input type="text" name="custo" inputmode="decimal" placeholder="0,00" /></label>
+              <label>Estoque inicial <input type="number" name="estoque" min="0" step="1" required value="1" /></label>
+              <label>Imagem (URL opcional) <input type="url" name="imagem" placeholder="https://..." /></label>
+            </div>
+            <label>Descricao <textarea name="descricao" rows="3" placeholder="Opcional"></textarea></label>
+            <label class="inline-check"><input type="checkbox" name="ativo" checked /> Produto ativo</label>
+            <p class="form-status" data-stock-product-status></p>
+            <button class="primary-action" type="submit" data-stock-product-submit>Cadastrar produto</button>
+          </form>
           <div class="stock-filters">
             <input type="search" data-stock-search placeholder="Buscar por nome" />
             <select data-stock-category></select>
