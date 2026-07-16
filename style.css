@@ -27,9 +27,7 @@ html {
 }
 
 body {
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
+  min-height: 0;
   max-width: 100%;
   margin: 0;
   overflow-x: hidden;
@@ -60,7 +58,7 @@ a {
 }
 
 main {
-  flex: 1 0 auto;
+  display: block;
   min-height: auto;
   overflow: visible;
   background: var(--white);
@@ -1491,7 +1489,10 @@ body.order-confirmation-view .whatsapp-float {
   grid-template-columns: 1fr 1.4fr minmax(150px, 0.45fr);
   gap: 24px;
   align-items: start;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  flex-grow: 0;
+  min-height: 0;
+  height: auto;
   margin-top: 0;
   padding: 42px clamp(16px, 5vw, 64px);
   color: var(--white);
