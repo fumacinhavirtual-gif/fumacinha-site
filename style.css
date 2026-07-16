@@ -1494,7 +1494,7 @@ body.order-confirmation-view .whatsapp-float {
   min-height: 0;
   height: auto;
   margin-top: 0;
-  padding: 42px clamp(16px, 5vw, 64px);
+  padding: 42px clamp(16px, 5vw, 64px) 24px;
   color: var(--white);
   background: var(--black);
 }
