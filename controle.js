@@ -480,6 +480,23 @@ function saleTotal(sale) {
   return toNumber(sale.valor_produtos || sale.valor_total || 0);
 }
 
+function saleProductsValue(sale) {
+  const directValue = toNumber(sale?.valor_produtos);
+  if (directValue > 0 || sale?.valor_produtos === 0 || sale?.valor_produtos === "0") return directValue;
+
+  const saleId = String(sale?.id || "");
+  const itemsTotal = app.saleItems
+    .filter((item) => String(item.venda_id || "") === saleId)
+    .reduce((sum, item) => {
+      const storedTotal = toNumber(item.valor_total || item.subtotal);
+      if (storedTotal > 0) return sum + storedTotal;
+      return sum + toNumber(item.quantidade) * toNumber(item.valor_unitario);
+    }, 0);
+  if (itemsTotal > 0) return itemsTotal;
+
+  return saleTotal(sale);
+}
+
 function saleGrandTotal(sale) {
   return toNumber(sale.total_venda || sale.valor_recebido || saleTotal(sale) + saleDelivery(sale));
 }
