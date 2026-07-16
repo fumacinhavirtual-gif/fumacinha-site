@@ -98,6 +98,7 @@ const orderConfirmationForm = document.querySelector("[data-order-confirmation-f
 const orderSummary = document.querySelector("[data-order-summary]");
 const orderError = document.querySelector("[data-order-error]");
 const toastRegion = document.querySelector("[data-toast-region]");
+const pageScroll = document.querySelector("[data-page-scroll]");
 const searchInput = document.querySelector("[data-search]");
 const searchForm = document.querySelector(".search-form");
 const storeClosedScreen = document.querySelector("[data-store-closed]");
@@ -1417,7 +1418,7 @@ function showProduct(productId) {
     }
   `;
 
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  scrollPageToTop("smooth");
 }
 
 function setProductQuantity(change) {
@@ -1745,6 +1746,14 @@ function syncPageScrollLock() {
   document.body.classList.toggle("no-scroll", Boolean(shouldLock));
 }
 
+function scrollPageToTop(behavior = "smooth") {
+  if (pageScroll) {
+    pageScroll.scrollTo({ top: 0, behavior });
+    return;
+  }
+  window.scrollTo({ top: 0, behavior });
+}
+
 let touchBoundaryStartY = 0;
 let touchBoundaryStartX = 0;
 
@@ -1827,7 +1836,7 @@ function openOrderConfirmation() {
   orderConfirmation.classList.remove("hidden");
   orderConfirmation.setAttribute("aria-hidden", "false");
   syncPageScrollLock();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+  scrollPageToTop("smooth");
 }
 
 function closeOrderConfirmation() {
@@ -1848,7 +1857,7 @@ function restoreHomeAfterCompletedCheckout({ clearFlag = true } = {}) {
   productPage?.classList.add("hidden");
   productPage?.setAttribute("aria-hidden", "true");
   state.currentProductId = null;
-  window.scrollTo({ top: 0, behavior: "auto" });
+  scrollPageToTop("auto");
   if (window.location.hash) {
     history.replaceState({}, document.title, `${window.location.pathname}${window.location.search}`);
   }
@@ -3124,7 +3133,7 @@ document.addEventListener("click", async (event) => {
     openOrderConfirmation();
   }
   if (event.target.closest("[data-back-to-top]")) {
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    scrollPageToTop("smooth");
   }
   if (event.target.closest("[data-close-cart]")) closeCart();
   if (event.target === cartDrawer) closeCart();
