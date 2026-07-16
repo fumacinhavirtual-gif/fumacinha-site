@@ -1527,10 +1527,9 @@ body.order-confirmation-view .whatsapp-float {
 .back-to-top-wrap {
   display: grid;
   place-items: center;
+  grid-column: 1 / -1;
   flex-shrink: 0;
-  margin-bottom: var(--page-end-offset, 0px);
-  padding: 22px 16px 30px;
-  background: var(--black);
+  padding: 14px 16px 0;
 }
 
 .back-to-top-wrap::before {
