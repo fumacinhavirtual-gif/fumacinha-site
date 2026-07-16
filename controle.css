@@ -143,6 +143,23 @@ textarea {
   min-height: auto;
 }
 
+.split-payment-toggle {
+  grid-column: 1 / -1;
+  width: 100%;
+  padding: 14px 16px;
+  border: 2px solid #198754;
+  border-radius: 16px;
+  background: #eaf8f0;
+  color: #0f6b3a;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.split-payment-toggle input {
+  width: 22px;
+  height: 22px;
+}
+
 .split-payment-grid {
   display: grid;
   grid-column: 1 / -1;
