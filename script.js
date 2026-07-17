@@ -12,6 +12,7 @@ const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LOW_STOCK_DEFAULT_LIMIT = 5;
 const ADMIN_ACCESS_PARAM = "admin";
 const ADMIN_ACCESS_SECRET = "fumacinha";
+const ADMIN_EDITOR_REDIRECT_KEY = "fumacinha_open_editor";
 const PRODUCT_SLOW_LOAD_MS = 5000;
 const ALL_CATEGORY_ID = "all";
 const CHECKOUT_COMPLETED_KEY = "fumacinha_checkout_completed";
@@ -1970,6 +1971,14 @@ function hasSecretAdminAccess() {
   return params.get(ADMIN_ACCESS_PARAM) === ADMIN_ACCESS_SECRET;
 }
 
+function hasEditorRedirectAccess() {
+  return sessionStorage.getItem(ADMIN_EDITOR_REDIRECT_KEY) === "1";
+}
+
+function clearEditorRedirectAccess() {
+  sessionStorage.removeItem(ADMIN_EDITOR_REDIRECT_KEY);
+}
+
 function clearSecretAdminAccess() {
   const url = new URL(window.location.href);
   if (!url.searchParams.has(ADMIN_ACCESS_PARAM)) return;
@@ -1980,7 +1989,8 @@ function clearSecretAdminAccess() {
 }
 
 async function handleSecretAdminAccess() {
-  if (!hasSecretAdminAccess()) return;
+  const hasAdminAccess = hasSecretAdminAccess() || hasEditorRedirectAccess();
+  if (!hasAdminAccess) return;
 
   if (!supabaseClient) {
     openLogin();
@@ -1992,6 +2002,7 @@ async function handleSecretAdminAccess() {
   if (!error && data.session?.user) {
     enableEditMode();
     clearSecretAdminAccess();
+    clearEditorRedirectAccess();
     return;
   }
 
@@ -3327,6 +3338,7 @@ editLoginForm?.addEventListener("submit", async (event) => {
   form.reset();
   enableEditMode();
   clearSecretAdminAccess();
+  clearEditorRedirectAccess();
 });
 
 orderConfirmationForm?.addEventListener("submit", async (event) => {
