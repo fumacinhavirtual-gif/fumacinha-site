@@ -36,6 +36,7 @@
 
       <section class="control-view hidden" data-control-view>
         <header class="control-header">
+          <button class="menu-toggle" type="button" data-side-open aria-label="Abrir menu">☰</button>
           <div>
             <p class="eyebrow">Fumacinha</p>
             <h1>Controle da loja</h1>
@@ -562,15 +563,33 @@
       </section>
     </main>
 
-    <nav class="bottom-nav hidden" data-bottom-nav aria-label="Navegacao do controle">
-      <button type="button" data-tab="home" class="active">Inicio</button>
-      <button type="button" data-tab="sales">Vender</button>
-      <button type="button" data-tab="orders">Pedidos <span class="nav-badge hidden" data-pending-nav-badge>0</span></button>
-      <button type="button" data-tab="stock">Estoque</button>
-      <button type="button" data-tab="finance">Financeiro</button>
-      <button type="button" data-tab="cash">Caixa</button>
-      <button type="button" data-tab="more">Mais</button>
-    </nav>
+    <div class="side-menu-shell hidden" data-side-shell aria-hidden="true">
+      <button class="side-overlay" type="button" data-side-close aria-label="Fechar menu"></button>
+      <aside class="side-menu" data-side-menu aria-label="Menu do controle">
+        <header class="side-menu-header">
+          <p>🔥 FUMACINHA</p>
+          <h2>Controle da Loja</h2>
+          <span>Administrador</span>
+          <strong><i></i> Online</strong>
+        </header>
+
+        <nav class="side-menu-nav" aria-label="Menu principal">
+          <button type="button" data-tab="home" class="active"><span>🏠</span> Início</button>
+          <button type="button" data-tab="sales"><span>🛒</span> Vender</button>
+          <button type="button" data-tab="orders"><span>📦</span> Pedidos <span class="nav-badge hidden" data-pending-nav-badge>0</span></button>
+          <button type="button" data-tab="stock"><span>📦</span> Estoque</button>
+          <button type="button" data-tab="finance"><span>💰</span> Financeiro</button>
+          <button type="button" data-tab="cash"><span>🧾</span> Caixa</button>
+          <button type="button" data-tab="more"><span>⚙️</span> Mais</button>
+        </nav>
+
+        <div class="side-menu-footer">
+          <button type="button" data-tab="more"><span>🌐</span> Site Online / Offline</button>
+          <button type="button" data-tab="finance"><span>📊</span> Relatórios</button>
+          <button type="button" data-logout><span>🚪</span> Sair</button>
+        </div>
+      </aside>
+    </div>
 
     <script src="./controle.js"></script>
   </body>

@@ -83,12 +83,15 @@ const app = {
   user: null,
 };
 
+let sideTouchStartX = null;
+
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const loginView = $("[data-login-view]");
 const controlView = $("[data-control-view]");
-const bottomNav = $("[data-bottom-nav]");
+const sideShell = $("[data-side-shell]");
+const sideMenu = $("[data-side-menu]");
 const loginForm = $("[data-login-form]");
 const loginStatus = $("[data-login-status]");
 const appStatus = $("[data-app-status]");
@@ -641,7 +644,8 @@ function summaryFor(sales = filteredSales(), expenses = filteredExpenses()) {
 function renderAuth(isAuthenticated) {
   loginView?.classList.toggle("hidden", isAuthenticated);
   controlView?.classList.toggle("hidden", !isAuthenticated);
-  bottomNav?.classList.toggle("hidden", !isAuthenticated);
+  sideShell?.classList.toggle("hidden", !isAuthenticated);
+  if (!isAuthenticated) closeSideMenu();
 }
 
 async function requireAuth() {
@@ -3212,6 +3216,19 @@ function switchTab(tab) {
   $$("[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
 }
 
+function openSideMenu() {
+  if (!sideShell) return;
+  sideShell.classList.remove("hidden");
+  sideShell.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => sideShell.classList.add("open"));
+}
+
+function closeSideMenu() {
+  if (!sideShell) return;
+  sideShell.classList.remove("open");
+  sideShell.setAttribute("aria-hidden", "true");
+}
+
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!supabaseClient) return setLoginStatus("Configure o Supabase da Fumacinha.", "error");
@@ -3247,9 +3264,39 @@ delivererForm?.addEventListener("submit", (event) => {
   addTeamMember("deliverer", event.currentTarget);
 });
 
+sideMenu?.addEventListener(
+  "touchstart",
+  (event) => {
+    sideTouchStartX = event.touches?.[0]?.clientX ?? null;
+  },
+  { passive: true },
+);
+
+sideMenu?.addEventListener(
+  "touchend",
+  (event) => {
+    if (sideTouchStartX === null) return;
+    const endX = event.changedTouches?.[0]?.clientX ?? sideTouchStartX;
+    if (sideTouchStartX - endX > 60) closeSideMenu();
+    sideTouchStartX = null;
+  },
+  { passive: true },
+);
+
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-side-open]")) {
+    openSideMenu();
+    return;
+  }
+  if (event.target.closest("[data-side-close]")) {
+    closeSideMenu();
+    return;
+  }
   const tab = event.target.closest("[data-tab]");
-  if (tab) switchTab(tab.dataset.tab);
+  if (tab) {
+    switchTab(tab.dataset.tab);
+    closeSideMenu();
+  }
   const period = event.target.closest("[data-period]");
   if (period) {
     app.period = period.dataset.period;
