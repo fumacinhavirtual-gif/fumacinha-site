@@ -1170,7 +1170,7 @@ function saleItemTemplate(item = {}) {
       </div>
       <label>Produto <select name="produto_id">${productOptions(firstProduct?.id || "")}</select></label>
       <label>Qtd <input type="number" name="quantidade" min="1" step="1" value="${toNumber(item.quantidade || 1)}" /></label>
-      <label>Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" value="${item.valor_unitario !== undefined ? toNumber(item.valor_unitario).toFixed(2) : ""}" /></label>
+      <label>Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" value="${item.valor_unitario !== undefined ? toNumber(item.valor_unitario).toFixed(2) : ""}" readonly /></label>
       <div class="sale-line-total"><span>Subtotal</span><strong data-item-subtotal>R$ 0,00</strong></div>
       <button class="ghost-action" type="button" data-remove-sale-item>Remover</button>
     </article>
@@ -3369,6 +3369,9 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-add-change]")) changeCashBalance("adicao");
   if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
   if (event.target.closest("[data-reopen-cash]")) reopenCash();
+  if (event.target.closest("[data-view-catalog]")) {
+    window.location.href = "/";
+  }
   if (event.target.closest("[data-edit-site]")) {
     sessionStorage.setItem("fumacinha_open_editor", "1");
     window.location.href = "/?admin=fumacinha";
