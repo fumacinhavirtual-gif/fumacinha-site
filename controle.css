@@ -1286,6 +1286,28 @@ textarea {
   font-weight: 950;
 }
 
+.nav-badge.attention {
+  animation: pendingBadgePulse 1s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.62);
+}
+
+@keyframes pendingBadgePulse {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+    box-shadow: 0 0 0 0 rgba(25, 135, 84, 0.62);
+  }
+
+  35% {
+    transform: translateY(-7px) scale(1.14);
+    box-shadow: 0 0 0 7px rgba(25, 135, 84, 0);
+  }
+
+  60% {
+    transform: translateY(1px) scale(0.98);
+  }
+}
+
 @media (min-width: 760px) {
   .app-shell {
     padding: 22px;

@@ -331,6 +331,7 @@ function updatePendingBadges() {
   if (pendingNavBadge) {
     pendingNavBadge.textContent = String(count);
     pendingNavBadge.classList.toggle("hidden", count <= 0);
+    pendingNavBadge.classList.toggle("attention", count > 0);
   }
 }
 
