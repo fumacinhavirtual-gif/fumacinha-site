@@ -154,6 +154,21 @@ function setLoginStatus(message = "", type = "") {
   loginStatus.className = `form-status ${type}`.trim();
 }
 
+function isConnectionError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return !navigator.onLine || message.includes("failed to fetch") || message.includes("networkerror") || message.includes("network request failed") || message.includes("fetch");
+}
+
+function connectionMessage() {
+  return "Sem internet. Verifique sua conexao e toque em Atualizar para tentar novamente.";
+}
+
+function showConnectionStatus() {
+  const message = connectionMessage();
+  setStatus(message, "error");
+  setLoginStatus(message, "error");
+}
+
 function showToast(message, type = "success", options = {}) {
   let toast = $("[data-control-toast]");
   if (!toast) {
@@ -655,8 +670,19 @@ async function requireAuth() {
     return false;
   }
 
-  const { data, error } = await supabaseClient.auth.getSession();
+  let sessionResult;
+  try {
+    sessionResult = await supabaseClient.auth.getSession();
+  } catch (error) {
+    if (isConnectionError(error)) showConnectionStatus();
+    else setLoginStatus(error?.message || "Nao foi possivel verificar a sessao.", "error");
+    renderAuth(false);
+    return false;
+  }
+
+  const { data, error } = sessionResult;
   if (error || !data.session?.user) {
+    if (isConnectionError(error)) showConnectionStatus();
     renderAuth(false);
     return false;
   }
@@ -762,6 +788,10 @@ function ensureSplitPaymentPanel() {
 
 async function loadAll() {
   if (!(await requireAuth())) return;
+  if (!navigator.onLine) {
+    showConnectionStatus();
+    return;
+  }
   setStatus("Carregando controle...", "loading");
   const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
@@ -781,12 +811,19 @@ async function loadAll() {
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
-  const errors = [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult]
+  const results = [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult];
+  const rejected = results.find((result) => result.status === "rejected");
+  if (rejected) {
+    setStatus(isConnectionError(rejected.reason) ? connectionMessage() : `Erro ao carregar: ${rejected.reason?.message || rejected.reason}`, "error");
+    return;
+  }
+
+  const errors = results
     .filter((result) => result.status === "fulfilled" && result.value.error)
     .map((result) => result.value.error.message);
 
   if (errors.length) {
-    setStatus(`Erro ao carregar: ${errors[0]}`, "error");
+    setStatus(isConnectionError(errors[0]) ? connectionMessage() : `Erro ao carregar: ${errors[0]}`, "error");
     return;
   }
 
@@ -3235,12 +3272,18 @@ function closeSideMenu() {
 loginForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!supabaseClient) return setLoginStatus("Configure o Supabase da Fumacinha.", "error");
+  if (!navigator.onLine) return showConnectionStatus();
   setLoginStatus("Entrando...", "loading");
-  const { error } = await supabaseClient.auth.signInWithPassword({
-    email: loginForm.elements.email.value.trim(),
-    password: loginForm.elements.password.value,
-  });
-  if (error) return setLoginStatus(error.message, "error");
+  let result;
+  try {
+    result = await supabaseClient.auth.signInWithPassword({
+      email: loginForm.elements.email.value.trim(),
+      password: loginForm.elements.password.value,
+    });
+  } catch (error) {
+    return setLoginStatus(isConnectionError(error) ? connectionMessage() : error?.message || "Nao foi possivel entrar.", "error");
+  }
+  if (result.error) return setLoginStatus(isConnectionError(result.error) ? connectionMessage() : result.error.message, "error");
   setLoginStatus("");
   await loadAll();
 });
@@ -3285,6 +3328,12 @@ sideMenu?.addEventListener(
   },
   { passive: true },
 );
+
+window.addEventListener("offline", showConnectionStatus);
+window.addEventListener("online", () => {
+  setStatus("Internet voltou. Toque em Atualizar para carregar os dados.", "success");
+  setLoginStatus("");
+});
 
 document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-side-open]")) {
