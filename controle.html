@@ -44,7 +44,7 @@
           <button class="ghost-action" type="button" data-refresh>Atualizar</button>
         </header>
 
-        <nav class="period-tabs" aria-label="Filtros de periodo">
+        <nav class="period-tabs" data-period-tabs aria-label="Filtros de periodo">
           <button type="button" data-period="today" class="active">Hoje</button>
           <button type="button" data-period="yesterday">Ontem</button>
           <button type="button" data-period="last7">Ultimos 7 dias</button>
@@ -52,7 +52,7 @@
           <button type="button" data-period="custom">Personalizado</button>
         </nav>
 
-        <div class="custom-period hidden" data-custom-period>
+        <div class="custom-period hidden" data-custom-period data-period-custom>
           <label>Inicio <input type="date" data-date-start /></label>
           <label>Fim <input type="date" data-date-end /></label>
         </div>

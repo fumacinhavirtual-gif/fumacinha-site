@@ -943,8 +943,10 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
+  const shouldHidePeriodFilters = ["sales", "stock"].includes(app.activeTab);
+  $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
-  $("[data-custom-period]")?.classList.toggle("hidden", app.period !== "custom");
+  $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
 }
 
 function renderPeopleOptions() {
@@ -3214,6 +3216,7 @@ function switchTab(tab) {
   app.activeTab = tab;
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
   $$("[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
+  renderPeriods();
 }
 
 function openSideMenu() {
