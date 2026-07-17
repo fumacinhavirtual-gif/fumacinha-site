@@ -3369,6 +3369,9 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-add-change]")) changeCashBalance("adicao");
   if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
   if (event.target.closest("[data-reopen-cash]")) reopenCash();
+  if (event.target.closest("[data-edit-site]")) {
+    window.location.href = "./?admin=fumacinha";
+  }
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();
     renderAuth(false);
