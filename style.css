@@ -23,6 +23,8 @@ html {
   overflow-x: hidden;
   overflow-y: hidden;
   overscroll-behavior-y: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
   background: var(--black);
 }
 
@@ -71,6 +73,15 @@ a {
 button,
 a {
   font: inherit;
+}
+
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px !important;
+  }
 }
 
 main {

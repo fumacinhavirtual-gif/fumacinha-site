@@ -11,11 +11,25 @@
   box-sizing: border-box;
 }
 
+html {
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   background: var(--soft);
   color: var(--black);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px !important;
+  }
 }
 
 .admin-header {
