@@ -525,7 +525,7 @@ function saleProductsValue(sale) {
 }
 
 function saleGrandTotal(sale) {
-  return toNumber(sale.total_venda || sale.valor_recebido || saleTotal(sale) + saleDelivery(sale));
+  return toNumber(sale.total_venda || sale.valor_recebido || saleTotal(sale) + saleDelivery(sale) + saleCardServiceFee(sale));
 }
 
 function saleDeliveredValue(sale) {
@@ -541,7 +541,14 @@ function saleReceived(sale) {
 }
 
 function saleDelivery(sale) {
-  return toNumber(sale.taxa_entrega || 0);
+  const storedDelivery = toNumber(sale.taxa_entrega || 0);
+  const cardServiceFee = saleCardServiceFee(sale);
+  const explicitPaidValue = toNumber(sale.valor_pago_cliente || sale.valor_entregue || 0);
+  if (cardServiceFee > 0 && explicitPaidValue > 0) {
+    const correctedDelivery = explicitPaidValue - saleProductsValue(sale) - saleChangeValue(sale) - cardServiceFee;
+    if (correctedDelivery >= -0.01) return Math.max(0, correctedDelivery);
+  }
+  return storedDelivery;
 }
 
 function saleCommission(sale) {
@@ -579,6 +586,22 @@ function commissionForPayment(payment) {
   };
 }
 
+function cardServiceFeeForPayment(payment, splitPayments = []) {
+  const hasCard = splitPayments.length
+    ? splitPayments.some((row) => isCardPayment(row.forma))
+    : isCardPayment(payment);
+  return hasCard ? COMMISSION_CARD_EXTRA : 0;
+}
+
+function saleCardServiceFee(sale) {
+  const breakdown = salePaymentBreakdown(sale);
+  const hasCard = breakdown.length
+    ? breakdown.some((payment) => isCardPayment(payment.forma))
+    : isCardPayment(sale.forma_pagamento);
+  if (!hasCard) return 0;
+  return toNumber(sale.comissao_cartao || COMMISSION_CARD_EXTRA);
+}
+
 function productImage(product) {
   return product?.imagem || "./assets/fumacinha-logo.png";
 }
@@ -593,9 +616,10 @@ function summaryFor(sales = filteredSales(), expenses = filteredExpenses()) {
   const received = sales.reduce((sum, sale) => sum + saleReceived(sale), 0);
   const delivery = sales.reduce((sum, sale) => sum + saleDelivery(sale), 0);
   const commission = sales.reduce((sum, sale) => sum + saleCommission(sale), 0);
+  const cardServiceFees = sales.reduce((sum, sale) => sum + saleCardServiceFee(sale), 0);
   const cost = sales.reduce((sum, sale) => sum + saleCost(sale), 0);
   const expenseTotal = expenses.reduce((sum, expense) => sum + toNumber(expense.valor), 0);
-  const gross = revenue - cost;
+  const gross = revenue + cardServiceFees - cost;
   const net = gross - expenseTotal - commission;
   const quantity = sales.reduce((sum, sale) => sum + toNumber(sale.quantidade || sale.quantidade_total), 0);
   return {
@@ -603,6 +627,7 @@ function summaryFor(sales = filteredSales(), expenses = filteredExpenses()) {
     received,
     delivery,
     commission,
+    cardServiceFees,
     cost,
     expenses: expenseTotal,
     gross,
@@ -1202,18 +1227,19 @@ function currentSaleDraft() {
   const split = saleForm?.elements.pagamento_dividido?.checked || false;
   const splitPayments = split ? splitPaymentsFromForm() : [];
   const paymentLabel = split && splitPayments.length ? paymentBreakdownLabel(splitPayments) : payment;
+  const cardServiceFee = cardServiceFeeForPayment(payment, splitPayments);
   const cash = split ? splitPayments.some((row) => isCashPayment(row.forma)) : isCashPayment(payment);
   const hasChange = saleForm?.elements.teve_troco?.value === "sim";
   const paidInput = saleForm?.elements.valor_recebido;
   const changeInput = saleForm?.elements.troco;
   const deliveryInput = saleForm?.elements.taxa_entrega;
   if (paidInput && !split && !app.saleReceivedTouched && productsValue > 0) {
-    paidInput.value = productsValue.toFixed(2).replace(".", ",");
+    paidInput.value = (productsValue + cardServiceFee).toFixed(2).replace(".", ",");
   }
   const paidValue = split ? splitPayments.reduce((sum, row) => sum + row.valor, 0) : parseMoney(paidInput?.value);
   const changeValue = cash && hasChange ? parseMoney(changeInput?.value) : 0;
-  const deliveryValue = paidValue - productsValue - changeValue;
-  const totalSale = productsValue + Math.max(0, deliveryValue);
+  const deliveryValue = paidValue - productsValue - changeValue - cardServiceFee;
+  const totalSale = productsValue + Math.max(0, deliveryValue) + cardServiceFee;
   return {
     productsValue,
     payment,
@@ -1224,6 +1250,7 @@ function currentSaleDraft() {
     hasChange,
     paidValue,
     changeValue,
+    cardServiceFee,
     deliveryValue,
     totalSale,
     routeDate: saleForm?.elements.data_entrega?.value || localDateValue(),
@@ -1256,7 +1283,8 @@ function updateSaleTotal() {
   const commission = draft.split
     ? { total: COMMISSION_BASE + (draft.splitPayments.some((payment) => isCardPayment(payment.forma)) ? COMMISSION_CARD_EXTRA : 0) }
     : commissionForPayment(draft.payment);
-  const receivedInvalid = app.saleReceivedTouched && draft.paidValue < draft.productsValue;
+  const minimumPaidValue = draft.productsValue + draft.cardServiceFee;
+  const receivedInvalid = app.saleReceivedTouched && draft.paidValue < minimumPaidValue;
   const changeInvalid = draft.cash && draft.hasChange && (!String(changeInput?.value || "").trim() || draft.changeValue < 0);
   const deliveryInvalid = draft.deliveryValue < 0;
 
@@ -1272,7 +1300,9 @@ function updateSaleTotal() {
   $$("[data-sale-change-field]").forEach((element) => element.classList.toggle("hidden", !draft.cash || !draft.hasChange));
   if (saleWarning) {
     saleWarning.textContent = receivedInvalid
-      ? "Valor pago menor que o valor dos produtos."
+      ? draft.cardServiceFee > 0
+        ? "Valor pago menor que produtos + R$ 1,00 da taxa do cartao."
+        : "Valor pago menor que o valor dos produtos."
       : changeInvalid
         ? "Informe o valor do troco entregue."
         : deliveryInvalid
@@ -1361,12 +1391,14 @@ function buildSalePayload(items, seller, deliverer) {
   const productsValue = Math.max(0, subtotal - discount);
   if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
   if (draft.split && draft.splitPayments.length < 2) throw new Error("Informe as duas formas de pagamento dividido.");
-  if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
+  if (draft.paidValue < draft.productsValue + draft.cardServiceFee) {
+    throw new Error(draft.cardServiceFee > 0 ? "Valor pago menor que produtos + R$ 1,00 da taxa do cartao." : "Valor pago menor que o valor dos produtos.");
+  }
   if (draft.cash && draft.hasChange && !String(saleForm.elements.troco.value || "").trim()) throw new Error("Informe o valor do troco entregue.");
   if (draft.cash && draft.changeValue < 0) throw new Error("Troco nao pode ser negativo.");
   if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
   const deliveryValue = Math.max(0, draft.deliveryValue);
-  const totalSale = draft.productsValue + deliveryValue;
+  const totalSale = draft.productsValue + deliveryValue + draft.cardServiceFee;
   const paymentLabel = draft.paymentLabel || draft.payment;
   const deliveredValue = draft.paidValue;
   const changeValue = draft.cash && draft.hasChange ? draft.changeValue : 0;
@@ -2049,7 +2081,9 @@ async function saveOrderEdit(event) {
     const usuarioId = await requireUserId();
     const items = collectSaleItems({ allowEditing: true });
     const draft = currentSaleDraft();
-    if (draft.paidValue < draft.productsValue) throw new Error("Valor pago menor que o valor dos produtos.");
+    if (draft.paidValue < draft.productsValue + draft.cardServiceFee) {
+      throw new Error(draft.cardServiceFee > 0 ? "Valor pago menor que produtos + R$ 1,00 da taxa do cartao." : "Valor pago menor que o valor dos produtos.");
+    }
     if (draft.deliveryValue < 0) throw new Error("A taxa de entrega ficou negativa.");
     if (draft.split && draft.splitPayments.length < 2) throw new Error("Informe as duas formas de pagamento dividido.");
     const previous = {
