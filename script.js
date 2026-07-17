@@ -2118,6 +2118,16 @@ function disableEditMode() {
   supabaseClient?.auth.signOut();
 }
 
+function returnToControlPanel() {
+  closeAdminMobileMenu();
+  closeEditorModal(productEditor);
+  closeEditorModal(categoryEditor);
+  closeEditorModal(bannerEditor);
+  closeEditorModal(benefitEditor);
+  closeEditorModal(siteEditor);
+  window.location.href = "/controle";
+}
+
 function openSalesLogin() {
   salesLogin?.classList.remove("hidden");
   salesLogin?.setAttribute("aria-hidden", "false");
@@ -3247,6 +3257,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-delete-product]")) deleteCurrentProduct();
   if (event.target.closest("[data-remove-product-image]")) clearSelectedProductImage();
   if (event.target.closest("[data-remove-site-logo]")) clearSelectedSiteLogo();
+  if (event.target.closest("[data-return-control]")) returnToControlPanel();
   if (event.target.closest("[data-edit-logout]")) disableEditMode();
   if (event.target.closest("[data-close-sales-login]")) closeSalesLogin();
   if (event.target === salesLogin) closeSalesLogin();
