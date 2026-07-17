@@ -1596,7 +1596,7 @@ async function registerSale(event) {
     await loadAll();
     resetSaleForm();
     if (confirmingOrderId) {
-      switchTab("sales");
+      switchTab("history");
       renderSalesHistory();
       salesHistory?.closest(".panel-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }

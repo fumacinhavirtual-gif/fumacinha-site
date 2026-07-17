@@ -211,15 +211,6 @@
             </div>
           </form>
 
-          <section class="panel-card">
-            <div class="section-head">
-              <div>
-                <p class="eyebrow">Historico</p>
-                <h2>Vendas registradas</h2>
-              </div>
-            </div>
-            <div data-sales-history></div>
-          </section>
         </section>
 
         <section class="tab-panel hidden" data-panel="orders">
@@ -252,6 +243,19 @@
             <div data-pending-orders></div>
           </section>
         </section>
+
+        <section class="tab-panel hidden" data-panel="history">
+          <section class="panel-card">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Historico</p>
+                <h2>Historico de vendas</h2>
+              </div>
+            </div>
+            <div data-sales-history></div>
+          </section>
+        </section>
+
         <section class="tab-panel hidden" data-panel="stock">
           <div class="section-head">
             <div>
@@ -577,6 +581,7 @@
           <button type="button" data-tab="home" class="active"><span>🏠</span> Início</button>
           <button type="button" data-tab="sales"><span>🛒</span> Vender</button>
           <button type="button" data-tab="orders"><span>📦</span> Pedidos <span class="nav-badge hidden" data-pending-nav-badge>0</span></button>
+          <button type="button" data-tab="history"><span>🕘</span> Historico</button>
           <button type="button" data-tab="stock"><span>📦</span> Estoque</button>
           <button type="button" data-tab="finance"><span>💰</span> Financeiro</button>
           <button type="button" data-tab="cash"><span>🧾</span> Caixa</button>
