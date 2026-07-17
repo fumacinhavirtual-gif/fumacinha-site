@@ -674,6 +674,63 @@ async function ensureDukeAvailability(products) {
   return products.map((product) => updatedProducts.get(String(product.id)) || product);
 }
 
+function splitPaymentPanelMarkup() {
+  return `
+    <div>
+      <strong>Pagamento dividido - marque aqui</strong>
+      <span>Use quando o cliente pagar em duas formas, exemplo: R$ 100 no Pix e R$ 20 no Debito ou Dinheiro.</span>
+    </div>
+    <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /> Ativar pagamento dividido</label>
+    <div class="split-payment-grid hidden" data-split-payment-fields>
+      <label>
+        Forma 1
+        <select name="pagamento_1_forma">
+          <option value="Pix">Pix</option>
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="Debito">Debito</option>
+          <option value="Credito">Credito</option>
+          <option value="Outros">Outros</option>
+        </select>
+      </label>
+      <label>Valor 1 <input type="text" name="pagamento_1_valor" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+      <label>
+        Forma 2
+        <select name="pagamento_2_forma">
+          <option value="Pix">Pix</option>
+          <option value="Dinheiro">Dinheiro</option>
+          <option value="Debito">Debito</option>
+          <option value="Credito">Credito</option>
+          <option value="Outros">Outros</option>
+        </select>
+      </label>
+      <label>Valor 2 <input type="text" name="pagamento_2_valor" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+    </div>
+  `;
+}
+
+function ensureSplitPaymentPanel() {
+  if (!saleForm) return null;
+  const paymentSelect = saleForm.elements.forma_pagamento;
+  const paymentLabel = paymentSelect?.closest("label");
+  if (!paymentLabel) return null;
+
+  let panel = saleForm.querySelector("[data-split-payment-panel]");
+  if (!panel) {
+    panel = document.createElement("section");
+    panel.className = "split-payment-panel";
+    panel.dataset.splitPaymentPanel = "";
+    panel.dataset.testid = "split-payment-panel";
+    panel.setAttribute("aria-label", "Pagamento dividido");
+    panel.innerHTML = splitPaymentPanelMarkup();
+  }
+
+  panel.hidden = false;
+  panel.classList.remove("hidden");
+  panel.removeAttribute("aria-hidden");
+  if (paymentLabel.nextElementSibling !== panel) paymentLabel.insertAdjacentElement("afterend", panel);
+  return panel;
+}
+
 async function loadAll() {
   if (!(await requireAuth())) return;
   setStatus("Carregando controle...", "loading");
@@ -3360,6 +3417,7 @@ document.addEventListener("change", (event) => {
 });
 
 function initDefaults() {
+  ensureSplitPaymentPanel();
   app.cashDate = localDateValue();
   app.routesDate = localDateValue();
   if (cashDateInput) cashDateInput.value = app.cashDate;
