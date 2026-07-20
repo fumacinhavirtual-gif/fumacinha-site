@@ -1960,12 +1960,50 @@ function renderSalesHistory() {
     ...sales.map((sale) => ({ type: "sale", date: saleDate(sale), sale })),
     ...confirmedSiteOrders.map((order) => ({ type: "order", date: orderHistoryDate(order), order })),
   ].sort((a, b) => b.date - a.date);
-  salesHistory.innerHTML = rows.length
-    ? rows.slice(0, 40).map((row) => {
-      if (row.type === "order") {
-        const order = row.order;
-        const products = orderHistoryProducts(order);
-        return `
+  const limitedRows = rows.slice(0, 40);
+  const groups = limitedRows.reduce((acc, row) => {
+    const key = localDateValue(row.date);
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key).push(row);
+    return acc;
+  }, new Map());
+
+  salesHistory.innerHTML = limitedRows.length
+    ? [...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("")
+    : "<p>Nenhuma venda confirmada para este filtro.</p>";
+}
+
+function renderSalesHistoryDay(dateKey, rows) {
+  const activeRows = rows.filter((row) => !isHistoryRowCancelled(row));
+  const revenue = activeRows.reduce((sum, row) => sum + historyRowRevenue(row), 0);
+  const salesCount = activeRows.length;
+  const ticket = salesCount ? revenue / salesCount : 0;
+  const title = historyDateTitle(dateKey);
+  return `
+    <section class="history-day-group">
+      <header class="history-day-header">
+        <div>
+          <p>Data</p>
+          <h3>${escapeHtml(title)}</h3>
+        </div>
+        <div class="history-day-summary">
+          <strong>${salesCount} ${salesCount === 1 ? "venda" : "vendas"}</strong>
+          <span>${currency.format(revenue)} faturados</span>
+          <span>Ticket medio ${currency.format(ticket)}</span>
+        </div>
+      </header>
+      <div class="history-day-list">
+        ${rows.map(renderSalesHistoryRow).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderSalesHistoryRow(row) {
+  if (row.type === "order") {
+    const order = row.order;
+    const products = orderHistoryProducts(order);
+    return `
       <article class="history-row site-order-history">
         <strong>${escapeHtml(products.title)}</strong>
         <span class="status-badge">Pedido feito no site</span>
@@ -1979,12 +2017,12 @@ function renderSalesHistory() {
         </div>
       </article>
     `;
-      }
+  }
 
-      const sale = row.sale;
-      const products = saleHistoryProducts(sale);
-      const linkedOrder = saleLinkedOrder(sale);
-      return `
+  const sale = row.sale;
+  const products = saleHistoryProducts(sale);
+  const linkedOrder = saleLinkedOrder(sale);
+  return `
       <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
         <strong>${escapeHtml(products.title)}</strong>
         ${linkedOrder ? `<span class="status-badge">Pedido feito no site${linkedOrder.codigo ? ` - ${escapeHtml(linkedOrder.codigo)}` : ""}</span>` : ""}
@@ -2001,8 +2039,26 @@ function renderSalesHistory() {
         </div>
       </article>
     `;
-    }).join("")
-    : "<p>Nenhuma venda confirmada para este filtro.</p>";
+}
+
+function historyDateTitle(dateKey) {
+  const date = new Date(`${dateKey}T12:00:00`);
+  const title = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+  return title.charAt(0).toUpperCase() + title.slice(1);
+}
+
+function isHistoryRowCancelled(row) {
+  return row.type === "sale" ? Boolean(row.sale.cancelada) : normalizeOrderStatus(row.order.status) === "cancelado";
+}
+
+function historyRowRevenue(row) {
+  if (isHistoryRowCancelled(row)) return 0;
+  return row.type === "sale" ? saleTotal(row.sale) : toNumber(row.order.valor_produtos);
 }
 
 function viewSaleDetails(saleId) {
