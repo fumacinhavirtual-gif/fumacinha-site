@@ -72,7 +72,7 @@ const app = {
   delivererSearch: "",
   clientSearch: "",
   period: "today",
-  historyPeriod: "all",
+  historyPeriod: "last7",
   activeTab: "home",
   stockSearch: "",
   stockCategory: "all",
@@ -1980,16 +1980,46 @@ function renderSalesHistory() {
     acc.get(key).push(row);
     return acc;
   }, new Map());
+  const summary = renderSalesHistoryPeriodSummary(filteredRows);
 
   salesHistory.innerHTML = filteredRows.length
-    ? [...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("")
+    ? `${summary}${[...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("")}`
     : "<p>Nenhuma venda confirmada neste periodo.</p>";
 }
 
 function filterHistoryRowsByPeriod(rows) {
-  if (app.historyPeriod === "all") return rows;
   const { start, end } = periodRange(app.historyPeriod);
   return rows.filter((row) => row.date >= start && row.date <= end);
+}
+
+function historyPeriodLabel() {
+  const labels = {
+    last7: "Ultimos 7 dias",
+    month: "Mes atual",
+    lastMonth: "Mes passado",
+    year: "Ano atual",
+  };
+  return labels[app.historyPeriod] || "Ultimos 7 dias";
+}
+
+function renderSalesHistoryPeriodSummary(rows) {
+  const activeRows = rows.filter((row) => !isHistoryRowCancelled(row));
+  const salesCount = activeRows.length;
+  const revenue = activeRows.reduce((sum, row) => sum + historyRowRevenue(row), 0);
+  const ticket = salesCount ? revenue / salesCount : 0;
+  return `
+    <section class="history-period-summary">
+      <div>
+        <p>Resumo do periodo</p>
+        <h3>${escapeHtml(historyPeriodLabel())}</h3>
+      </div>
+      <div class="history-day-summary">
+        <strong>${salesCount} ${salesCount === 1 ? "venda" : "vendas"}</strong>
+        <span>${currency.format(revenue)} faturados</span>
+        <span>Ticket medio ${currency.format(ticket)}</span>
+      </div>
+    </section>
+  `;
 }
 
 function renderSalesHistoryDay(dateKey, rows) {
@@ -3560,7 +3590,7 @@ document.addEventListener("change", (event) => {
     renderAll();
   }
   if (event.target.matches("[data-history-period]")) {
-    app.historyPeriod = event.target.value || "all";
+    app.historyPeriod = event.target.value || "last7";
     renderSalesHistory();
   }
 });
