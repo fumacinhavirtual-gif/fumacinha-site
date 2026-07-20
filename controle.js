@@ -2843,12 +2843,7 @@ function updateStockSaveState(productId) {
 
 function renderFinance() {
   const summary = summaryFor();
-  const orders = filteredOrders();
-  const pending = orders.filter((order) => normalizeOrderStatus(order.status) === "aguardando confirmacao");
-  $("[data-finance-orders-received]").textContent = String(orders.length);
-  $("[data-finance-orders-pending]").textContent = String(pending.length);
   $("[data-finance-sales-confirmed]").textContent = String(filteredSales().length);
-  $("[data-finance-pending-potential]").textContent = currency.format(pending.reduce((sum, order) => sum + toNumber(order.valor_produtos), 0));
   $("[data-finance-revenue]").textContent = currency.format(summary.revenue);
   $("[data-finance-received]").textContent = currency.format(summary.received);
   $("[data-finance-delivery]").textContent = currency.format(summary.delivery);
