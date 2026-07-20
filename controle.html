@@ -53,6 +53,16 @@
         </nav>
 
         <div class="custom-period hidden" data-custom-period data-period-custom>
+          <label>
+            Periodo rapido
+            <select data-period-preset>
+              <option value="custom">Datas manuais</option>
+              <option value="last7">Ultimos 7 dias</option>
+              <option value="month">Mes atual</option>
+              <option value="lastMonth">Mes passado</option>
+              <option value="year">Ano atual</option>
+            </select>
+          </label>
           <label>Inicio <input type="date" data-date-start /></label>
           <label>Fim <input type="date" data-date-end /></label>
         </div>

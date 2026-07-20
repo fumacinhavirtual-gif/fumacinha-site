@@ -276,6 +276,14 @@ function periodRange() {
   if (app.period === "month") {
     return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfDay(now) };
   }
+  if (app.period === "lastMonth") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return { start: startOfDay(start), end: endOfDay(end) };
+  }
+  if (app.period === "year") {
+    return { start: new Date(now.getFullYear(), 0, 1), end: endOfDay(now) };
+  }
   if (app.period === "custom") {
     const startInput = $("[data-date-start]")?.value;
     const endInput = $("[data-date-end]")?.value;
@@ -981,10 +989,12 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["sales", "stock"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["sales", "stock", "history"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
+  const preset = $("[data-period-preset]");
+  if (preset) preset.value = ["last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "custom";
 }
 
 function renderPeopleOptions() {
@@ -1951,26 +1961,25 @@ function renderPendingOrders() {
 
 function renderSalesHistory() {
   if (!salesHistory) return;
-  const sales = app.sales.filter(saleMatchesPeriod);
+  const sales = app.sales;
   const saleIds = new Set(sales.map((sale) => String(sale.id)));
   const confirmedSiteOrders = app.orders
-    .filter((order) => isConfirmedOrder(order) && orderMatchesPeriod(order))
+    .filter((order) => isConfirmedOrder(order))
     .filter((order) => !order.venda_id || !saleIds.has(String(order.venda_id)));
   const rows = [
     ...sales.map((sale) => ({ type: "sale", date: saleDate(sale), sale })),
     ...confirmedSiteOrders.map((order) => ({ type: "order", date: orderHistoryDate(order), order })),
   ].sort((a, b) => b.date - a.date);
-  const limitedRows = rows.slice(0, 40);
-  const groups = limitedRows.reduce((acc, row) => {
+  const groups = rows.reduce((acc, row) => {
     const key = localDateValue(row.date);
     if (!acc.has(key)) acc.set(key, []);
     acc.get(key).push(row);
     return acc;
   }, new Map());
 
-  salesHistory.innerHTML = limitedRows.length
+  salesHistory.innerHTML = rows.length
     ? [...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("")
-    : "<p>Nenhuma venda confirmada para este filtro.</p>";
+    : "<p>Nenhuma venda confirmada no historico.</p>";
 }
 
 function renderSalesHistoryDay(dateKey, rows) {
@@ -3532,6 +3541,13 @@ document.addEventListener("input", (event) => {
   if (event.target.closest("[data-cash-form]")) {
     app.cashEditing = true;
     updateCashPreview();
+  }
+});
+
+document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-period-preset]")) {
+    app.period = event.target.value === "custom" ? "custom" : event.target.value;
+    renderAll();
   }
 });
 
