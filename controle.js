@@ -72,6 +72,7 @@ const app = {
   delivererSearch: "",
   clientSearch: "",
   period: "today",
+  historyPeriod: "all",
   activeTab: "home",
   stockSearch: "",
   stockCategory: "all",
@@ -109,6 +110,7 @@ const stockProductImagePreview = $("[data-stock-product-image-preview]");
 const stockProductImagePreviewImg = $("[data-stock-product-image-preview-img]");
 const stockProductImageEmpty = $("[data-stock-product-image-empty]");
 const salesHistory = $("[data-sales-history]");
+const historyPeriodSelect = $("[data-history-period]");
 const pendingOrdersRoot = $("[data-pending-orders]");
 const salesStatusFilter = $("[data-sales-status-filter]");
 const orderSearchInput = $("[data-order-search]");
@@ -261,30 +263,30 @@ function endOfDay(date) {
   return next;
 }
 
-function periodRange() {
+function periodRange(period = app.period) {
   const now = new Date();
-  if (app.period === "yesterday") {
+  if (period === "yesterday") {
     const day = new Date(now);
     day.setDate(day.getDate() - 1);
     return { start: startOfDay(day), end: endOfDay(day) };
   }
-  if (app.period === "last7") {
+  if (period === "last7") {
     const start = new Date(now);
     start.setDate(start.getDate() - 6);
     return { start: startOfDay(start), end: endOfDay(now) };
   }
-  if (app.period === "month") {
+  if (period === "month") {
     return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfDay(now) };
   }
-  if (app.period === "lastMonth") {
+  if (period === "lastMonth") {
     const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const end = new Date(now.getFullYear(), now.getMonth(), 0);
     return { start: startOfDay(start), end: endOfDay(end) };
   }
-  if (app.period === "year") {
+  if (period === "year") {
     return { start: new Date(now.getFullYear(), 0, 1), end: endOfDay(now) };
   }
-  if (app.period === "custom") {
+  if (period === "custom") {
     const startInput = $("[data-date-start]")?.value;
     const endInput = $("[data-date-end]")?.value;
     const start = startInput ? startOfDay(new Date(`${startInput}T00:00:00`)) : startOfDay(now);
@@ -1961,6 +1963,7 @@ function renderPendingOrders() {
 
 function renderSalesHistory() {
   if (!salesHistory) return;
+  if (historyPeriodSelect) historyPeriodSelect.value = app.historyPeriod;
   const sales = app.sales;
   const saleIds = new Set(sales.map((sale) => String(sale.id)));
   const confirmedSiteOrders = app.orders
@@ -1970,16 +1973,23 @@ function renderSalesHistory() {
     ...sales.map((sale) => ({ type: "sale", date: saleDate(sale), sale })),
     ...confirmedSiteOrders.map((order) => ({ type: "order", date: orderHistoryDate(order), order })),
   ].sort((a, b) => b.date - a.date);
-  const groups = rows.reduce((acc, row) => {
+  const filteredRows = filterHistoryRowsByPeriod(rows);
+  const groups = filteredRows.reduce((acc, row) => {
     const key = localDateValue(row.date);
     if (!acc.has(key)) acc.set(key, []);
     acc.get(key).push(row);
     return acc;
   }, new Map());
 
-  salesHistory.innerHTML = rows.length
+  salesHistory.innerHTML = filteredRows.length
     ? [...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("")
-    : "<p>Nenhuma venda confirmada no historico.</p>";
+    : "<p>Nenhuma venda confirmada neste periodo.</p>";
+}
+
+function filterHistoryRowsByPeriod(rows) {
+  if (app.historyPeriod === "all") return rows;
+  const { start, end } = periodRange(app.historyPeriod);
+  return rows.filter((row) => row.date >= start && row.date <= end);
 }
 
 function renderSalesHistoryDay(dateKey, rows) {
@@ -3548,6 +3558,10 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-period-preset]")) {
     app.period = event.target.value === "custom" ? "custom" : event.target.value;
     renderAll();
+  }
+  if (event.target.matches("[data-history-period]")) {
+    app.historyPeriod = event.target.value || "all";
+    renderSalesHistory();
   }
 });
 
