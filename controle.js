@@ -1081,6 +1081,107 @@ function renderDashboard() {
   renderRevenueReport(selected);
 }
 
+function operationalAlerts({ pending, lowStock, outStock, missingImages, inactiveProducts }) {
+  const alerts = [];
+  if (outStock.length) alerts.push(`${outStock.length} ${outStock.length === 1 ? "produto sem estoque" : "produtos sem estoque"}`);
+  if (lowStock.length) alerts.push(`${lowStock.length} ${lowStock.length === 1 ? "produto com estoque baixo" : "produtos com estoque baixo"}`);
+  if (pending.length) alerts.push(`${pending.length} ${pending.length === 1 ? "pedido aguardando confirmacao" : "pedidos aguardando confirmacao"}`);
+  if (missingImages.length) alerts.push(`${missingImages.length} ${missingImages.length === 1 ? "produto cadastrado sem imagem" : "produtos cadastrados sem imagem"}`);
+  if (inactiveProducts.length) alerts.push(`${inactiveProducts.length} ${inactiveProducts.length === 1 ? "produto inativo" : "produtos inativos"}`);
+  return alerts;
+}
+
+function renderDashboard() {
+  const selected = filteredSales();
+  const confirmedSiteOrders = confirmedSiteOrdersInPeriod();
+  const manualSales = manualSalesInPeriod(selected, confirmedSiteOrders);
+  const totalSales = manualSales.length + confirmedSiteOrders.length;
+  const { start, end } = periodRange();
+  const pending = pendingOrders();
+  const cancelled = app.orders.filter((order) => {
+    const status = normalizeOrderStatus(order.status);
+    const date = new Date(order.cancelado_em || order.updated_at || order.created_at || Date.now());
+    return status === "cancelado" && date >= start && date <= end;
+  });
+  const lowStock = app.products.filter((product) => {
+    const stock = toNumber(product.estoque);
+    return stock >= 1 && stock <= 5;
+  });
+  const outStock = app.products.filter((product) => toNumber(product.estoque) === 0);
+  const missingImages = app.products.filter((product) => !String(product.imagem || "").trim());
+  const inactiveProducts = app.products.filter((product) => product.ativo === false);
+  const alerts = operationalAlerts({ pending, lowStock, outStock, missingImages, inactiveProducts });
+
+  $("[data-kpi-pending-orders]").textContent = String(pending.length);
+  $("[data-kpi-total-sales]").textContent = String(totalSales);
+  $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais | ${confirmedSiteOrders.length} site`;
+  $("[data-kpi-confirmed-orders]").textContent = String(confirmedSiteOrders.length);
+  $("[data-kpi-cancelled-orders]").textContent = String(cancelled.length);
+  $("[data-kpi-low-stock]").textContent = String(lowStock.length);
+  $("[data-kpi-out-stock]").textContent = String(outStock.length);
+  renderOperationalAlerts(alerts);
+  renderTopProductsRanking(dashboardRankedProducts(manualSales, confirmedSiteOrders).slice(0, 5));
+}
+
+function dashboardRankedProducts(manualSales, confirmedOrders) {
+  const rank = new Map();
+  const addRow = (key, label, quantity, total) => {
+    const current = rank.get(key) || { label: label || "Produto", quantity: 0, total: 0 };
+    current.quantity += toNumber(quantity);
+    current.total += toNumber(total);
+    rank.set(key, current);
+  };
+
+  app.saleItems
+    .filter((item) => manualSales.some((sale) => String(sale.id) === String(item.venda_id)))
+    .forEach((item) => {
+      const key = item.nome_produto || item.produto_id;
+      addRow(key, item.nome_produto || "Produto", item.quantidade, item.valor_total);
+    });
+
+  const confirmedOrderIds = new Set(confirmedOrders.map((order) => String(order.id)));
+  app.orderItems
+    .filter((item) => confirmedOrderIds.has(String(item.pedido_id)))
+    .forEach((item) => {
+      const key = item.produto_nome || item.produto_id;
+      addRow(key, item.produto_nome || "Produto", item.quantidade, item.subtotal || item.valor_total);
+    });
+
+  return [...rank.values()].sort((a, b) => b.quantity - a.quantity);
+}
+
+function renderOperationalAlerts(alerts) {
+  const root = $("[data-operational-alerts]");
+  if (!root) return;
+  root.innerHTML = alerts.length
+    ? `<ul class="operational-alert-list">${alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>`
+    : `<p class="operational-alert-empty">Nenhum alerta importante agora.</p>`;
+}
+
+function renderTopProductsRanking(rows) {
+  const root = $("[data-report-top-products]");
+  if (!root) return;
+  if (!rows.length) {
+    root.innerHTML = "<p>Nenhuma venda no periodo.</p>";
+    return;
+  }
+  const maxQuantity = Math.max(...rows.map((row) => toNumber(row.quantity)), 1);
+  root.innerHTML = rows.map((row, index) => {
+    const quantity = toNumber(row.quantity);
+    const percent = Math.max(8, Math.round((quantity / maxQuantity) * 100));
+    return `
+      <article class="top-product-row">
+        <div class="top-product-position">${index + 1}º</div>
+        <div class="top-product-info">
+          <strong>${escapeHtml(row.label)}</strong>
+          <span>${quantity} ${quantity === 1 ? "unidade" : "unidades"} | ${currency.format(row.total)}</span>
+          <div class="top-product-bar"><span style="width: ${percent}%"></span></div>
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
 function rankedProducts(sales = filteredSales()) {
   const rank = new Map();
   app.saleItems

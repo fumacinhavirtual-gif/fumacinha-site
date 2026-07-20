@@ -70,27 +70,20 @@
         <p class="app-status" data-app-status></p>
 
         <section class="tab-panel" data-panel="home">
-          <div class="kpi-grid">
-            <article class="kpi-clickable" data-open-orders><span>Pedidos pendentes</span><strong data-kpi-pending-orders>0</strong></article>
+          <div class="kpi-grid home-kpi-grid">
+            <article class="kpi-clickable" data-open-orders><span>📦 Pedidos pendentes</span><strong data-kpi-pending-orders>0</strong></article>
             <article><span>Total de vendas</span><strong data-kpi-total-sales>0</strong><small data-kpi-total-sales-breakdown>0 manuais • 0 site</small></article>
-            <article><span>Faturamento produtos</span><strong data-kpi-revenue-today>R$ 0,00</strong></article>
+            <article><span>📋 Pedidos confirmados</span><strong data-kpi-confirmed-orders>0</strong></article>
             <article><span>Pedidos cancelados</span><strong data-kpi-cancelled-orders>0</strong></article>
-            <article><span>Ticket medio</span><strong data-kpi-ticket>R$ 0,00</strong></article>
-            <article><span>Valor recebido</span><strong data-kpi-received>R$ 0,00</strong></article>
-            <article><span>Taxas de entrega</span><strong data-kpi-delivery>R$ 0,00</strong></article>
-            <article><span>Comissao vendedoras</span><strong data-kpi-commission>R$ 0,00</strong></article>
-            <article><span>Lucro liquido loja</span><strong data-kpi-profit>R$ 0,00</strong></article>
-            <article><span>Estoque baixo</span><strong data-kpi-low-stock>0</strong></article>
+            <article><span>📉 Estoque baixo</span><strong data-kpi-low-stock>0</strong></article>
+            <article><span>⚠️ Produtos sem estoque</span><strong data-kpi-out-stock>0</strong></article>
+            <article class="kpi-wide"><span>🔔 Alertas importantes</span><div data-operational-alerts></div></article>
           </div>
 
-          <div class="report-grid">
-            <section>
-              <h2>Produtos mais vendidos</h2>
+          <div class="report-grid home-report-grid">
+            <section class="home-ranking-section">
+              <h2>🔥 Produtos mais vendidos</h2>
               <div data-report-top-products></div>
-            </section>
-            <section>
-              <h2>Faturamento</h2>
-              <div data-report-revenue></div>
             </section>
           </div>
         </section>
