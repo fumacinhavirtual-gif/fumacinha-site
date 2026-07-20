@@ -1029,20 +1029,35 @@ function todaySales() {
   });
 }
 
+function confirmedSiteOrdersInPeriod() {
+  const { start, end } = periodRange();
+  return app.orders.filter((order) => {
+    if (!isConfirmedOrder(order)) return false;
+    const date = orderHistoryDate(order);
+    return date >= start && date <= end;
+  });
+}
+
+function manualSalesInPeriod(sales = filteredSales(), confirmedOrders = confirmedSiteOrdersInPeriod()) {
+  const siteSaleIds = new Set(confirmedOrders.map((order) => String(order.venda_id || "")).filter(Boolean));
+  return sales.filter((sale) => !siteSaleIds.has(String(sale.id)));
+}
+
+function confirmedSiteOrderRevenue(orders) {
+  return orders.reduce((sum, order) => sum + toNumber(order.valor_produtos), 0);
+}
+
 function renderDashboard() {
   const selected = filteredSales();
-  const selectedSummary = summaryFor(selected);
-  const today = summaryFor(todaySales(), []);
-  const todayRows = todaySales();
-  const linkedSaleIds = new Set(app.orders.map((order) => String(order.venda_id || "")));
-  const manualToday = todayRows.filter((sale) => !linkedSaleIds.has(String(sale.id))).length;
+  const confirmedSiteOrders = confirmedSiteOrdersInPeriod();
+  const manualSales = manualSalesInPeriod(selected, confirmedSiteOrders);
+  const manualSummary = summaryFor(manualSales);
+  const siteRevenue = confirmedSiteOrderRevenue(confirmedSiteOrders);
+  const totalSales = manualSales.length + confirmedSiteOrders.length;
+  const totalRevenue = manualSummary.revenue + siteRevenue;
+  const totalTicket = totalSales ? totalRevenue / totalSales : 0;
   const { start, end } = periodRange();
   const pending = pendingOrders();
-  const confirmedToday = app.orders.filter((order) => {
-    const status = normalizeOrderStatus(order.status);
-    const date = new Date(order.confirmado_em || order.updated_at || order.created_at || Date.now());
-    return status === "confirmado" && date >= start && date <= end;
-  });
   const cancelled = app.orders.filter((order) => {
     const status = normalizeOrderStatus(order.status);
     const date = new Date(order.cancelado_em || order.updated_at || order.created_at || Date.now());
@@ -1051,15 +1066,15 @@ function renderDashboard() {
   const lowStock = app.products.filter((product) => toNumber(product.estoque) <= 5).length;
 
   $("[data-kpi-pending-orders]").textContent = String(pending.length);
-  $("[data-kpi-manual-sales-today]").textContent = String(manualToday);
-  $("[data-kpi-confirmed-orders-today]").textContent = String(confirmedToday.length);
+  $("[data-kpi-total-sales]").textContent = String(totalSales);
+  $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais • ${confirmedSiteOrders.length} site`;
   $("[data-kpi-cancelled-orders]").textContent = String(cancelled.length);
-  $("[data-kpi-revenue-today]").textContent = currency.format(today.revenue);
-  $("[data-kpi-ticket]").textContent = currency.format(selectedSummary.ticket);
-  $("[data-kpi-received]").textContent = currency.format(selectedSummary.received);
-  $("[data-kpi-delivery]").textContent = currency.format(selectedSummary.delivery);
-  $("[data-kpi-commission]").textContent = currency.format(selectedSummary.commission);
-  $("[data-kpi-profit]").textContent = currency.format(selectedSummary.net);
+  $("[data-kpi-revenue-today]").textContent = currency.format(totalRevenue);
+  $("[data-kpi-ticket]").textContent = currency.format(totalTicket);
+  $("[data-kpi-received]").textContent = currency.format(manualSummary.received);
+  $("[data-kpi-delivery]").textContent = currency.format(manualSummary.delivery);
+  $("[data-kpi-commission]").textContent = currency.format(manualSummary.commission);
+  $("[data-kpi-profit]").textContent = currency.format(manualSummary.net + siteRevenue);
   $("[data-kpi-low-stock]").textContent = String(lowStock);
 
   renderList("[data-report-top-products]", rankedProducts(selected).slice(0, 5), "Nenhuma venda no periodo.");

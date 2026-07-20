@@ -478,6 +478,14 @@ textarea {
   line-height: 1.05;
 }
 
+.kpi-grid small {
+  display: block;
+  margin-top: 8px;
+  color: var(--green);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
 .section-head {
   display: flex;
   align-items: center;
