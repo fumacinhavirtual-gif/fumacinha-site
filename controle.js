@@ -72,6 +72,9 @@ const app = {
   delivererSearch: "",
   clientSearch: "",
   period: "today",
+  financePeriodMode: "month",
+  financeMonth: localDateValue(new Date()).slice(0, 7),
+  financeQuickPeriod: "month",
   historyPeriod: "last7",
   activeTab: "home",
   stockSearch: "",
@@ -296,6 +299,133 @@ function periodRange(period = app.period) {
   return { start: startOfDay(now), end: endOfDay(now) };
 }
 
+function monthKey(date = new Date()) {
+  return localDateValue(date).slice(0, 7);
+}
+
+function monthStartFromKey(key) {
+  const [year, month] = String(key || monthKey()).split("-").map(Number);
+  return new Date(year, month - 1, 1);
+}
+
+function monthEndFromKey(key) {
+  const [year, month] = String(key || monthKey()).split("-").map(Number);
+  return endOfDay(new Date(year, month, 0));
+}
+
+function monthLabel(key) {
+  const date = monthStartFromKey(key);
+  const label = date.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
+function setGlobalCustomRange(startDate, endDate) {
+  const startInput = $("[data-date-start]");
+  const endInput = $("[data-date-end]");
+  if (startInput) startInput.value = localDateValue(startDate);
+  if (endInput) endInput.value = localDateValue(endDate);
+  app.period = "custom";
+}
+
+function applyFinanceMonth(key = monthKey()) {
+  app.financePeriodMode = "month";
+  app.financeMonth = key;
+  const current = monthKey();
+  if (key === current) {
+    app.period = "month";
+  } else {
+    setGlobalCustomRange(monthStartFromKey(key), monthEndFromKey(key));
+  }
+}
+
+function financePeriodTitle() {
+  if (app.financePeriodMode === "month") return monthLabel(app.financeMonth);
+  const labels = {
+    today: `Hoje, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
+    yesterday: "Ontem",
+    last7: "Ultimos 7 dias",
+    month: "Mes atual",
+    lastMonth: "Mes passado",
+    year: `Ano atual - ${new Date().getFullYear()}`,
+    custom: "Periodo personalizado",
+  };
+  if (app.financeQuickPeriod === "custom") {
+    const start = $("[data-date-start]")?.value;
+    const end = $("[data-date-end]")?.value;
+    return start && end ? `${formatDateBR(start)} a ${formatDateBR(end)}` : labels.custom;
+  }
+  return labels[app.financeQuickPeriod] || labels.custom;
+}
+
+function openFinanceFilter() {
+  const shell = $("[data-finance-filter-shell]");
+  if (!shell) return;
+  const startInput = $("[data-finance-date-start]");
+  const endInput = $("[data-finance-date-end]");
+  if (startInput) startInput.value = $("[data-date-start]")?.value || localDateValue(new Date());
+  if (endInput) endInput.value = $("[data-date-end]")?.value || localDateValue(new Date());
+  shell.classList.remove("hidden");
+  shell.setAttribute("aria-hidden", "false");
+  renderFinancePeriodControls();
+}
+
+function closeFinanceFilter() {
+  const shell = $("[data-finance-filter-shell]");
+  if (!shell) return;
+  shell.classList.add("hidden");
+  shell.setAttribute("aria-hidden", "true");
+}
+
+function renderFinancePeriodControls() {
+  const label = $("[data-finance-period-label]");
+  if (label) label.textContent = financePeriodTitle();
+  const nextButton = $("[data-finance-month-next]");
+  if (nextButton) nextButton.disabled = app.financePeriodMode === "month" && app.financeMonth >= monthKey();
+  $("[data-finance-current-month]")?.classList.toggle("hidden", app.financePeriodMode === "month" && app.financeMonth === monthKey());
+  $$("[data-finance-quick]").forEach((button) => {
+    const quick = button.dataset.financeQuick;
+    const activeQuick = app.financePeriodMode === "quick" && quick === app.financeQuickPeriod;
+    const activeCurrentMonth = app.financePeriodMode === "month" && app.financeMonth === monthKey() && quick === "month";
+    button.classList.toggle("active", activeQuick || activeCurrentMonth);
+  });
+}
+
+function applyFinanceQuickPeriod(period) {
+  app.financePeriodMode = "quick";
+  app.financeQuickPeriod = period;
+  app.period = period;
+  if (period === "month") app.financeMonth = monthKey();
+  if (period === "lastMonth") {
+    const previousMonth = new Date();
+    previousMonth.setMonth(previousMonth.getMonth() - 1);
+    app.financeMonth = monthKey(previousMonth);
+  }
+  closeFinanceFilter();
+  renderAll();
+}
+
+function applyFinanceCustomDates() {
+  const startValue = $("[data-finance-date-start]")?.value;
+  const endValue = $("[data-finance-date-end]")?.value;
+  const status = $("[data-finance-filter-status]");
+  if (!startValue || !endValue) {
+    if (status) status.textContent = "Informe a data inicial e final.";
+    return;
+  }
+  const start = new Date(`${startValue}T00:00:00`);
+  const end = new Date(`${endValue}T00:00:00`);
+  if (end < start) {
+    if (status) status.textContent = "A data final nao pode ser anterior a inicial.";
+    return;
+  }
+  setGlobalCustomRange(start, end);
+  app.financePeriodMode = "quick";
+  app.financeQuickPeriod = "custom";
+  if (status) status.textContent = "";
+  closeFinanceFilter();
+  renderAll();
+}
+
 function saleDate(sale) {
   return new Date(sale.data_venda || sale.created_at || Date.now());
 }
@@ -310,8 +440,7 @@ function filteredSales() {
 }
 
 function filteredExpenses() {
-  const start = startOfDay(new Date());
-  const end = endOfDay(new Date());
+  const { start, end } = periodRange();
   return app.expenses.filter((expense) => {
     const date = new Date(`${expense.data_despesa || dateValue()}T12:00:00`);
     return date >= start && date <= end;
@@ -991,12 +1120,13 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["sales", "stock", "history"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["sales", "stock", "history", "finance"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
   const preset = $("[data-period-preset]");
   if (preset) preset.value = ["last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "custom";
+  renderFinancePeriodControls();
 }
 
 function renderPeopleOptions() {
@@ -3472,10 +3602,15 @@ async function updateDeliveryStatus(saleId, status) {
 }
 
 function switchTab(tab) {
+  if (tab === "finance") applyFinanceMonth(monthKey());
   app.activeTab = tab;
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
   $$("[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
   renderPeriods();
+  if (tab === "finance") {
+    renderFinance();
+    renderReports();
+  }
 }
 
 function openSideMenu() {
@@ -3576,6 +3711,29 @@ document.addEventListener("click", async (event) => {
     app.period = period.dataset.period;
     renderAll();
   }
+  if (event.target.closest("[data-finance-month-prev]")) {
+    const current = monthStartFromKey(app.financeMonth);
+    current.setMonth(current.getMonth() - 1);
+    applyFinanceMonth(monthKey(current));
+    renderAll();
+  }
+  if (event.target.closest("[data-finance-month-next]")) {
+    const current = monthStartFromKey(app.financeMonth);
+    current.setMonth(current.getMonth() + 1);
+    if (monthKey(current) <= monthKey()) {
+      applyFinanceMonth(monthKey(current));
+      renderAll();
+    }
+  }
+  if (event.target.closest("[data-finance-current-month]")) {
+    applyFinanceMonth(monthKey());
+    renderAll();
+  }
+  if (event.target.closest("[data-finance-filter-open]")) openFinanceFilter();
+  if (event.target.closest("[data-finance-filter-close]")) closeFinanceFilter();
+  const financeQuick = event.target.closest("[data-finance-quick]");
+  if (financeQuick) applyFinanceQuickPeriod(financeQuick.dataset.financeQuick);
+  if (event.target.closest("[data-finance-filter-apply]")) applyFinanceCustomDates();
   if (event.target.closest("[data-refresh]")) loadAll();
   if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
   if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
@@ -3694,6 +3852,10 @@ document.addEventListener("input", (event) => {
     updateSaleTotal();
   }
   if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
+  if (event.target.matches("[data-finance-date-start], [data-finance-date-end]")) {
+    const status = $("[data-finance-filter-status]");
+    if (status) status.textContent = "";
+  }
   if (event.target.closest("[data-cash-form]")) {
     app.cashEditing = true;
     updateCashPreview();

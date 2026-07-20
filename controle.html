@@ -330,6 +330,15 @@
               <h2>Entradas, despesas e lucro</h2>
             </div>
           </div>
+          <section class="finance-period-panel">
+            <div class="finance-month-control">
+              <button type="button" data-finance-month-prev aria-label="Mes anterior">&lt;</button>
+              <strong data-finance-period-label>Mes atual</strong>
+              <button type="button" data-finance-month-next aria-label="Proximo mes">&gt;</button>
+            </div>
+            <button type="button" class="finance-custom-button" data-finance-filter-open>Personalizado</button>
+            <button type="button" class="finance-current-button hidden" data-finance-current-month>Voltar para mes atual</button>
+          </section>
           <div class="finance-grid">
             <article><span>Pedidos recebidos</span><strong data-finance-orders-received>0</strong></article>
             <article><span>Pedidos pendentes</span><strong data-finance-orders-pending>0</strong></article>
@@ -384,6 +393,33 @@
             <div data-expense-list></div>
           </section>
         </section>
+
+        <div class="finance-filter-shell hidden" data-finance-filter-shell aria-hidden="true">
+          <div class="finance-filter-overlay" data-finance-filter-close></div>
+          <section class="finance-filter-modal" role="dialog" aria-modal="true" aria-label="Filtro financeiro personalizado">
+            <header>
+              <div>
+                <p class="eyebrow">Periodo financeiro</p>
+                <h2>Personalizado</h2>
+              </div>
+              <button type="button" data-finance-filter-close aria-label="Fechar">×</button>
+            </header>
+            <div class="finance-quick-options">
+              <button type="button" data-finance-quick="today">Hoje</button>
+              <button type="button" data-finance-quick="yesterday">Ontem</button>
+              <button type="button" data-finance-quick="last7">Ultimos 7 dias</button>
+              <button type="button" data-finance-quick="month">Mes atual</button>
+              <button type="button" data-finance-quick="lastMonth">Mes passado</button>
+              <button type="button" data-finance-quick="year">Ano atual</button>
+            </div>
+            <div class="finance-date-range">
+              <label>Data inicial <input type="date" data-finance-date-start /></label>
+              <label>Data final <input type="date" data-finance-date-end /></label>
+            </div>
+            <p class="finance-filter-status" data-finance-filter-status></p>
+            <button type="button" class="primary-action" data-finance-filter-apply>Aplicar filtro</button>
+          </section>
+        </div>
 
         <section class="tab-panel hidden" data-panel="cash">
           <section class="panel-card cash-panel">
