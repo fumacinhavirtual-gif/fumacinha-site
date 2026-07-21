@@ -79,6 +79,7 @@ const app = {
   activeTab: "home",
   stockSearch: "",
   stockCategory: "all",
+  stockCategories: [],
   stockFilter: "all",
   stockSort: "filter",
   stockProductSaving: false,
@@ -2677,28 +2678,64 @@ function openOrderWhatsApp(orderId) {
 
 function renderStockFilters() {
   const categorySelect = $("[data-stock-category]");
+  const categoryChips = $("[data-stock-category-chips]");
   const productCategories = $("[data-stock-product-categories]");
   const categories = [...new Set(app.products.map((product) => product.categoria || "Produtos"))].sort();
   if (productCategories) {
     productCategories.innerHTML = categories.map((category) => `<option value="${escapeHtml(category)}"></option>`).join("");
   }
-  if (!categorySelect) return;
-  categorySelect.innerHTML = `<option value="all">Todas as categorias</option>${categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
-  categorySelect.value = categories.includes(app.stockCategory) || app.stockCategory === "all" ? app.stockCategory : "all";
-  if (categorySelect.value !== app.stockCategory) app.stockCategory = "all";
+  app.stockCategories = app.stockCategories.filter((category) => categories.includes(category));
+  app.stockCategory = app.stockCategories.length === 1 ? app.stockCategories[0] : "all";
+  if (categorySelect) {
+    categorySelect.innerHTML = `<option value="all">Todas as categorias</option>${categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("")}`;
+    categorySelect.value = app.stockCategory;
+  }
+  if (categoryChips) {
+    categoryChips.innerHTML = `
+      <button type="button" class="${app.stockCategories.length ? "" : "active"}" data-stock-category-chip="all">Todas</button>
+      ${categories.map((category) => `
+        <button type="button" class="${app.stockCategories.includes(category) ? "active" : ""}" data-stock-category-chip="${escapeHtml(category)}">${escapeHtml(category)}</button>
+      `).join("")}
+    `;
+  }
 }
 
 function stockProducts() {
   const search = app.stockSearch.trim().toLowerCase();
   return app.products
     .filter((product) => !search || product.nome.toLowerCase().includes(search))
-    .filter((product) => app.stockCategory === "all" || product.categoria === app.stockCategory)
+    .filter((product) => !app.stockCategories.length || app.stockCategories.includes(product.categoria || "Produtos"))
     .filter((product) => app.stockFilter !== "low" || toNumber(product.estoque) <= 5)
     .sort((a, b) => {
       if (app.stockSort === "stock-asc") return toNumber(a.estoque) - toNumber(b.estoque);
       if (app.stockSort === "stock-desc") return toNumber(b.estoque) - toNumber(a.estoque);
       return 0;
     });
+}
+
+function renderStockTotalSummary(products) {
+  const root = $("[data-stock-total-summary]");
+  if (!root) return;
+  const totalUnits = products.reduce((sum, product) => sum + toNumber(product.estoque), 0);
+  const selectedLabel = app.stockCategories.length
+    ? app.stockCategories.join(" + ")
+    : "Todas as categorias";
+  const categoryRows = app.stockCategories.length
+    ? app.stockCategories.map((category) => {
+      const units = products
+        .filter((product) => (product.categoria || "Produtos") === category)
+        .reduce((sum, product) => sum + toNumber(product.estoque), 0);
+      return `<span>${escapeHtml(category)}: <strong>${units}</strong></span>`;
+    }).join("")
+    : "";
+  root.innerHTML = `
+    <div>
+      <span>Total de estoque</span>
+      <strong>${totalUnits}</strong>
+      <small>${escapeHtml(selectedLabel)}</small>
+    </div>
+    ${categoryRows ? `<p>${categoryRows}</p>` : ""}
+  `;
 }
 
 function stockLevelClass(stock) {
@@ -2712,7 +2749,9 @@ function stockLevelClass(stock) {
 function renderStock() {
   renderStockFilters();
   if (!stockList) return;
-  stockList.innerHTML = stockProducts().map((product) => `
+  const products = stockProducts();
+  renderStockTotalSummary(products);
+  stockList.innerHTML = products.map((product) => `
     <article class="stock-row" data-stock-row="${product.id}">
       <img src="${escapeHtml(product.imagem || "./assets/fumacinha-logo.png")}" alt="${escapeHtml(product.nome)}" />
       <div>
@@ -3875,6 +3914,19 @@ document.addEventListener("click", async (event) => {
   }
   const save = event.target.closest("[data-stock-save]");
   if (save) saveStock(save.dataset.stockSave);
+  const stockCategoryChip = event.target.closest("[data-stock-category-chip]");
+  if (stockCategoryChip) {
+    const category = stockCategoryChip.dataset.stockCategoryChip;
+    if (category === "all") {
+      app.stockCategories = [];
+    } else if (app.stockCategories.includes(category)) {
+      app.stockCategories = app.stockCategories.filter((item) => item !== category);
+    } else {
+      app.stockCategories = [...app.stockCategories, category];
+    }
+    app.stockCategory = app.stockCategories.length === 1 ? app.stockCategories[0] : "all";
+    renderStock();
+  }
   const cancel = event.target.closest("[data-cancel-sale]");
   if (cancel) cancelSale(cancel.dataset.cancelSale);
   const viewSale = event.target.closest("[data-view-sale]");
@@ -4036,6 +4088,7 @@ document.addEventListener("change", (event) => {
     else localStorage.removeItem(LAST_DELIVERER_KEY);
   }
   if (event.target.matches("[data-stock-category]")) {
+    app.stockCategories = event.target.value === "all" ? [] : [event.target.value];
     app.stockCategory = event.target.value;
     renderStock();
   }
