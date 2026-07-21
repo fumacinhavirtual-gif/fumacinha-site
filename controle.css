@@ -229,6 +229,29 @@ textarea {
   font-weight: 900;
 }
 
+.payment-check-message {
+  margin: 0;
+  color: var(--red);
+  font-weight: 900;
+}
+
+.payment-check-message:empty {
+  display: none;
+}
+
+.payment-check-message.success {
+  color: #198754;
+}
+
+.primary-action.sale-confirmed {
+  background: #198754;
+}
+
+.primary-action.sale-confirmed:hover,
+.primary-action.sale-confirmed:focus-visible {
+  background: #157347;
+}
+
 @media (max-width: 680px) {
   .split-payment-grid {
     grid-template-columns: 1fr;

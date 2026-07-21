@@ -135,6 +135,7 @@ const sellerList = $("[data-seller-list]");
 const delivererList = $("[data-deliverer-list]");
 const saleSuccess = $("[data-sale-success]");
 const saleSubmit = $("[data-sale-submit]");
+const paymentCheckMessage = $("[data-payment-check-message]");
 const confirmEditedOrderButton = $("[data-confirm-edited-order]");
 const saleEditBanner = $("[data-sale-edit-banner]");
 const saleEditLabel = $("[data-sale-edit-label]");
@@ -151,6 +152,7 @@ const routesList = $("[data-routes-list]");
 const topClientsRoot = $("[data-top-clients]");
 const clientsCount = $("[data-clients-count]");
 let toastTimer = null;
+let saleConfirmationTimer = null;
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -162,6 +164,41 @@ function setLoginStatus(message = "", type = "") {
   if (!loginStatus) return;
   loginStatus.textContent = message;
   loginStatus.className = `form-status ${type}`.trim();
+}
+
+function setPaymentCheckMessage(message = "", type = "error") {
+  if (!paymentCheckMessage) return;
+  paymentCheckMessage.textContent = message;
+  paymentCheckMessage.className = `payment-check-message ${message ? type : ""}`.trim();
+}
+
+function isPaymentCheckError(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("conferiu o pagamento") || message.includes("confira a forma de pagamento");
+}
+
+function saleSubmitIdleLabel() {
+  if (app.confirmingOrderId) return "Confirmar e registrar venda";
+  if (app.editingSaleId) return "Salvar alteracoes";
+  return "Registrar venda";
+}
+
+function showSaleConfirmedFeedback() {
+  if (saleConfirmationTimer) window.clearTimeout(saleConfirmationTimer);
+  setPaymentCheckMessage("Venda confirmada", "success");
+  if (saleSubmit) {
+    saleSubmit.classList.add("sale-confirmed");
+    saleSubmit.disabled = true;
+    saleSubmit.textContent = "Venda confirmada";
+  }
+  saleConfirmationTimer = window.setTimeout(() => {
+    setPaymentCheckMessage("");
+    if (saleSubmit && !app.saleSaving) {
+      saleSubmit.classList.remove("sale-confirmed");
+      saleSubmit.disabled = false;
+      saleSubmit.textContent = saleSubmitIdleLabel();
+    }
+  }, 2600);
 }
 
 function isConnectionError(error) {
@@ -1787,6 +1824,7 @@ function buildSalePayload(items, seller, deliverer) {
   const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
   const draft = currentSaleDraft();
   const paymentChecked = saleForm.elements.pagamento_conferido?.value || "";
+  setPaymentCheckMessage("");
   if (!paymentChecked) throw new Error("Campo obrigatorio: responda se conferiu o pagamento.");
   if (paymentChecked !== "sim") throw new Error("Confira a forma de pagamento antes de registrar a venda.");
   const productsValue = Math.max(0, subtotal - discount);
@@ -1871,6 +1909,9 @@ function resetSaleForm() {
   app.editingOrderId = null;
   app.confirmingOrderId = null;
   saleForm.reset();
+  setPaymentCheckMessage("");
+  if (saleConfirmationTimer) window.clearTimeout(saleConfirmationTimer);
+  saleSubmit?.classList.remove("sale-confirmed");
   app.saleProductSearch = preservedProductSearch;
   app.saleProductCategory = preservedProductCategory;
   renderSaleProductFilters();
@@ -1944,12 +1985,14 @@ async function registerSale(event) {
   const confirmingOrderId = app.confirmingOrderId;
   let reservedOrderId = null;
   let saleCreated = false;
+  let showConfirmedButton = false;
   app.saleSaving = true;
   if (saleSubmit) {
     saleSubmit.disabled = true;
     saleSubmit.textContent = confirmingOrderId ? "Confirmando pedido..." : "Registrando venda...";
   }
   if (saleSuccess) saleSuccess.textContent = "";
+  setPaymentCheckMessage("");
   setStatus(confirmingOrderId ? "Confirmando pedido..." : "Registrando venda...", "loading");
   try {
     const usuarioId = await requireUserId();
@@ -2011,6 +2054,7 @@ async function registerSale(event) {
         saleSuccess.textContent = "";
       }, 8000);
     }
+    showConfirmedButton = true;
   } catch (error) {
     if (reservedOrderId && !saleCreated) {
       await supabaseClient
@@ -2019,12 +2063,23 @@ async function registerSale(event) {
         .eq("id", reservedOrderId)
         .eq("status", "Em separacao");
     }
-    setStatus(error.message || "Erro ao registrar venda.", "error");
+    const message = error.message || "Erro ao registrar venda.";
+    if (isPaymentCheckError(error)) {
+      setStatus("", "");
+      setPaymentCheckMessage(message, "error");
+    } else {
+      setStatus(message, "error");
+    }
   } finally {
     app.saleSaving = false;
     if (saleSubmit) {
-      saleSubmit.disabled = false;
-      saleSubmit.textContent = app.confirmingOrderId ? "Confirmar e registrar venda" : "Registrar venda";
+      if (showConfirmedButton) {
+        showSaleConfirmedFeedback();
+      } else {
+        saleSubmit.classList.remove("sale-confirmed");
+        saleSubmit.disabled = false;
+        saleSubmit.textContent = saleSubmitIdleLabel();
+      }
     }
   }
 }
@@ -2048,6 +2103,7 @@ async function updateEditedSale(event) {
     saleSuccess.textContent = "";
     saleSuccess.className = "form-status";
   }
+  setPaymentCheckMessage("");
   setStatus("Salvando alteracoes...", "loading");
   try {
     const usuarioId = await requireUserId();
@@ -2078,8 +2134,13 @@ async function updateEditedSale(event) {
     }
   } catch (error) {
     const message = error.message || "Erro ao editar venda.";
-    setStatus(message, "error");
-    if (saleWarning) {
+    if (isPaymentCheckError(error)) {
+      setStatus("", "");
+      setPaymentCheckMessage(message, "error");
+    } else {
+      setStatus(message, "error");
+    }
+    if (saleWarning && !isPaymentCheckError(error)) {
       saleWarning.textContent = message;
       saleWarning.className = "form-status error";
     }
@@ -2087,7 +2148,7 @@ async function updateEditedSale(event) {
     app.saleSaving = false;
     if (saleSubmit) {
       saleSubmit.disabled = false;
-      saleSubmit.textContent = app.editingSaleId ? "Salvar alteracoes" : "Registrar venda";
+      saleSubmit.textContent = saleSubmitIdleLabel();
     }
   }
 }
@@ -4239,6 +4300,7 @@ document.addEventListener("change", (event) => {
   if (event.target.name === "pagamento_dividido") updateSaleTotal();
   if (["pagamento_1_forma", "pagamento_2_forma"].includes(event.target.name)) updateSaleTotal();
   if (event.target.name === "teve_troco") updateSaleTotal();
+  if (event.target.name === "pagamento_conferido") setPaymentCheckMessage("");
   if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
   if (event.target.matches("[data-exchange-count]")) renderExchangeCheck(exchangeRowsFromInputs());
   if (event.target.matches("[data-exchange-checked]")) renderExchangeCheck(exchangeRowsFromInputs());
