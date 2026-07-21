@@ -3453,56 +3453,95 @@ function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDat
   const store = exchangeStore();
   store[dateKey] = rows.reduce((acc, row) => {
     const sent = toNumber(row.sent);
-    const checked = Boolean(row.checked || sent === 0);
+    const checked = Boolean(row.checked);
     acc[row.time] = { sent, returned: checked ? sent : 0, checked };
     return acc;
   }, {});
+  store[dateKey].__updatedAt = new Date().toISOString();
   localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
 }
 
 function exchangeSummary(rows = exchangeRowsFromInputs()) {
   const sent = rows.reduce((sum, row) => sum + toNumber(row.sent), 0);
   const checked = rows.reduce((sum, row) => sum + (toNumber(row.sent) > 0 && row.checked ? toNumber(row.sent) : 0), 0);
+  const checkedRoutes = rows.filter((row) => toNumber(row.sent) > 0 && row.checked).length;
   const pendingRoutes = rows.filter((row) => toNumber(row.sent) > 0 && !row.checked).length;
-  return { sent, returned: checked, missing: Math.max(0, sent - checked), pendingRoutes, ok: pendingRoutes === 0 };
+  const startedRoutes = rows.filter((row) => toNumber(row.sent) > 0).length;
+  const progress = Math.round((checkedRoutes / ROUTE_TIMES.length) * 100);
+  return { sent, returned: checked, missing: Math.max(0, sent - checked), checkedRoutes, pendingRoutes, startedRoutes, progress, ok: pendingRoutes === 0 };
+}
+
+function exchangeLastUpdated(dateKey = app.cashDate) {
+  const updatedAt = exchangeStore()[dateKey]?.__updatedAt;
+  return updatedAt ? new Date(updatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--";
+}
+
+function exchangeRouteState(row) {
+  const quantity = toNumber(row.sent);
+  if (row.checked) return { key: "checked", label: "Conferido", dot: "green" };
+  if (quantity <= 0) return { key: "idle", label: "Ainda nao iniciado", dot: "gray" };
+  const selectedDate = app.cashDate || localDateValue();
+  const today = localDateValue();
+  const routeDate = new Date(`${selectedDate}T${row.time}:00`);
+  const isLate = selectedDate < today || (selectedDate === today && Date.now() > routeDate.getTime());
+  return isLate
+    ? { key: "late", label: "Horario passou", dot: "red" }
+    : { key: "pending", label: "Pendente", dot: "orange" };
 }
 
 function renderExchangeSummary(rows = exchangeRowsFromInputs()) {
   const root = $("[data-exchange-summary]");
   if (!root) return;
   const summary = exchangeSummary(rows);
-  root.className = `exchange-summary ${summary.ok ? "ok" : "pending"}`;
+  root.className = "exchange-summary";
   root.innerHTML = `
-      <strong>${summary.ok ? "Trocas conferidas" : `${summary.pendingRoutes} horario${summary.pendingRoutes === 1 ? "" : "s"} sem conferir`}</strong>
-      <span>Total de trocas: ${summary.sent} | Conferidas: ${summary.returned}</span>
-    `;
+    <div class="exchange-kpi-grid">
+      <article><span>Total de trocas</span><strong>${summary.sent}</strong><small>Trocas hoje</small></article>
+      <article><span>Rotas conferidas</span><strong>${summary.checkedRoutes} / ${ROUTE_TIMES.length}</strong><small>Confirmadas</small></article>
+      <article><span>Pendentes</span><strong>${summary.pendingRoutes}</strong><small>Horarios</small></article>
+      <article><span>Ultima atualizacao</span><strong>${exchangeLastUpdated()}</strong><small>Conferencia</small></article>
+    </div>
+    <div class="exchange-progress-card">
+      <div>
+        <strong>Progresso do dia</strong>
+        <span>${summary.checkedRoutes} de ${ROUTE_TIMES.length} horarios conferidos</span>
+      </div>
+      <b>${summary.progress}%</b>
+      <div class="exchange-progress-track"><i style="width: ${summary.progress}%"></i></div>
+    </div>
+  `;
 }
 
-function renderExchangeCheck() {
+function renderExchangeCheck(rows = exchangeRowsForDate()) {
   const root = $("[data-exchange-route-list]");
   if (!root) return;
-  const rows = exchangeRowsForDate();
-  root.innerHTML = `
-    <div class="exchange-route-header">
-      <span>Horarios</span>
-      <span>Trocas</span>
-      <span>Conferir</span>
-    </div>
-    ${rows.map((row) => {
+  root.innerHTML = rows.map((row) => {
       const checked = Boolean(row.checked);
-      const ok = checked || toNumber(row.sent) === 0;
+      const state = exchangeRouteState(row);
       return `
-        <article class="exchange-route-row ${ok ? "ok" : "pending"}">
-          <strong>${row.time}</strong>
-          <input aria-label="Trocas da rota ${row.time}" type="number" min="0" step="1" value="${row.sent}" data-exchange-count="${row.time}" />
-          <label class="exchange-check-box" aria-label="Conferir rota ${row.time}">
-            <input type="checkbox" ${checked ? "checked" : ""} data-exchange-checked="${row.time}" />
-            <span>✓</span>
-          </label>
+        <article class="exchange-route-row ${state.key}">
+          <header>
+            <strong><span>🕒</span>${row.time}</strong>
+            <em class="exchange-status ${state.key}"><i></i>${state.label}</em>
+          </header>
+          <div class="exchange-route-body">
+            <div class="exchange-stepper">
+              <span>Trocas</span>
+              <div>
+                <button type="button" data-exchange-step="${row.time}" data-step="-1">-</button>
+                <input aria-label="Trocas da rota ${row.time}" type="number" min="0" step="1" value="${row.sent}" data-exchange-count="${row.time}" />
+                <button type="button" data-exchange-step="${row.time}" data-step="1">+</button>
+              </div>
+            </div>
+            <label class="exchange-switch" aria-label="Conferir rota ${row.time}">
+              <input type="checkbox" ${checked ? "checked" : ""} data-exchange-checked="${row.time}" />
+              <span></span>
+              <b>${checked ? "Conferido" : "Pendente"}</b>
+            </label>
+          </div>
         </article>
       `;
-    }).join("")}
-  `;
+    }).join("");
   renderExchangeSummary(rows);
 }
 
@@ -3694,7 +3733,7 @@ function renderCashClosing() {
   });
   renderConferenceAlert();
   renderExchangeCheck();
-  $$("[data-exchange-count], [data-exchange-checked], [data-save-exchange-check]").forEach((field) => {
+  $$("[data-exchange-count], [data-exchange-checked], [data-exchange-step], [data-save-exchange-check]").forEach((field) => {
     field.disabled = isClosed;
   });
   updateCashPreview();
@@ -4087,6 +4126,15 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
   if (event.target.closest("[data-reopen-cash]")) reopenCash();
   if (event.target.closest("[data-save-exchange-check]")) saveExchangeCheck();
+  const exchangeStep = event.target.closest("[data-exchange-step]");
+  if (exchangeStep) {
+    const input = $(`[data-exchange-count="${exchangeStep.dataset.exchangeStep}"]`);
+    if (input) {
+      const nextValue = Math.max(0, Number.parseInt(input.value || "0", 10) + Number.parseInt(exchangeStep.dataset.step || "0", 10));
+      input.value = String(nextValue);
+      renderExchangeCheck(exchangeRowsFromInputs());
+    }
+  }
   if (event.target.closest("[data-view-catalog]")) {
     window.location.href = "/";
   }
@@ -4186,7 +4234,8 @@ document.addEventListener("change", (event) => {
   if (["pagamento_1_forma", "pagamento_2_forma"].includes(event.target.name)) updateSaleTotal();
   if (event.target.name === "teve_troco") updateSaleTotal();
   if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
-  if (event.target.matches("[data-exchange-checked]")) renderExchangeSummary();
+  if (event.target.matches("[data-exchange-count]")) renderExchangeCheck(exchangeRowsFromInputs());
+  if (event.target.matches("[data-exchange-checked]")) renderExchangeCheck(exchangeRowsFromInputs());
   if (["valor_recebido", "taxa_entrega", "troco", "pagamento_1_valor", "pagamento_2_valor"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     updateSaleTotal();

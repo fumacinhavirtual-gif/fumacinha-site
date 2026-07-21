@@ -444,10 +444,6 @@
               </div>
             </div>
 
-            <div class="form-grid">
-              <label>Data do fechamento <input type="date" data-cash-date /></label>
-            </div>
-
             <div class="cash-status" data-cash-status></div>
             <div class="conference-alert" data-conference-alert></div>
 
@@ -487,16 +483,17 @@
             </div>
 
             <section class="exchange-check-panel">
-              <div class="section-head">
+              <div class="section-head exchange-head">
                 <div>
                   <p class="eyebrow">Conferir trocas</p>
                   <h2>Horarios das trocas</h2>
+                  <p class="muted-text">Registre a quantidade de trocas realizadas em cada rota e confirme quando finalizar.</p>
                 </div>
+                <label class="exchange-date-picker">Data <input type="date" data-cash-date /></label>
               </div>
-              <p class="muted-text">Digite quantas trocas sairam em cada rota e marque quando conferir que voltou tudo certo.</p>
-              <div class="exchange-route-list" data-exchange-route-list></div>
               <div class="exchange-summary" data-exchange-summary></div>
-              <button class="ghost-action" type="button" data-save-exchange-check>Salvar conferencia de trocas</button>
+              <div class="exchange-route-list" data-exchange-route-list></div>
+              <button class="primary-action exchange-save-button" type="button" data-save-exchange-check>Salvar alteracoes</button>
             </section>
 
             <form data-cash-form>
