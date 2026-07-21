@@ -2373,12 +2373,14 @@ textarea {
   }
 
   .exchange-check-panel {
-    padding: 16px 12px;
+    gap: 12px;
+    padding: 14px 10px;
   }
 
   .exchange-head {
     align-items: stretch;
     flex-direction: column;
+    gap: 10px;
   }
 
   .exchange-date-picker {
@@ -2386,7 +2388,55 @@ textarea {
     min-width: 0;
   }
 
-  .exchange-kpi-grid,
+  .exchange-head h2 {
+    font-size: 1.55rem;
+  }
+
+  .exchange-head .muted-text {
+    margin-top: 4px;
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+
+  .exchange-date-picker input {
+    min-height: 42px;
+  }
+
+  .exchange-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .exchange-kpi-grid article {
+    min-height: 0;
+    border-radius: 14px;
+    padding: 10px 12px;
+  }
+
+  .exchange-kpi-grid span {
+    font-size: 0.76rem;
+    line-height: 1.15;
+  }
+
+  .exchange-kpi-grid strong {
+    font-size: 1.25rem;
+  }
+
+  .exchange-kpi-grid small {
+    font-size: 0.72rem;
+    line-height: 1.1;
+  }
+
+  .exchange-progress-card {
+    border-radius: 14px;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+
+  .exchange-progress-track {
+    height: 9px;
+  }
+
   .exchange-route-list {
     grid-template-columns: 1fr;
   }
