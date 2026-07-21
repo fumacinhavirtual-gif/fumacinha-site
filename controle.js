@@ -1786,6 +1786,9 @@ function buildSalePayload(items, seller, deliverer) {
   const discount = parseMoney(saleForm.elements.desconto.value);
   const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
   const draft = currentSaleDraft();
+  const paymentChecked = saleForm.elements.pagamento_conferido?.value || "";
+  if (!paymentChecked) throw new Error("Campo obrigatorio: responda se conferiu o pagamento.");
+  if (paymentChecked !== "sim") throw new Error("Confira a forma de pagamento antes de registrar a venda.");
   const productsValue = Math.max(0, subtotal - discount);
   if (Math.abs(productsValue - draft.productsValue) > 0.01) throw new Error("Revise os valores da venda.");
   if (draft.split && draft.splitPayments.length < 2) throw new Error("Informe as duas formas de pagamento dividido.");
@@ -1876,6 +1879,7 @@ function resetSaleForm() {
   saleForm.elements.troco.value = "";
   saleForm.elements.teve_troco.value = "nao";
   saleForm.elements.taxa_entrega.value = "";
+  if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
   setSplitPaymentFields([]);
   saleForm.elements.motivo_alteracao.value = "";
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = "";
@@ -1905,6 +1909,7 @@ function loadSaleForEdit(saleId) {
   saleForm.elements.desconto.value = toNumber(sale.desconto).toFixed(2);
   const breakdown = salePaymentBreakdown(sale);
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || sale.forma_pagamento || "Pix";
+  if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
   setSplitPaymentFields(breakdown);
   renderPeopleOptions();
   saleForm.elements.vendedora_id.value = sale.vendedora_id || "";
@@ -2509,6 +2514,7 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   saleForm.elements.desconto.value = toNumber(order.desconto || 0).toFixed(2).replace(".", ",");
   const breakdown = paymentBreakdownFromText(order.observacao_interna || "");
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || order.forma_pagamento || "Pix";
+  if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
   setSplitPaymentFields(breakdown);
   saleForm.elements.valor_recebido.value = toNumber(order.valor_pago_cliente || order.valor_produtos).toFixed(2).replace(".", ",");
   saleForm.elements.teve_troco.value = order.teve_troco || toNumber(order.troco) > 0 ? "sim" : "nao";

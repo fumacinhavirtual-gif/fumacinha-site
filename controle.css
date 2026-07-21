@@ -215,6 +215,20 @@ textarea {
   background: #fbfbfc;
 }
 
+.payment-check-field {
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 16px;
+  padding: 12px;
+  color: #8a5600;
+  background: #fff8e8;
+}
+
+.payment-check-field select {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: #ffffff;
+  font-weight: 900;
+}
+
 @media (max-width: 680px) {
   .split-payment-grid {
     grid-template-columns: 1fr;
