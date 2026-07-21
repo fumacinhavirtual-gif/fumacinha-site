@@ -125,14 +125,6 @@
                   <option value="Outros">Outros</option>
                 </select>
               </label>
-              <label class="payment-check-field">
-                Conferiu pagamento?
-                <select name="pagamento_conferido">
-                  <option value="">Responder</option>
-                  <option value="sim">Sim, conferi</option>
-                  <option value="nao">Nao conferi</option>
-                </select>
-              </label>
               <section class="split-payment-panel" data-split-payment-panel data-testid="split-payment-panel" aria-label="Pagamento dividido">
                 <div>
                   <strong>Pagamento dividido - marque aqui</strong>
@@ -217,6 +209,13 @@
             <label class="hidden" data-sale-edit-motive>Motivo da alteracao (opcional) <input type="text" name="motivo_alteracao" placeholder="Ex.: quantidade digitada errada" /></label>
             <input type="hidden" name="observacao" value="" />
             <div class="form-footer">
+              <label class="payment-check-field">
+                Conferiu pagamento?
+                <select name="pagamento_conferido">
+                  <option value="">Responder</option>
+                  <option value="sim">Conferi sim</option>
+                </select>
+              </label>
               <small>A taxa de entrega pertence ao entregador e nao entra no faturamento dos produtos.</small>
               <div class="form-actions">
                 <button class="primary-action" type="submit" data-sale-submit>Registrar venda</button>
