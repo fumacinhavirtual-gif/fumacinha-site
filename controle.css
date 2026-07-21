@@ -663,6 +663,67 @@ textarea {
   grid-column: 1 / -1;
 }
 
+.home-stock-section {
+  grid-column: 1 / -1;
+}
+
+.home-stock-list {
+  display: grid;
+  gap: 10px;
+}
+
+.home-stock-row {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-left-width: 6px;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: var(--white);
+}
+
+.home-stock-row strong {
+  color: var(--black);
+  overflow-wrap: anywhere;
+}
+
+.home-stock-row span {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-weight: 950;
+}
+
+.home-stock-row.stock-alert-zero {
+  border-left-color: #f2c94c;
+  background: #fff9db;
+}
+
+.home-stock-row.stock-alert-zero span {
+  color: #8a5a00;
+  background: #fff1a8;
+}
+
+.home-stock-row.stock-alert-critical {
+  border-left-color: #e53935;
+  background: #fff1f1;
+}
+
+.home-stock-row.stock-alert-critical span {
+  color: #b42318;
+  background: #ffd7d7;
+}
+
+.home-stock-row.stock-alert-ok {
+  border-left-color: var(--green);
+  background: #f0fff5;
+}
+
+.home-stock-row.stock-alert-ok span {
+  color: var(--green);
+  background: rgba(25, 135, 84, 0.14);
+}
+
 .top-product-row {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);

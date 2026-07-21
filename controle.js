@@ -1250,6 +1250,7 @@ function renderDashboard() {
   $("[data-kpi-low-stock]").textContent = String(lowStock.length);
   $("[data-kpi-out-stock]").textContent = String(outStock.length);
   renderOperationalAlerts(alerts);
+  renderHomeLowStockList();
   renderTopProductsRanking(dashboardRankedProducts(manualSales, confirmedSiteOrders).slice(0, 5));
 }
 
@@ -1286,6 +1287,33 @@ function renderOperationalAlerts(alerts) {
   root.innerHTML = alerts.length
     ? `<ul class="operational-alert-list">${alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>`
     : `<p class="operational-alert-empty">Nenhum alerta importante agora.</p>`;
+}
+
+function stockColorClass(stock) {
+  const value = toNumber(stock);
+  if (value === 0) return "stock-alert-zero";
+  if (value >= 1 && value <= 3) return "stock-alert-critical";
+  return "stock-alert-ok";
+}
+
+function renderHomeLowStockList() {
+  const root = $("[data-home-low-stock-list]");
+  if (!root) return;
+  const rows = app.products
+    .filter((product) => toNumber(product.estoque) <= 5)
+    .sort((a, b) => toNumber(a.estoque) - toNumber(b.estoque) || String(a.nome || "").localeCompare(String(b.nome || "")));
+
+  root.innerHTML = rows.length
+    ? `<div class="home-stock-list">${rows.map((product) => {
+      const stock = toNumber(product.estoque);
+      return `
+        <article class="home-stock-row ${stockColorClass(stock)}">
+          <strong>${escapeHtml(product.nome || "Produto")}</strong>
+          <span>${stock} un</span>
+        </article>
+      `;
+    }).join("")}</div>`
+    : `<p class="operational-alert-empty">Nenhum produto com estoque baixo.</p>`;
 }
 
 function renderTopProductsRanking(rows) {
