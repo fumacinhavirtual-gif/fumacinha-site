@@ -1089,30 +1089,120 @@ textarea {
 }
 
 @media (max-width: 680px) {
+  .period-tabs {
+    display: flex;
+    grid-template-columns: none;
+    gap: 8px;
+    margin-inline: -2px;
+    overflow-x: auto;
+    padding: 0 2px 6px;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .period-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .period-tabs button {
+    flex: 0 0 auto;
+    min-width: 118px;
+    min-height: 42px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    scroll-snap-align: start;
+    font-size: 0.86rem;
+  }
+
+  .home-dashboard {
+    gap: 14px;
+  }
+
   .home-section {
     border-radius: 20px;
-    padding: 14px;
+    padding: 14px 12px;
   }
 
   .home-section-head {
     align-items: flex-start;
+    margin-bottom: 12px;
+  }
+
+  .home-section-head h2 {
+    font-size: 1.28rem;
   }
 
   .home-kpi-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 
   .home-kpi-card {
-    min-height: 100px;
-    padding: 14px;
+    grid-template-columns: 42px minmax(0, 1fr);
+    gap: 9px;
+    min-height: 112px;
+    padding: 12px 10px;
+    border-radius: 16px;
+  }
+
+  .home-kpi-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 14px;
+    font-size: 1.08rem;
+  }
+
+  .home-kpi-card span {
+    font-size: 0.72rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .home-kpi-card strong {
+    margin-top: 4px;
+    font-size: 1.55rem;
+  }
+
+  .home-kpi-card small {
+    margin-top: 5px;
+    font-size: 0.72rem;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
+
+  .operational-alert-list li {
+    gap: 9px;
+    padding: 10px;
+  }
+
+  .alert-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
   }
 
   .home-ranking-section .top-product-row {
-    grid-template-columns: 34px 52px minmax(0, 1fr);
+    grid-template-columns: 30px 42px minmax(0, 1fr);
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .top-product-image {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+  }
+
+  .home-ranking-section .top-product-position {
+    width: 28px;
+    height: 28px;
+    font-size: 0.78rem;
   }
 
   .top-product-revenue {
     grid-column: 3;
+    font-size: 0.86rem;
   }
 }
 
