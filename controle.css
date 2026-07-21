@@ -724,6 +724,62 @@ textarea {
   background: rgba(25, 135, 84, 0.14);
 }
 
+.smart-order-list {
+  display: grid;
+  gap: 10px;
+}
+
+.smart-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-left-width: 6px;
+  border-radius: 16px;
+  padding: 12px 14px;
+  background: var(--white);
+}
+
+.smart-order-row div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.smart-order-row strong {
+  color: var(--black);
+  overflow-wrap: anywhere;
+}
+
+.smart-order-row span {
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.smart-order-row em {
+  flex: 0 0 auto;
+  color: var(--green);
+  font-style: normal;
+  font-weight: 950;
+}
+
+.smart-order-row.stock-alert-zero {
+  border-left-color: #f2c94c;
+  background: #fff9db;
+}
+
+.smart-order-row.stock-alert-critical {
+  border-left-color: #e53935;
+  background: #fff1f1;
+}
+
+.smart-order-row.stock-alert-ok {
+  border-left-color: var(--green);
+  background: #f0fff5;
+}
+
 .top-product-row {
   display: grid;
   grid-template-columns: 46px minmax(0, 1fr);
@@ -1904,5 +1960,10 @@ textarea {
 
   .finance-date-range {
     grid-template-columns: 1fr;
+  }
+
+  .smart-order-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

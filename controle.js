@@ -1355,6 +1355,69 @@ function rankedProducts(sales = filteredSales()) {
   return [...rank.values()].sort((a, b) => b.quantity - a.quantity);
 }
 
+function smartOrderSuggestions() {
+  const selected = filteredSales();
+  const confirmedSiteOrders = confirmedSiteOrdersInPeriod();
+  const manualSales = manualSalesInPeriod(selected, confirmedSiteOrders);
+  const saleIds = new Set(manualSales.map((sale) => String(sale.id)));
+  const orderIds = new Set(confirmedSiteOrders.map((order) => String(order.id)));
+  const productById = new Map(app.products.map((product) => [String(product.id), product]));
+  const productByName = new Map(app.products.map((product) => [String(product.nome || "").trim().toLowerCase(), product]));
+  const sold = new Map();
+
+  const addSold = (item, productId, productName, quantity, total) => {
+    const normalizedName = String(productName || "").trim().toLowerCase();
+    const product = productById.get(String(productId)) || productByName.get(normalizedName);
+    const key = product ? `product:${product.id}` : `name:${normalizedName || productId}`;
+    const current = sold.get(key) || {
+      product,
+      name: product?.nome || productName || "Produto",
+      quantity: 0,
+      total: 0,
+      stock: toNumber(product?.estoque),
+    };
+    current.quantity += toNumber(quantity);
+    current.total += toNumber(total);
+    current.stock = toNumber(current.product?.estoque);
+    sold.set(key, current);
+  };
+
+  app.saleItems
+    .filter((item) => saleIds.has(String(item.venda_id)))
+    .forEach((item) => addSold(item, item.produto_id, item.nome_produto, item.quantidade, item.valor_total));
+
+  app.orderItems
+    .filter((item) => orderIds.has(String(item.pedido_id)))
+    .forEach((item) => addSold(item, item.produto_id, item.produto_nome, item.quantidade, item.subtotal || item.valor_total));
+
+  return [...sold.values()]
+    .filter((row) => {
+      const stock = toNumber(row.stock);
+      const soldQty = toNumber(row.quantity);
+      if (stock === 0) return soldQty >= 1;
+      if (stock >= 1 && stock <= 3) return soldQty >= 2;
+      if (stock >= 4 && stock <= 5) return soldQty >= 3;
+      return false;
+    })
+    .map((row) => {
+      const stock = toNumber(row.stock);
+      let priority = 3;
+      let status = "Acompanhar";
+      if (stock === 0) {
+        priority = 1;
+        status = "Acabou e vendeu";
+      } else if (stock <= 3) {
+        priority = 2;
+        status = "Repor urgente";
+      } else {
+        status = "Esgotando";
+      }
+      return { ...row, priority, status };
+    })
+    .sort((a, b) => a.priority - b.priority || b.quantity - a.quantity || a.stock - b.stock)
+    .slice(0, 12);
+}
+
 function renderList(selector, rows, emptyText) {
   const root = $(selector);
   if (!root) return;
@@ -2965,10 +3028,32 @@ function renderExpenses() {
     : "<p>Nenhuma despesa no periodo.</p>";
 }
 
+function renderSmartOrderSuggestions() {
+  const root = $("[data-smart-order-suggestions]");
+  if (!root) return;
+  const rows = smartOrderSuggestions();
+  root.innerHTML = rows.length
+    ? `<div class="smart-order-list">${rows.map((row) => {
+      const stock = toNumber(row.stock);
+      const colorClass = stockColorClass(stock);
+      return `
+        <article class="smart-order-row ${colorClass}">
+          <div>
+            <strong>${escapeHtml(row.name)}</strong>
+            <span>${escapeHtml(row.status)} • vendeu ${toNumber(row.quantity)} un no periodo • estoque ${stock} un</span>
+          </div>
+          <em>${currency.format(row.total)}</em>
+        </article>
+      `;
+    }).join("")}</div>`
+    : `<p class="operational-alert-empty">Nenhuma sugestao de pedido agora. Produtos com pouco estoque, mas sem venda forte, foram ignorados.</p>`;
+}
+
 function renderReports() {
   const sales = filteredSales();
   const ranked = rankedProducts(sales);
   const soldNames = new Set(ranked.map((row) => row.label));
+  renderSmartOrderSuggestions();
   renderList("[data-report-low-products]", [...ranked].reverse().slice(0, 5), "Sem dados de venda.");
   renderList(
     "[data-report-no-sales]",
