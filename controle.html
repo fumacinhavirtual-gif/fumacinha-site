@@ -439,8 +439,8 @@
           <section class="panel-card cash-panel">
             <div class="section-head">
               <div>
-                <p class="eyebrow">Fechamento de Caixa</p>
-                <h2>Conferencia do dia</h2>
+                <p class="eyebrow">Conferencia</p>
+                <h2>Caixa, troco e trocas</h2>
               </div>
             </div>
 
@@ -449,6 +449,7 @@
             </div>
 
             <div class="cash-status" data-cash-status></div>
+            <div class="conference-alert" data-conference-alert></div>
 
             <section class="change-box-panel">
               <div class="section-head">
@@ -485,6 +486,19 @@
               <article><span>Vendas canceladas</span><strong data-cash-cancelled>0</strong></article>
             </div>
 
+            <section class="exchange-check-panel">
+              <div class="section-head">
+                <div>
+                  <p class="eyebrow">Conferir trocas</p>
+                  <h2>Pods reserva por rota</h2>
+                </div>
+              </div>
+              <p class="muted-text">Informe quantas trocas o entregador levou e quantas voltaram em cada rota.</p>
+              <div class="exchange-route-list" data-exchange-route-list></div>
+              <div class="exchange-summary" data-exchange-summary></div>
+              <button class="ghost-action" type="button" data-save-exchange-check>Salvar conferencia de trocas</button>
+            </section>
+
             <form data-cash-form>
               <div class="form-grid">
                 <label>Sangrias <input type="text" name="sangrias" inputmode="decimal" placeholder="0,00" /></label>
@@ -494,6 +508,7 @@
                 <label>Dinheiro contado manualmente <input type="text" name="dinheiro_contado" inputmode="decimal" placeholder="0,00" required /></label>
               </div>
               <label>Observacao <textarea name="observacao" rows="3"></textarea></label>
+              <label>Senha de conferencia <input type="password" name="conferencia_senha" autocomplete="off" placeholder="Digite a senha para finalizar" /></label>
 
               <div class="cash-grid cash-result-grid">
                 <article><span>Troco restante</span><strong data-cash-change-left>R$ 0,00</strong></article>
@@ -506,7 +521,7 @@
               <div class="cash-summary" data-cash-summary></div>
               <div class="form-footer">
                 <small>Dinheiro esperado = saldo inicial de troco + dinheiro recebido - troco devolvido + reforcos - sangrias - retiradas - pagamentos pelo caixa.</small>
-                <button class="primary-action" type="submit" data-cash-close-button>Conferir e fechar caixa</button>
+                <button class="primary-action" type="submit" data-cash-close-button>Finalizar conferencia</button>
               </div>
             </form>
 
@@ -653,7 +668,7 @@
           <button type="button" data-tab="history"><span>🕘</span> Historico</button>
           <button type="button" data-tab="stock"><span>📦</span> Estoque</button>
           <button type="button" data-tab="finance"><span>💰</span> Financeiro</button>
-          <button type="button" data-tab="cash"><span>🧾</span> Caixa</button>
+          <button type="button" data-tab="cash"><span>🧾</span> Conferencia</button>
           <button type="button" data-tab="more"><span>⚙️</span> Mais</button>
         </nav>
 

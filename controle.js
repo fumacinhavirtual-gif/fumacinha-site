@@ -29,6 +29,9 @@ const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
 const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
+const EXCHANGE_CHECK_KEY = "fumacinha:exchangeChecks";
+const CONFERENCE_PASSWORD_KEY = "fumacinha:conferencePassword";
+const DEFAULT_CONFERENCE_PASSWORD = "1234";
 const app = {
   products: [],
   sales: [],
@@ -140,6 +143,7 @@ const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
 const cashHistory = $("[data-cash-history]");
 const cashStatus = $("[data-cash-status]");
+const conferenceAlert = $("[data-conference-alert]");
 const changeHistory = $("[data-change-history]");
 const routesDateInput = $("[data-routes-date]");
 const routesFilterSelect = $("[data-routes-filter]");
@@ -3418,6 +3422,103 @@ function cashDifferenceLabel(difference) {
   return difference > 0 ? "Sobra de caixa" : "Falta de caixa";
 }
 
+function exchangeStore() {
+  try {
+    return JSON.parse(localStorage.getItem(EXCHANGE_CHECK_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function exchangeRowsForDate(dateKey = app.cashDate) {
+  const store = exchangeStore();
+  const saved = store[dateKey] || {};
+  return ROUTE_TIMES.map((time) => ({
+    time,
+    sent: Math.max(0, Number.parseInt(saved[time]?.sent || 0, 10)),
+    returned: Math.max(0, Number.parseInt(saved[time]?.returned || 0, 10)),
+  }));
+}
+
+function exchangeRowsFromInputs() {
+  return ROUTE_TIMES.map((time) => ({
+    time,
+    sent: Math.max(0, Number.parseInt($(`[data-exchange-sent="${time}"]`)?.value || "0", 10)),
+    returned: Math.max(0, Number.parseInt($(`[data-exchange-returned="${time}"]`)?.value || "0", 10)),
+  }));
+}
+
+function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
+  const store = exchangeStore();
+  store[dateKey] = rows.reduce((acc, row) => {
+    acc[row.time] = { sent: toNumber(row.sent), returned: toNumber(row.returned) };
+    return acc;
+  }, {});
+  localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
+}
+
+function exchangeSummary(rows = exchangeRowsFromInputs()) {
+  const sent = rows.reduce((sum, row) => sum + toNumber(row.sent), 0);
+  const returned = rows.reduce((sum, row) => sum + toNumber(row.returned), 0);
+  const missing = Math.max(0, sent - returned);
+  return { sent, returned, missing, ok: missing === 0 };
+}
+
+function renderExchangeSummary(rows = exchangeRowsFromInputs()) {
+  const root = $("[data-exchange-summary]");
+  if (!root) return;
+  const summary = exchangeSummary(rows);
+  root.className = `exchange-summary ${summary.ok ? "ok" : "pending"}`;
+  root.innerHTML = `
+    <strong>${summary.ok ? "Trocas conferidas" : `Faltam ${summary.missing} troca${summary.missing === 1 ? "" : "s"}`}</strong>
+    <span>Levou ${summary.sent} | Voltou ${summary.returned}</span>
+  `;
+}
+
+function renderExchangeCheck() {
+  const root = $("[data-exchange-route-list]");
+  if (!root) return;
+  const rows = exchangeRowsForDate();
+  root.innerHTML = rows.map((row) => {
+    const missing = Math.max(0, toNumber(row.sent) - toNumber(row.returned));
+    return `
+      <article class="exchange-route-row ${missing ? "pending" : "ok"}">
+        <strong>${row.time}</strong>
+        <label>Levou <input type="number" min="0" step="1" value="${row.sent}" data-exchange-sent="${row.time}" /></label>
+        <label>Voltou <input type="number" min="0" step="1" value="${row.returned}" data-exchange-returned="${row.time}" /></label>
+        <span>${missing ? `Faltam ${missing}` : "Ok"}</span>
+      </article>
+    `;
+  }).join("");
+  renderExchangeSummary(rows);
+}
+
+function saveExchangeCheck() {
+  const rows = exchangeRowsFromInputs();
+  saveExchangeRows(rows);
+  renderExchangeCheck();
+  const summary = exchangeSummary(rows);
+  setStatus(summary.ok ? "Trocas conferidas." : "Trocas salvas com pendencias.", summary.ok ? "success" : "error");
+}
+
+function conferencePasswordOk() {
+  const expected = localStorage.getItem(CONFERENCE_PASSWORD_KEY) || DEFAULT_CONFERENCE_PASSWORD;
+  const value = cashForm?.elements.conferencia_senha?.value || "";
+  return value === expected;
+}
+
+function renderConferenceAlert() {
+  if (!conferenceAlert) return;
+  const today = localDateValue();
+  const closing = cashClosingForDate();
+  const selectedDate = app.cashDate || today;
+  const isPastOpen = selectedDate < today && closing?.status !== "fechado";
+  conferenceAlert.innerHTML = isPastOpen
+    ? `<strong>Dia ${new Date(`${selectedDate}T12:00:00`).toLocaleDateString("pt-BR")} nao foi conferido.</strong><span>A vendedora ainda nao conferiu caixa, troco e trocas deste dia.</span>`
+    : "";
+  conferenceAlert.classList.toggle("hidden", !isPastOpen);
+}
+
 function setMoneyInput(input, value) {
   if (input) input.value = toNumber(value).toFixed(2).replace(".", ",");
 }
@@ -3465,6 +3566,7 @@ function populateCashForm() {
   setMoneyInput(cashForm.elements.pagamentos_caixa, closing?.pagamentos_caixa || movements.pagamento);
   setMoneyInput(cashForm.elements.dinheiro_contado, closing?.dinheiro_contado || 0);
   cashForm.elements.observacao.value = closing?.observacao || "";
+  if (cashForm.elements.conferencia_senha) cashForm.elements.conferencia_senha.value = "";
 }
 
 async function changeCashBalance(action) {
@@ -3564,7 +3666,7 @@ function renderCashClosing() {
   $("[data-cash-cancelled]").textContent = String(values.vendasCanceladas);
   if (cashStatus) {
     cashStatus.innerHTML = closing?.status === "fechado"
-      ? `<strong>Caixa conferido</strong><span>${new Date(closing.fechado_em || closing.updated_at).toLocaleString("pt-BR")}</span><span>Responsavel: ${escapeHtml(closing.fechado_por || "Usuario autenticado")}</span><span>Diferenca: ${currency.format(closing.diferenca || 0)}</span>`
+      ? `<strong>Conferencia finalizada</strong><span>${new Date(closing.fechado_em || closing.updated_at).toLocaleString("pt-BR")}</span><span>Responsavel: ${escapeHtml(closing.fechado_por || "Usuario autenticado")}</span><span>Diferenca: ${currency.format(closing.diferenca || 0)}</span>`
       : "<span>Fechamento aberto para conferencia.</span>";
   }
   const isClosed = closing?.status === "fechado";
@@ -3576,6 +3678,11 @@ function renderCashClosing() {
   }
   [...cashForm.elements].forEach((field) => {
     if (field.matches("input, textarea, select")) field.disabled = isClosed;
+  });
+  renderConferenceAlert();
+  renderExchangeCheck();
+  $$("[data-exchange-sent], [data-exchange-returned], [data-save-exchange-check]").forEach((field) => {
+    field.disabled = isClosed;
   });
   updateCashPreview();
   renderCashHistory();
@@ -3619,20 +3726,28 @@ async function closeCash(event) {
   event.preventDefault();
   if (!cashForm) return;
   const values = cashCalculate();
-  const confirmed = window.confirm(`Conferir e fechar caixa de ${new Date(`${app.cashDate}T12:00:00`).toLocaleDateString("pt-BR")}?\n\nDinheiro esperado: ${currency.format(values.dinheiroEsperado)}\nDinheiro contado: ${currency.format(values.dinheiroContado)}\nDiferenca: ${currency.format(values.diferenca)}`);
+  const exchangeRows = exchangeRowsFromInputs();
+  const exchange = exchangeSummary(exchangeRows);
+  if (!exchange.ok) {
+    renderExchangeSummary(exchangeRows);
+    return setStatus(`Ainda faltam ${exchange.missing} troca${exchange.missing === 1 ? "" : "s"} para voltar. Confira antes de fechar.`, "error");
+  }
+  if (!conferencePasswordOk()) return setStatus("Senha de conferencia incorreta.", "error");
+  const confirmed = window.confirm(`Finalizar conferencia de ${new Date(`${app.cashDate}T12:00:00`).toLocaleDateString("pt-BR")}?\n\nDinheiro esperado: ${currency.format(values.dinheiroEsperado)}\nDinheiro contado: ${currency.format(values.dinheiroContado)}\nDiferenca: ${currency.format(values.diferenca)}\nTrocas: levou ${exchange.sent}, voltou ${exchange.returned}`);
   if (!confirmed) return;
-  setStatus("Fechando caixa...", "loading");
+  setStatus("Finalizando conferencia...", "loading");
   try {
     await requireUserId();
+    saveExchangeRows(exchangeRows);
     const payload = cashPayload("fechado");
     const { data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(payload, { onConflict: "data_caixa" }).select("*").single();
     if (error) throw error;
     app.cashClosings = [data, ...app.cashClosings.filter((closing) => closing.data_caixa !== data.data_caixa)];
     app.cashEditing = false;
-    setStatus("Caixa conferido e fechado.", "success");
+    setStatus("Conferencia finalizada.", "success");
     renderCashClosing();
   } catch (error) {
-    setStatus(error.message || "Erro ao fechar caixa.", "error");
+    setStatus(error.message || "Erro ao finalizar conferencia.", "error");
   }
 }
 
@@ -3958,6 +4073,7 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-add-change]")) changeCashBalance("adicao");
   if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
   if (event.target.closest("[data-reopen-cash]")) reopenCash();
+  if (event.target.closest("[data-save-exchange-check]")) saveExchangeCheck();
   if (event.target.closest("[data-view-catalog]")) {
     window.location.href = "/";
   }
@@ -4019,6 +4135,9 @@ document.addEventListener("input", (event) => {
   if (event.target.closest("[data-cash-form]")) {
     app.cashEditing = true;
     updateCashPreview();
+  }
+  if (event.target.matches("[data-exchange-sent], [data-exchange-returned]")) {
+    renderExchangeSummary();
   }
 });
 
