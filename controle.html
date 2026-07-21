@@ -73,8 +73,8 @@
           <div class="kpi-grid home-kpi-grid">
             <article class="kpi-clickable" data-open-orders><span>📦 Pedidos pendentes</span><strong data-kpi-pending-orders>0</strong></article>
             <article><span>Total de vendas</span><strong data-kpi-total-sales>0</strong><small data-kpi-total-sales-breakdown>0 manuais • 0 site</small></article>
-            <article><span>📋 Pedidos confirmados</span><strong data-kpi-confirmed-orders>0</strong></article>
-            <article><span>Pedidos cancelados</span><strong data-kpi-cancelled-orders>0</strong></article>
+            <article><span>Comissao de venda</span><strong data-kpi-home-commission>R$ 0,00</strong></article>
+            <article><span>Valor da taxa feita</span><strong data-kpi-home-delivery>R$ 0,00</strong></article>
             <article><span>📉 Estoque baixo</span><strong data-kpi-low-stock>0</strong></article>
             <article><span>⚠️ Produtos sem estoque</span><strong data-kpi-out-stock>0</strong></article>
             <article class="kpi-wide"><span>🔔 Alertas importantes</span><div data-operational-alerts></div></article>
@@ -276,6 +276,7 @@
                   <option value="year">Ano atual</option>
                 </select>
               </label>
+              <button type="button" class="ghost-action history-cancelled-toggle" data-toggle-cancelled-history>Mostrar vendas canceladas</button>
             </div>
             <div data-sales-history></div>
           </section>

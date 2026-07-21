@@ -974,6 +974,9 @@ textarea {
 
 .history-tools {
   display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: end;
   justify-content: flex-end;
   margin: 4px 0 16px;
 }
@@ -984,6 +987,15 @@ textarea {
   width: min(320px, 100%);
   color: var(--muted);
   font-weight: 900;
+}
+
+.history-cancelled-toggle {
+  min-height: 48px;
+}
+
+.history-cancelled-toggle.active {
+  color: #ffffff;
+  background: var(--red);
 }
 
 .sale-item,
@@ -2030,6 +2042,36 @@ textarea {
 
 .history-row.cancelled {
   opacity: 0.64;
+}
+
+.history-cancelled-section {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.history-cancelled-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-cancelled-title h3 {
+  margin: 0;
+  color: var(--red);
+}
+
+.history-cancelled-title span {
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.history-cancelled-day {
+  border-color: rgba(229, 57, 53, 0.24);
 }
 
 @keyframes historyFadeIn {

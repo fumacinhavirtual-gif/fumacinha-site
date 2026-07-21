@@ -79,6 +79,7 @@ const app = {
   financeMonth: localDateValue(new Date()).slice(0, 7),
   financeQuickPeriod: "month",
   historyPeriod: "last7",
+  showCancelledHistory: false,
   activeTab: "home",
   stockSearch: "",
   stockCategory: "all",
@@ -1267,14 +1268,9 @@ function renderDashboard() {
   const selected = filteredSales();
   const confirmedSiteOrders = confirmedSiteOrdersInPeriod();
   const manualSales = manualSalesInPeriod(selected, confirmedSiteOrders);
+  const salesSummary = summaryFor(selected);
   const totalSales = manualSales.length + confirmedSiteOrders.length;
-  const { start, end } = periodRange();
   const pending = pendingOrders();
-  const cancelled = app.orders.filter((order) => {
-    const status = normalizeOrderStatus(order.status);
-    const date = new Date(order.cancelado_em || order.updated_at || order.created_at || Date.now());
-    return status === "cancelado" && date >= start && date <= end;
-  });
   const lowStock = app.products.filter((product) => {
     const stock = toNumber(product.estoque);
     return stock >= 1 && stock <= 5;
@@ -1287,8 +1283,8 @@ function renderDashboard() {
   $("[data-kpi-pending-orders]").textContent = String(pending.length);
   $("[data-kpi-total-sales]").textContent = String(totalSales);
   $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais | ${confirmedSiteOrders.length} site`;
-  $("[data-kpi-confirmed-orders]").textContent = String(confirmedSiteOrders.length);
-  $("[data-kpi-cancelled-orders]").textContent = String(cancelled.length);
+  $("[data-kpi-home-commission]").textContent = currency.format(salesSummary.commission);
+  $("[data-kpi-home-delivery]").textContent = currency.format(salesSummary.delivery);
   $("[data-kpi-low-stock]").textContent = String(lowStock.length);
   $("[data-kpi-out-stock]").textContent = String(outStock.length);
   renderOperationalAlerts(alerts);
@@ -2372,6 +2368,11 @@ function renderPendingOrders() {
 function renderSalesHistory() {
   if (!salesHistory) return;
   if (historyPeriodSelect) historyPeriodSelect.value = app.historyPeriod;
+  const cancelledToggle = $("[data-toggle-cancelled-history]");
+  if (cancelledToggle) {
+    cancelledToggle.textContent = app.showCancelledHistory ? "Ocultar vendas canceladas" : "Mostrar vendas canceladas";
+    cancelledToggle.classList.toggle("active", app.showCancelledHistory);
+  }
   const sales = app.sales;
   const saleIds = new Set(sales.map((sale) => String(sale.id)));
   const confirmedSiteOrders = app.orders
@@ -2381,7 +2382,9 @@ function renderSalesHistory() {
     ...sales.map((sale) => ({ type: "sale", date: saleDate(sale), sale })),
     ...confirmedSiteOrders.map((order) => ({ type: "order", date: orderHistoryDate(order), order })),
   ].sort((a, b) => b.date - a.date);
-  const filteredRows = filterHistoryRowsByPeriod(rows);
+  const allRowsInPeriod = filterHistoryRowsByPeriod(rows);
+  const filteredRows = allRowsInPeriod.filter((row) => !isHistoryRowCancelled(row));
+  const cancelledRows = allRowsInPeriod.filter((row) => isHistoryRowCancelled(row));
   const groups = filteredRows.reduce((acc, row) => {
     const key = localDateValue(row.date);
     if (!acc.has(key)) acc.set(key, []);
@@ -2389,9 +2392,10 @@ function renderSalesHistory() {
     return acc;
   }, new Map());
   const summary = renderSalesHistoryPeriodSummary(filteredRows);
+  const cancelledSection = app.showCancelledHistory ? renderCancelledHistorySection(cancelledRows) : "";
 
-  salesHistory.innerHTML = filteredRows.length
-    ? `${summary}${[...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("")}`
+  salesHistory.innerHTML = filteredRows.length || cancelledSection
+    ? `${summary}${filteredRows.length ? [...groups.entries()].map(([dateKey, groupRows]) => renderSalesHistoryDay(dateKey, groupRows)).join("") : "<p>Nenhuma venda confirmada neste periodo.</p>"}${cancelledSection}`
     : "<p>Nenhuma venda confirmada neste periodo.</p>";
 }
 
@@ -2447,6 +2451,53 @@ function renderSalesHistoryDay(dateKey, rows) {
           <strong>${salesCount} ${salesCount === 1 ? "venda" : "vendas"}</strong>
           <span>${currency.format(revenue)} faturados</span>
           <span>Ticket medio ${currency.format(ticket)}</span>
+        </div>
+      </header>
+      <div class="history-day-list">
+        ${rows.map(renderSalesHistoryRow).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderCancelledHistorySection(rows) {
+  if (!rows.length) {
+    return `
+      <section class="history-cancelled-section">
+        <header class="history-cancelled-title">
+          <h3>Vendas canceladas</h3>
+          <span>Nenhuma venda cancelada neste periodo.</span>
+        </header>
+      </section>
+    `;
+  }
+  const groups = rows.reduce((acc, row) => {
+    const key = localDateValue(row.date);
+    if (!acc.has(key)) acc.set(key, []);
+    acc.get(key).push(row);
+    return acc;
+  }, new Map());
+  return `
+    <section class="history-cancelled-section">
+      <header class="history-cancelled-title">
+        <h3>Vendas canceladas</h3>
+        <span>${rows.length} ${rows.length === 1 ? "registro cancelado" : "registros cancelados"}</span>
+      </header>
+      ${[...groups.entries()].map(([dateKey, groupRows]) => renderCancelledHistoryDay(dateKey, groupRows)).join("")}
+    </section>
+  `;
+}
+
+function renderCancelledHistoryDay(dateKey, rows) {
+  return `
+    <section class="history-day-group history-cancelled-day">
+      <header class="history-day-header">
+        <div>
+          <p>Canceladas</p>
+          <h3>${escapeHtml(historyDateTitle(dateKey))}</h3>
+        </div>
+        <div class="history-day-summary">
+          <strong>${rows.length} ${rows.length === 1 ? "cancelada" : "canceladas"}</strong>
         </div>
       </header>
       <div class="history-day-list">
@@ -4109,6 +4160,11 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-finance-current-month]")) {
     applyFinanceMonth(monthKey());
     renderAll();
+  }
+  if (event.target.closest("[data-toggle-cancelled-history]")) {
+    app.showCancelledHistory = !app.showCancelledHistory;
+    renderSalesHistory();
+    return;
   }
   if (event.target.closest("[data-finance-filter-open]")) openFinanceFilter();
   if (event.target.closest("[data-finance-filter-close]")) closeFinanceFilter();
