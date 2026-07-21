@@ -642,7 +642,7 @@ function notifyNewOrder(order) {
   app.notifiedOrderIds.add(id);
   const receivedAt = new Date(order.created_at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   showToast(
-    `ðŸ”” Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${order.cliente_nome || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
+    `Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${order.cliente_nome || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
     "order",
     { clickable: true, onClick: () => scrollToOrder(order.id) }
   );
@@ -1240,7 +1240,7 @@ function renderDashboard() {
 
   $("[data-kpi-pending-orders]").textContent = String(pending.length);
   $("[data-kpi-total-sales]").textContent = String(totalSales);
-  $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais â€¢ ${confirmedSiteOrders.length} site`;
+  $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais | ${confirmedSiteOrders.length} site`;
   $("[data-kpi-cancelled-orders]").textContent = String(cancelled.length);
   $("[data-kpi-revenue-today]").textContent = currency.format(totalRevenue);
   $("[data-kpi-ticket]").textContent = currency.format(totalTicket);
@@ -2895,7 +2895,7 @@ function renderStock() {
       </div>
       <div class="stock-actions">
         <div class="stock-quantity-control">
-          <button class="stock-minus" type="button" data-stock-minus="${product.id}">âˆ’</button>
+          <button class="stock-minus" type="button" data-stock-minus="${product.id}">-</button>
           <input class="stock-quantity-input" type="number" min="0" step="1" value="${toNumber(product.estoque)}" data-stock-value="${product.id}" data-stock-original="${toNumber(product.estoque)}" />
           <button class="stock-plus" type="button" data-stock-plus="${product.id}">+</button>
         </div>
@@ -3075,14 +3075,14 @@ async function saveStock(productId) {
       button.textContent = "Salvando...";
     }
     await updateProductStock(product, toNumber(input.value), "ajuste manual");
-    const successMessage = `âœ… Estoque de â€œ${product.nome}â€ salvo com sucesso!`;
+    const successMessage = `Estoque de "${product.nome}" salvo com sucesso!`;
     setStatus("Estoque atualizado.", "success");
     showToast(successMessage, "success");
     await loadAll();
   } catch (error) {
     console.error("Erro ao salvar estoque:", error);
-    setStatus("NÃ£o foi possÃ­vel salvar o estoque.", "error");
-    showToast("âŒ NÃ£o foi possÃ­vel salvar o estoque.", "error");
+    setStatus("Nao foi possivel salvar o estoque.", "error");
+    showToast("Nao foi possivel salvar o estoque.", "error");
     if (button) {
       button.disabled = false;
       button.textContent = "Salvar estoque";
@@ -3099,7 +3099,7 @@ function updateStockSaveState(productId) {
   button.disabled = !changed;
   button.textContent = "Salvar estoque";
   if (status) {
-    status.textContent = changed ? "AlteraÃ§Ã£o nÃ£o salva" : "Estoque atualizado";
+    status.textContent = changed ? "Alteracao nao salva" : "Estoque atualizado";
     status.classList.toggle("unsaved", changed);
   }
 }
@@ -3212,7 +3212,7 @@ function renderSmartOrderSuggestions() {
         <article class="smart-order-row ${colorClass}">
           <div>
             <strong>${escapeHtml(row.name)}</strong>
-            <span>${escapeHtml(row.status)} â€¢ vendeu ${toNumber(row.quantity)} un no periodo â€¢ estoque ${stock} un</span>
+            <span>${escapeHtml(row.status)} | vendeu ${toNumber(row.quantity)} un no periodo | estoque ${stock} un</span>
           </div>
           <em>${currency.format(row.total)}</em>
         </article>
@@ -3650,7 +3650,7 @@ function renderExchangeCheck(rows = exchangeRowsForDate()) {
       return `
         <article class="exchange-route-row ${state.key}">
           <header>
-            <strong><span>ðŸ•’</span>${row.time}</strong>
+            <strong><span aria-hidden="true">&#128337;</span>${row.time}</strong>
             <em class="exchange-status ${state.key}"><i></i>${state.label}</em>
           </header>
           <div class="exchange-route-body">
