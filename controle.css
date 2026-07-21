@@ -1207,53 +1207,115 @@ textarea {
 
 .exchange-check-panel {
   display: grid;
-  gap: 12px;
-  padding: 14px;
+  gap: 16px;
+  padding: 18px;
   border: 1px solid rgba(25, 135, 84, 0.18);
-  border-radius: 16px;
+  border-radius: 20px;
   background: #ffffff;
+}
+
+.exchange-check-panel .section-head {
+  justify-content: center;
+  text-align: center;
+}
+
+.exchange-check-panel .section-head h2 {
+  font-size: clamp(2rem, 5vw, 3.4rem);
+  line-height: 0.95;
+  text-transform: lowercase;
+}
+
+.exchange-check-panel .muted-text {
+  max-width: 620px;
+  margin: 0 auto;
+  text-align: center;
 }
 
 .exchange-route-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  max-width: 760px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.exchange-route-header {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 0.8fr;
+  gap: 14px;
+  align-items: center;
+  color: var(--black);
+  font-size: clamp(1rem, 3vw, 1.8rem);
+  font-weight: 950;
+  text-transform: uppercase;
 }
 
 .exchange-route-row {
   display: grid;
-  grid-template-columns: 72px repeat(2, minmax(0, 1fr)) 90px;
-  gap: 10px;
-  align-items: end;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--soft);
+  grid-template-columns: 1.2fr 0.8fr 0.8fr;
+  gap: 14px;
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
 }
 
 .exchange-route-row > strong {
-  align-self: center;
   color: var(--black);
-  font-size: 1.08rem;
-}
-
-.exchange-route-row label {
-  margin: 0;
-}
-
-.exchange-route-row span {
-  align-self: center;
-  justify-self: end;
-  color: var(--green);
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  line-height: 1;
   font-weight: 950;
 }
 
-.exchange-route-row.pending {
-  border-color: rgba(211, 47, 47, 0.22);
-  background: rgba(211, 47, 47, 0.06);
+.exchange-route-row > input {
+  width: 72px;
+  height: 72px;
+  min-width: 72px;
+  justify-self: center;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  color: #000000;
+  background: #b6b6b6;
+  font-size: 2.2rem;
+  font-weight: 950;
+  text-align: center;
 }
 
-.exchange-route-row.pending span {
-  color: var(--red);
+.exchange-check-box {
+  position: relative;
+  display: grid;
+  place-items: center;
+  justify-self: center;
+  width: 72px;
+  height: 72px;
+  margin: 0;
+  background: #b6b6b6;
+  cursor: pointer;
+}
+
+.exchange-check-box input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.exchange-check-box span {
+  color: transparent;
+  font-size: 4rem;
+  line-height: 1;
+  font-weight: 950;
+}
+
+.exchange-check-box input:checked + span {
+  color: #1d6ed4;
+}
+
+.exchange-route-row > input:disabled,
+.exchange-check-box:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.68;
 }
 
 .exchange-summary {
@@ -2083,14 +2145,33 @@ textarea {
     padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
 
-  .exchange-route-row {
-    grid-template-columns: 1fr 1fr;
+  .exchange-check-panel {
+    padding: 16px 12px;
   }
 
-  .exchange-route-row > strong,
-  .exchange-route-row span {
-    grid-column: 1 / -1;
-    justify-self: start;
+  .exchange-route-header,
+  .exchange-route-row {
+    grid-template-columns: minmax(92px, 1.2fr) 74px 74px;
+    gap: 8px;
+  }
+
+  .exchange-route-row > strong {
+    font-size: clamp(1.75rem, 8vw, 2.6rem);
+  }
+
+  .exchange-route-row > input,
+  .exchange-check-box {
+    width: 58px;
+    height: 58px;
+    min-width: 58px;
+  }
+
+  .exchange-route-row > input {
+    font-size: 1.8rem;
+  }
+
+  .exchange-check-box span {
+    font-size: 3.2rem;
   }
 
   .exchange-summary {

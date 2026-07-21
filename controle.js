@@ -3437,21 +3437,24 @@ function exchangeRowsForDate(dateKey = app.cashDate) {
     time,
     sent: Math.max(0, Number.parseInt(saved[time]?.sent || 0, 10)),
     returned: Math.max(0, Number.parseInt(saved[time]?.returned || 0, 10)),
+    checked: Boolean(saved[time]?.checked || (Number(saved[time]?.sent || 0) > 0 && Number(saved[time]?.returned || 0) >= Number(saved[time]?.sent || 0))),
   }));
 }
 
 function exchangeRowsFromInputs() {
   return ROUTE_TIMES.map((time) => ({
     time,
-    sent: Math.max(0, Number.parseInt($(`[data-exchange-sent="${time}"]`)?.value || "0", 10)),
-    returned: Math.max(0, Number.parseInt($(`[data-exchange-returned="${time}"]`)?.value || "0", 10)),
+    sent: Math.max(0, Number.parseInt($(`[data-exchange-count="${time}"]`)?.value || "0", 10)),
+    checked: Boolean($(`[data-exchange-checked="${time}"]`)?.checked),
   }));
 }
 
 function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
   const store = exchangeStore();
   store[dateKey] = rows.reduce((acc, row) => {
-    acc[row.time] = { sent: toNumber(row.sent), returned: toNumber(row.returned) };
+    const sent = toNumber(row.sent);
+    const checked = Boolean(row.checked || sent === 0);
+    acc[row.time] = { sent, returned: checked ? sent : 0, checked };
     return acc;
   }, {});
   localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
@@ -3459,9 +3462,9 @@ function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDat
 
 function exchangeSummary(rows = exchangeRowsFromInputs()) {
   const sent = rows.reduce((sum, row) => sum + toNumber(row.sent), 0);
-  const returned = rows.reduce((sum, row) => sum + toNumber(row.returned), 0);
-  const missing = Math.max(0, sent - returned);
-  return { sent, returned, missing, ok: missing === 0 };
+  const checked = rows.reduce((sum, row) => sum + (toNumber(row.sent) > 0 && row.checked ? toNumber(row.sent) : 0), 0);
+  const pendingRoutes = rows.filter((row) => toNumber(row.sent) > 0 && !row.checked).length;
+  return { sent, returned: checked, missing: Math.max(0, sent - checked), pendingRoutes, ok: pendingRoutes === 0 };
 }
 
 function renderExchangeSummary(rows = exchangeRowsFromInputs()) {
@@ -3470,26 +3473,36 @@ function renderExchangeSummary(rows = exchangeRowsFromInputs()) {
   const summary = exchangeSummary(rows);
   root.className = `exchange-summary ${summary.ok ? "ok" : "pending"}`;
   root.innerHTML = `
-    <strong>${summary.ok ? "Trocas conferidas" : `Faltam ${summary.missing} troca${summary.missing === 1 ? "" : "s"}`}</strong>
-    <span>Levou ${summary.sent} | Voltou ${summary.returned}</span>
-  `;
+      <strong>${summary.ok ? "Trocas conferidas" : `${summary.pendingRoutes} horario${summary.pendingRoutes === 1 ? "" : "s"} sem conferir`}</strong>
+      <span>Total de trocas: ${summary.sent} | Conferidas: ${summary.returned}</span>
+    `;
 }
 
 function renderExchangeCheck() {
   const root = $("[data-exchange-route-list]");
   if (!root) return;
   const rows = exchangeRowsForDate();
-  root.innerHTML = rows.map((row) => {
-    const missing = Math.max(0, toNumber(row.sent) - toNumber(row.returned));
-    return `
-      <article class="exchange-route-row ${missing ? "pending" : "ok"}">
-        <strong>${row.time}</strong>
-        <label>Levou <input type="number" min="0" step="1" value="${row.sent}" data-exchange-sent="${row.time}" /></label>
-        <label>Voltou <input type="number" min="0" step="1" value="${row.returned}" data-exchange-returned="${row.time}" /></label>
-        <span>${missing ? `Faltam ${missing}` : "Ok"}</span>
-      </article>
-    `;
-  }).join("");
+  root.innerHTML = `
+    <div class="exchange-route-header">
+      <span>Horarios</span>
+      <span>Trocas</span>
+      <span>Conferir</span>
+    </div>
+    ${rows.map((row) => {
+      const checked = Boolean(row.checked);
+      const ok = checked || toNumber(row.sent) === 0;
+      return `
+        <article class="exchange-route-row ${ok ? "ok" : "pending"}">
+          <strong>${row.time}</strong>
+          <input aria-label="Trocas da rota ${row.time}" type="number" min="0" step="1" value="${row.sent}" data-exchange-count="${row.time}" />
+          <label class="exchange-check-box" aria-label="Conferir rota ${row.time}">
+            <input type="checkbox" ${checked ? "checked" : ""} data-exchange-checked="${row.time}" />
+            <span>✓</span>
+          </label>
+        </article>
+      `;
+    }).join("")}
+  `;
   renderExchangeSummary(rows);
 }
 
@@ -3681,7 +3694,7 @@ function renderCashClosing() {
   });
   renderConferenceAlert();
   renderExchangeCheck();
-  $$("[data-exchange-sent], [data-exchange-returned], [data-save-exchange-check]").forEach((field) => {
+  $$("[data-exchange-count], [data-exchange-checked], [data-save-exchange-check]").forEach((field) => {
     field.disabled = isClosed;
   });
   updateCashPreview();
@@ -3730,7 +3743,7 @@ async function closeCash(event) {
   const exchange = exchangeSummary(exchangeRows);
   if (!exchange.ok) {
     renderExchangeSummary(exchangeRows);
-    return setStatus(`Ainda faltam ${exchange.missing} troca${exchange.missing === 1 ? "" : "s"} para voltar. Confira antes de fechar.`, "error");
+    return setStatus(`Ainda existe horario de troca sem conferir. Confira antes de finalizar.`, "error");
   }
   if (!conferencePasswordOk()) return setStatus("Senha de conferencia incorreta.", "error");
   const confirmed = window.confirm(`Finalizar conferencia de ${new Date(`${app.cashDate}T12:00:00`).toLocaleDateString("pt-BR")}?\n\nDinheiro esperado: ${currency.format(values.dinheiroEsperado)}\nDinheiro contado: ${currency.format(values.dinheiroContado)}\nDiferenca: ${currency.format(values.diferenca)}\nTrocas: levou ${exchange.sent}, voltou ${exchange.returned}`);
@@ -4136,7 +4149,7 @@ document.addEventListener("input", (event) => {
     app.cashEditing = true;
     updateCashPreview();
   }
-  if (event.target.matches("[data-exchange-sent], [data-exchange-returned]")) {
+  if (event.target.matches("[data-exchange-count]")) {
     renderExchangeSummary();
   }
 });
@@ -4173,6 +4186,7 @@ document.addEventListener("change", (event) => {
   if (["pagamento_1_forma", "pagamento_2_forma"].includes(event.target.name)) updateSaleTotal();
   if (event.target.name === "teve_troco") updateSaleTotal();
   if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
+  if (event.target.matches("[data-exchange-checked]")) renderExchangeSummary();
   if (["valor_recebido", "taxa_entrega", "troco", "pagamento_1_valor", "pagamento_2_valor"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     updateSaleTotal();
