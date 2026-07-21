@@ -69,29 +69,88 @@
 
         <p class="app-status" data-app-status></p>
 
-        <section class="tab-panel" data-panel="home">
-          <div class="kpi-grid home-kpi-grid">
-            <article class="kpi-clickable" data-open-orders><span>📦 Pedidos pendentes</span><strong data-kpi-pending-orders>0</strong></article>
-            <article><span>Total de vendas</span><strong data-kpi-total-sales>0</strong><small data-kpi-total-sales-breakdown>0 manuais • 0 site</small></article>
-            <article><span>Comissao de venda</span><strong data-kpi-home-commission>R$ 0,00</strong></article>
-            <article><span>Taxa do entregador</span><strong data-kpi-home-delivery>R$ 0,00</strong></article>
-            <article><span>📉 Estoque baixo</span><strong data-kpi-low-stock>0</strong></article>
-            <article><span>⚠️ Produtos sem estoque</span><strong data-kpi-out-stock>0</strong></article>
-            <article class="kpi-wide"><span>🔔 Alertas importantes</span><div data-operational-alerts></div></article>
-          </div>
+        <section class="tab-panel home-dashboard" data-panel="home">
+          <section class="home-section home-summary-card">
+            <div class="home-section-head">
+              <div>
+                <p class="eyebrow">Operacao</p>
+                <h2>Resumo do dia</h2>
+              </div>
+            </div>
+            <div class="home-kpi-grid">
+              <article class="home-kpi-card kpi-clickable" data-open-orders>
+                <div class="home-kpi-icon pending">&#128230;</div>
+                <div>
+                  <span>Pedidos pendentes</span>
+                  <strong data-kpi-pending-orders>0</strong>
+                  <small>Clique para ver</small>
+                </div>
+              </article>
+              <article class="home-kpi-card">
+                <div class="home-kpi-icon sales">&#128722;</div>
+                <div>
+                  <span>Total de vendas</span>
+                  <strong data-kpi-total-sales>0</strong>
+                  <small data-kpi-total-sales-breakdown>0 manuais | 0 site</small>
+                </div>
+              </article>
+              <article class="home-kpi-card">
+                <div class="home-kpi-icon commission">&#128176;</div>
+                <div>
+                  <span>Comissao de venda</span>
+                  <strong data-kpi-home-commission>R$ 0,00</strong>
+                  <small>No periodo</small>
+                </div>
+              </article>
+              <article class="home-kpi-card">
+                <div class="home-kpi-icon delivery">&#128666;</div>
+                <div>
+                  <span>Taxa do entregador</span>
+                  <strong data-kpi-home-delivery>R$ 0,00</strong>
+                  <small>No periodo</small>
+                </div>
+              </article>
+              <article class="home-kpi-card">
+                <div class="home-kpi-icon low">&#128201;</div>
+                <div>
+                  <span>Estoque baixo</span>
+                  <strong data-kpi-low-stock>0</strong>
+                  <small>Produtos</small>
+                </div>
+              </article>
+              <article class="home-kpi-card">
+                <div class="home-kpi-icon empty">&#9888;</div>
+                <div>
+                  <span>Produtos sem estoque</span>
+                  <strong data-kpi-out-stock>0</strong>
+                  <small>Produtos</small>
+                </div>
+              </article>
+            </div>
+          </section>
 
-          <div class="report-grid home-report-grid">
-            <section class="home-stock-section">
-              <h2>Estoque baixo</h2>
-              <div data-home-low-stock-list></div>
-            </section>
-            <section class="home-ranking-section">
-              <h2>🔥 Produtos mais vendidos</h2>
-              <div data-report-top-products></div>
-            </section>
-          </div>
+          <section class="home-section home-alert-card">
+            <div class="home-section-head">
+              <div>
+                <p class="eyebrow">Atencao</p>
+                <h2>Alertas importantes</h2>
+              </div>
+              <button type="button" class="ghost-action" data-tab="stock">Ver todos</button>
+            </div>
+            <div data-operational-alerts></div>
+          </section>
+
+          <section class="home-section home-ranking-section">
+            <div class="home-section-head">
+              <div>
+                <p class="eyebrow">Ranking</p>
+                <h2>Produtos mais vendidos</h2>
+              </div>
+              <button type="button" class="ghost-action" data-tab="history">Ver mais</button>
+            </div>
+            <div data-report-top-products></div>
+          </section>
         </section>
-
         <section class="tab-panel hidden" data-panel="sales">
           <div class="section-head">
             <div>

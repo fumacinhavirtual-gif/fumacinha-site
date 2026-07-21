@@ -642,7 +642,7 @@ function notifyNewOrder(order) {
   app.notifiedOrderIds.add(id);
   const receivedAt = new Date(order.created_at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   showToast(
-    `🔔 Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${order.cliente_nome || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
+    `ðŸ”” Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${order.cliente_nome || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
     "order",
     { clickable: true, onClick: () => scrollToOrder(order.id) }
   );
@@ -1240,7 +1240,7 @@ function renderDashboard() {
 
   $("[data-kpi-pending-orders]").textContent = String(pending.length);
   $("[data-kpi-total-sales]").textContent = String(totalSales);
-  $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais • ${confirmedSiteOrders.length} site`;
+  $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais â€¢ ${confirmedSiteOrders.length} site`;
   $("[data-kpi-cancelled-orders]").textContent = String(cancelled.length);
   $("[data-kpi-revenue-today]").textContent = currency.format(totalRevenue);
   $("[data-kpi-ticket]").textContent = currency.format(totalTicket);
@@ -1256,11 +1256,11 @@ function renderDashboard() {
 
 function operationalAlerts({ pending, lowStock, outStock, missingImages, inactiveProducts }) {
   const alerts = [];
-  if (outStock.length) alerts.push(`${outStock.length} ${outStock.length === 1 ? "produto sem estoque" : "produtos sem estoque"}`);
-  if (lowStock.length) alerts.push(`${lowStock.length} ${lowStock.length === 1 ? "produto com estoque baixo" : "produtos com estoque baixo"}`);
-  if (pending.length) alerts.push(`${pending.length} ${pending.length === 1 ? "pedido aguardando confirmacao" : "pedidos aguardando confirmacao"}`);
-  if (missingImages.length) alerts.push(`${missingImages.length} ${missingImages.length === 1 ? "produto cadastrado sem imagem" : "produtos cadastrados sem imagem"}`);
-  if (inactiveProducts.length) alerts.push(`${inactiveProducts.length} ${inactiveProducts.length === 1 ? "produto inativo" : "produtos inativos"}`);
+  if (outStock.length) alerts.push({ icon: "!", text: `${outStock.length} ${outStock.length === 1 ? "produto sem estoque" : "produtos sem estoque"}` });
+  if (lowStock.length) alerts.push({ icon: "-", text: `${lowStock.length} ${lowStock.length === 1 ? "produto com estoque baixo" : "produtos com estoque baixo"}` });
+  if (pending.length) alerts.push({ icon: "#", text: `${pending.length} ${pending.length === 1 ? "pedido aguardando confirmacao" : "pedidos aguardando confirmacao"}` });
+  if (missingImages.length) alerts.push({ icon: "i", text: `${missingImages.length} ${missingImages.length === 1 ? "produto cadastrado sem imagem" : "produtos cadastrados sem imagem"}` });
+  if (inactiveProducts.length) alerts.push({ icon: "x", text: `${inactiveProducts.length} ${inactiveProducts.length === 1 ? "produto inativo" : "produtos inativos"}` });
   return alerts;
 }
 
@@ -1294,17 +1294,21 @@ function renderDashboard() {
 
 function dashboardRankedProducts(manualSales, confirmedOrders) {
   const rank = new Map();
+  const productById = new Map(app.products.map((product) => [String(product.id), product]));
+  const productByName = new Map(app.products.map((product) => [String(product.nome || "").trim().toLowerCase(), product]));
   const addRow = (key, label, quantity, total) => {
-    const current = rank.get(key) || { label: label || "Produto", quantity: 0, total: 0 };
+    const product = productById.get(String(key)) || productByName.get(String(label || "").trim().toLowerCase());
+    const current = rank.get(key) || { label: label || "Produto", quantity: 0, total: 0, image: productImage(product) };
     current.quantity += toNumber(quantity);
     current.total += toNumber(total);
+    if (!current.image && product) current.image = productImage(product);
     rank.set(key, current);
   };
 
   app.saleItems
     .filter((item) => manualSales.some((sale) => String(sale.id) === String(item.venda_id)))
     .forEach((item) => {
-      const key = item.nome_produto || item.produto_id;
+      const key = item.produto_id || item.nome_produto;
       addRow(key, item.nome_produto || "Produto", item.quantidade, item.valor_total);
     });
 
@@ -1312,7 +1316,7 @@ function dashboardRankedProducts(manualSales, confirmedOrders) {
   app.orderItems
     .filter((item) => confirmedOrderIds.has(String(item.pedido_id)))
     .forEach((item) => {
-      const key = item.produto_nome || item.produto_id;
+      const key = item.produto_id || item.produto_nome;
       addRow(key, item.produto_nome || "Produto", item.quantidade, item.subtotal || item.valor_total);
     });
 
@@ -1323,7 +1327,13 @@ function renderOperationalAlerts(alerts) {
   const root = $("[data-operational-alerts]");
   if (!root) return;
   root.innerHTML = alerts.length
-    ? `<ul class="operational-alert-list">${alerts.map((alert) => `<li>${escapeHtml(alert)}</li>`).join("")}</ul>`
+    ? `<ul class="operational-alert-list">${alerts.map((alert) => `
+      <li>
+        <span class="alert-icon">${escapeHtml(alert.icon)}</span>
+        <strong>${escapeHtml(alert.text)}</strong>
+        <span class="alert-arrow">&rsaquo;</span>
+      </li>
+    `).join("")}</ul>`
     : `<p class="operational-alert-empty">Nenhum alerta importante agora.</p>`;
 }
 
@@ -1367,17 +1377,18 @@ function renderTopProductsRanking(rows) {
     const percent = Math.max(8, Math.round((quantity / maxQuantity) * 100));
     return `
       <article class="top-product-row">
-        <div class="top-product-position">${index + 1}º</div>
+        <div class="top-product-position">${index + 1}&ordm;</div>
+        <img class="top-product-image" src="${escapeHtml(row.image || "./assets/fumacinha-logo.png")}" alt="${escapeHtml(row.label)}" />
         <div class="top-product-info">
           <strong>${escapeHtml(row.label)}</strong>
-          <span>${quantity} ${quantity === 1 ? "unidade" : "unidades"} | ${currency.format(row.total)}</span>
+          <span>${quantity} ${quantity === 1 ? "unidade" : "unidades"}</span>
           <div class="top-product-bar"><span style="width: ${percent}%"></span></div>
         </div>
+        <strong class="top-product-revenue">${currency.format(row.total)}</strong>
       </article>
     `;
   }).join("");
 }
-
 function rankedProducts(sales = filteredSales()) {
   const rank = new Map();
   app.saleItems
@@ -2884,7 +2895,7 @@ function renderStock() {
       </div>
       <div class="stock-actions">
         <div class="stock-quantity-control">
-          <button class="stock-minus" type="button" data-stock-minus="${product.id}">−</button>
+          <button class="stock-minus" type="button" data-stock-minus="${product.id}">âˆ’</button>
           <input class="stock-quantity-input" type="number" min="0" step="1" value="${toNumber(product.estoque)}" data-stock-value="${product.id}" data-stock-original="${toNumber(product.estoque)}" />
           <button class="stock-plus" type="button" data-stock-plus="${product.id}">+</button>
         </div>
@@ -3064,14 +3075,14 @@ async function saveStock(productId) {
       button.textContent = "Salvando...";
     }
     await updateProductStock(product, toNumber(input.value), "ajuste manual");
-    const successMessage = `✅ Estoque de “${product.nome}” salvo com sucesso!`;
+    const successMessage = `âœ… Estoque de â€œ${product.nome}â€ salvo com sucesso!`;
     setStatus("Estoque atualizado.", "success");
     showToast(successMessage, "success");
     await loadAll();
   } catch (error) {
     console.error("Erro ao salvar estoque:", error);
-    setStatus("Não foi possível salvar o estoque.", "error");
-    showToast("❌ Não foi possível salvar o estoque.", "error");
+    setStatus("NÃ£o foi possÃ­vel salvar o estoque.", "error");
+    showToast("âŒ NÃ£o foi possÃ­vel salvar o estoque.", "error");
     if (button) {
       button.disabled = false;
       button.textContent = "Salvar estoque";
@@ -3088,7 +3099,7 @@ function updateStockSaveState(productId) {
   button.disabled = !changed;
   button.textContent = "Salvar estoque";
   if (status) {
-    status.textContent = changed ? "Alteração não salva" : "Estoque atualizado";
+    status.textContent = changed ? "AlteraÃ§Ã£o nÃ£o salva" : "Estoque atualizado";
     status.classList.toggle("unsaved", changed);
   }
 }
@@ -3201,7 +3212,7 @@ function renderSmartOrderSuggestions() {
         <article class="smart-order-row ${colorClass}">
           <div>
             <strong>${escapeHtml(row.name)}</strong>
-            <span>${escapeHtml(row.status)} • vendeu ${toNumber(row.quantity)} un no periodo • estoque ${stock} un</span>
+            <span>${escapeHtml(row.status)} â€¢ vendeu ${toNumber(row.quantity)} un no periodo â€¢ estoque ${stock} un</span>
           </div>
           <em>${currency.format(row.total)}</em>
         </article>
@@ -3639,7 +3650,7 @@ function renderExchangeCheck(rows = exchangeRowsForDate()) {
       return `
         <article class="exchange-route-row ${state.key}">
           <header>
-            <strong><span>🕒</span>${row.time}</strong>
+            <strong><span>ðŸ•’</span>${row.time}</strong>
             <em class="exchange-status ${state.key}"><i></i>${state.label}</em>
           </header>
           <div class="exchange-route-body">
