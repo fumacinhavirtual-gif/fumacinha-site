@@ -140,6 +140,8 @@ const salesStatusFilter = $("[data-sales-status-filter]");
 const orderSearchInput = $("[data-order-search]");
 const orderSortSelect = $("[data-order-sort]");
 const pendingTitle = $("[data-pending-title]");
+const pendingTotalBadge = $("[data-pending-total-badge]");
+const pendingSummary = $("[data-pending-summary]");
 const pendingNavBadge = $("[data-pending-nav-badge]");
 const expenseForm = $("[data-expense-form]");
 const expenseList = $("[data-expense-list]");
@@ -552,6 +554,7 @@ function pendingOrderCount() {
 function updatePendingBadges() {
   const count = pendingOrderCount();
   if (pendingTitle) pendingTitle.textContent = `Pedidos pendentes (${count})`;
+  if (pendingTotalBadge) pendingTotalBadge.textContent = `${count} ${count === 1 ? "pedido" : "pedidos"}`;
   if (pendingNavBadge) {
     pendingNavBadge.textContent = String(count);
     pendingNavBadge.classList.toggle("hidden", count <= 0);
@@ -2401,6 +2404,41 @@ function saleMatchesPeriod(sale) {
   return date >= start && date <= end;
 }
 
+function orderStatusInfo(status = "") {
+  const normalized = normalizeOrderStatus(status);
+  if (normalized === "confirmado") {
+    return { className: "status-confirmed", icon: "&#10003;", label: "Confirmado" };
+  }
+  if (normalized === "em rota") {
+    return { className: "status-route", icon: "&#128666;", label: "Em rota" };
+  }
+  if (normalized === "entregue") {
+    return { className: "status-delivered", icon: "&#10003;", label: "Entregue" };
+  }
+  if (normalized === "cancelado") {
+    return { className: "status-cancelled", icon: "&#10005;", label: "Cancelado" };
+  }
+  return { className: "status-pending", icon: "&#128337;", label: "Aguardando confirmacao" };
+}
+
+function renderPendingOrderSummary() {
+  if (!pendingSummary) return;
+  const rows = pendingOrders();
+  const total = rows.reduce((sum, order) => sum + toNumber(order.valor_produtos), 0);
+  pendingSummary.innerHTML = `
+    <section class="pending-orders-summary" aria-label="Resumo de pedidos pendentes">
+      <article>
+        <span>Total pendente</span>
+        <strong>${rows.length} ${rows.length === 1 ? "pedido" : "pedidos"}</strong>
+      </article>
+      <article>
+        <span>Valor total</span>
+        <strong>${currency.format(total)}</strong>
+      </article>
+    </section>
+  `;
+}
+
 function renderPendingOrders() {
   if (!pendingOrdersRoot) return;
   updatePendingBadges();
@@ -2410,34 +2448,55 @@ function renderPendingOrders() {
   const search = app.orderSearch.trim().toLowerCase();
   const rows = sortedOrders(ordersForCurrentStatusFilter()
     .filter((order) => !search || orderSearchText(order).includes(search)));
+  pendingOrdersRoot.classList.add("pending-orders-list");
   pendingOrdersRoot.innerHTML = rows.length
     ? rows.map((order) => {
       const items = orderItems(order.id);
-      const isPending = normalizeOrderStatus(order.status) === "aguardando confirmacao";
+      const normalizedStatus = normalizeOrderStatus(order.status);
+      const isPending = normalizedStatus === "aguardando confirmacao";
+      const statusInfo = orderStatusInfo(order.status);
       const phoneUrl = orderWhatsappUrl(order);
+      const createdAt = new Date(order.created_at || Date.now());
+      const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
+      const productText = items.map((item) => `${toNumber(item.quantidade || 1)}x ${escapeHtml(item.produto_nome || "Produto")}`).join(" | ") || "Sem itens";
+      const phoneText = orderPhone(order) ? phoneDisplay(orderPhone(order)) : "Sem telefone";
+      const value = currency.format(order.valor_produtos || 0);
       return `
-        <article class="history-row ${isPending ? "pending-order" : ""} ${normalizeOrderStatus(order.status) === "cancelado" ? "cancelled" : ""}" data-order-row="${order.id}">
-          <div class="pending-order-main">
-            <strong>${escapeHtml(order.codigo || `Pedido #${order.id}`)} - ${escapeHtml(order.cliente_nome || "Cliente")}</strong>
-            ${isPending ? `<span class="status-badge">Aguardando confirmacao</span>` : `<span class="status-badge">${escapeHtml(order.status || "Sem status")}</span>`}
-          </div>
-          <div class="pending-order-meta">
-            <span>${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}</span>
-            <span>${currency.format(order.valor_produtos || 0)}</span>
-            <span>${escapeHtml(order.origem || "Site")}</span>
-            ${order.data_entrega || order.horario_rota ? `<span>Entrega: ${escapeHtml(formatDateBR(order.data_entrega || localDateValue()))} as ${escapeHtml(order.horario_rota || "--:--")}</span>` : ""}
-          </div>
-          <span>${items.map((item) => `${toNumber(item.quantidade)}x ${escapeHtml(item.produto_nome)}`).join(" | ") || "Sem itens"}</span>
-          ${order.motivo_cancelamento ? `<span>Motivo: ${escapeHtml(order.motivo_cancelamento)}</span>` : ""}
-          <div class="history-actions">
-            <button type="button" data-view-order="${order.id}">Ver detalhes</button>
-            ${phoneUrl ? `<button type="button" data-open-order-whatsapp="${order.id}">Abrir conversa no WhatsApp</button>` : `<span>Telefone nao informado</span>`}
-            ${isPending ? `<button type="button" data-edit-order="${order.id}">Editar pedido</button><button type="button" data-cancel-order="${order.id}">Cancelar pedido</button>` : ""}
+        <article class="pending-order-card ${statusInfo.className}" data-order-row="${order.id}">
+          <div class="pending-order-icon" aria-hidden="true">${statusInfo.icon}</div>
+          <div class="pending-order-content">
+            <header class="pending-order-card-head">
+              <div class="pending-order-identity">
+                <strong>${escapeHtml(order.codigo || `Pedido #${order.id}`)}</strong>
+                <span>${escapeHtml(order.cliente_nome || "Cliente")}</span>
+              </div>
+              <div class="pending-order-value">
+                <strong>${value}</strong>
+                <span>${escapeHtml(order.origem || "Site")}</span>
+              </div>
+            </header>
+            <span class="pending-order-status">${statusInfo.label}</span>
+            <div class="pending-order-meta">
+              <span>&#128197; ${createdAt.toLocaleDateString("pt-BR")}</span>
+              <span>&#128338; ${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+              <span>&#128230; ${quantity || items.length} ${(quantity || items.length) === 1 ? "item" : "itens"}</span>
+              <span>&#128222; ${escapeHtml(phoneText)}</span>
+            </div>
+            <p class="pending-order-product">${productText}</p>
+            ${order.data_entrega || order.horario_rota ? `<p class="pending-order-delivery">Entrega: ${escapeHtml(formatDateBR(order.data_entrega || localDateValue()))} as ${escapeHtml(order.horario_rota || "--:--")}</p>` : ""}
+            ${order.motivo_cancelamento ? `<p class="pending-order-cancel-reason">Motivo: ${escapeHtml(order.motivo_cancelamento)}</p>` : ""}
+            <div class="pending-order-actions">
+              <button type="button" class="pending-order-button secondary" data-view-order="${order.id}">Ver detalhes</button>
+              ${isPending ? `<button type="button" class="pending-order-button secondary" data-edit-order="${order.id}">Editar</button>` : ""}
+              ${phoneUrl ? `<button type="button" class="pending-order-button whatsapp" data-open-order-whatsapp="${order.id}">WhatsApp</button>` : ""}
+              ${isPending ? `<button type="button" class="pending-order-button danger" data-cancel-order="${order.id}">Cancelar</button>` : ""}
+            </div>
           </div>
         </article>
       `;
     }).join("")
     : "<p>Nenhum pedido para este filtro.</p>";
+  renderPendingOrderSummary();
 }
 
 function renderSalesHistory() {
