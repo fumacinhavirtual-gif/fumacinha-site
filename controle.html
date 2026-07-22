@@ -790,6 +790,27 @@
       </aside>
     </div>
 
+    <div class="sale-detail-shell hidden" data-sale-detail-shell aria-hidden="true">
+      <button class="sale-detail-overlay" type="button" data-sale-detail-close aria-label="Fechar detalhes da venda"></button>
+      <aside class="sale-detail-panel" role="dialog" aria-modal="true" aria-label="Detalhes da venda">
+        <span class="sale-detail-handle" data-sale-detail-handle aria-hidden="true"></span>
+        <button class="sale-detail-close" type="button" data-sale-detail-close aria-label="Fechar">&times;</button>
+        <div data-sale-detail-body></div>
+      </aside>
+    </div>
+
+    <div class="confirm-shell hidden" data-confirm-shell aria-hidden="true">
+      <button class="confirm-overlay" type="button" data-confirm-cancel aria-label="Cancelar acao"></button>
+      <section class="confirm-dialog" role="dialog" aria-modal="true" aria-label="Confirmar acao">
+        <h2 data-confirm-title>Confirmar acao</h2>
+        <p data-confirm-message>Deseja continuar?</p>
+        <div class="confirm-actions">
+          <button type="button" class="confirm-secondary" data-confirm-cancel>Voltar</button>
+          <button type="button" class="confirm-danger" data-confirm-ok>Confirmar</button>
+        </div>
+      </section>
+    </div>
+
     <div class="side-menu-shell hidden" data-side-shell aria-hidden="true">
       <button class="side-overlay" type="button" data-side-close aria-label="Fechar menu"></button>
       <aside class="side-menu" data-side-menu aria-label="Menu do controle">

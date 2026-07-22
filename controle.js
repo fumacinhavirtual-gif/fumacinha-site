@@ -109,6 +109,9 @@ const app = {
 };
 
 let sideTouchStartX = null;
+let saleDetailTouchStartY = null;
+let lastSaleDetailTrigger = null;
+let pendingConfirmAction = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -119,6 +122,12 @@ const sideShell = $("[data-side-shell]");
 const sideMenu = $("[data-side-menu]");
 const orderDrawerShell = $("[data-order-drawer-shell]");
 const orderDrawerBody = $("[data-order-drawer-body]");
+const saleDetailShell = $("[data-sale-detail-shell]");
+const saleDetailBody = $("[data-sale-detail-body]");
+const confirmShell = $("[data-confirm-shell]");
+const confirmTitle = $("[data-confirm-title]");
+const confirmMessage = $("[data-confirm-message]");
+const confirmOkButton = $("[data-confirm-ok]");
 const loginForm = $("[data-login-form]");
 const loginStatus = $("[data-login-status]");
 const appStatus = $("[data-app-status]");
@@ -2665,16 +2674,32 @@ function renderSalesHistoryRow(row) {
   if (row.type === "order") {
     const order = row.order;
     const products = orderHistoryProducts(order);
+    const createdAt = orderHistoryDate(order);
+    const firstItem = orderItems(order.id)[0] || {};
+    const image = firstItem.produto_imagem || firstItem.imagem || "./assets/fumacinha-logo.png";
+    const code = order.codigo || `Pedido #${order.id}`;
     return `
-      <article class="history-row site-order-history">
-        <strong>${escapeHtml(products.title)}</strong>
-        <span class="status-badge">Pedido feito no site</span>
-        <span>Codigo: ${escapeHtml(order.codigo || `Pedido #${order.id}`)}</span>
-        <span>Quantidade: ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"}</span>
-        <span>Confirmado em: ${orderHistoryDate(order).toLocaleString("pt-BR")}</span>
-        <span>Cliente: ${escapeHtml(order.cliente_nome || "Cliente nao informado")}</span>
-        <span>Produtos ${currency.format(order.valor_produtos || 0)} | Status: ${escapeHtml(order.status || "Confirmado")}</span>
-        <div class="history-actions">
+      <article class="history-row sale-history-line site-order-history" data-order-detail-row="${order.id}" tabindex="0" role="button" aria-label="Abrir detalhes do pedido ${escapeHtml(code)}">
+        <img class="sale-history-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
+        <div class="sale-history-main">
+          <div class="sale-history-top">
+            <span class="sale-history-status status-site">Confirmado</span>
+            <strong>${escapeHtml(code)}</strong>
+            <span>Site</span>
+          </div>
+          <strong class="sale-history-product">${escapeHtml(products.title)}</strong>
+          <span class="sale-history-meta">
+            ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"} &bull;
+            Registro ${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} &bull;
+            Cliente ${escapeHtml(order.cliente_nome || "Nao informado")}
+          </span>
+        </div>
+        <div class="sale-history-side">
+          <strong>${currency.format(order.valor_produtos || 0)}</strong>
+          <span>${escapeHtml(order.forma_pagamento || "Site")}</span>
+        </div>
+        <button type="button" class="sale-history-menu-button" data-history-menu-toggle="${escapeHtml(`order-${order.id}`)}" aria-label="Acoes do pedido ${escapeHtml(code)}">...</button>
+        <div class="sale-history-menu hidden" data-history-menu="${escapeHtml(`order-${order.id}`)}">
           <button type="button" data-view-order="${order.id}">Ver detalhes</button>
         </div>
       </article>
@@ -2684,23 +2709,51 @@ function renderSalesHistoryRow(row) {
   const sale = row.sale;
   const products = saleHistoryProducts(sale);
   const linkedOrder = saleLinkedOrder(sale);
+  const details = saleHistoryLineDetails(sale, products, linkedOrder);
   return `
-      <article class="history-row ${sale.cancelada ? "cancelled" : ""}">
-        <strong>${escapeHtml(products.title)}</strong>
-        ${linkedOrder ? `<span class="status-badge">Pedido feito no site${linkedOrder.codigo ? ` - ${escapeHtml(linkedOrder.codigo)}` : ""}</span>` : ""}
-        <span>Quantidade: ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"}</span>
-        <span>Venda registrada em: ${new Date(sale.created_at || sale.data_venda || Date.now()).toLocaleString("pt-BR")}</span>
-        <span>Entrega prevista: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}</span>
-        <span>Produtos ${currency.format(saleTotal(sale))} | Valor pago ${currency.format(saleDeliveredValue(sale))}</span>
-        <span>Total ${currency.format(saleGrandTotal(sale))} | Entrega ${currency.format(saleDelivery(sale))}</span>
-        ${isCashPayment(sale.forma_pagamento) ? `<span>Entregue ${currency.format(saleDeliveredValue(sale))} | Troco ${currency.format(saleChangeValue(sale))}</span>` : ""}
-        <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")} | ${escapeHtml(sale.vendedora_nome || "Vendedora nao informada")} ${sale.cancelada ? "- Cancelada" : ""}</span>
-        <div class="history-actions">
+      <article class="history-row sale-history-line ${sale.cancelada ? "cancelled" : ""}" data-sale-detail-row="${sale.id}" tabindex="0" role="button" aria-label="Abrir detalhes da venda ${escapeHtml(details.code)}">
+        <img class="sale-history-thumb" src="${escapeHtml(details.image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
+        <div class="sale-history-main">
+          <div class="sale-history-top">
+            <span class="sale-history-status ${sale.cancelada ? "status-cancelled" : "status-sale"}">${escapeHtml(details.status)}</span>
+            <strong>${escapeHtml(details.code)}</strong>
+            <span>${escapeHtml(details.origin)}</span>
+          </div>
+          <strong class="sale-history-product">${escapeHtml(details.productName)}</strong>
+          <span class="sale-history-meta">
+            ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"} &bull;
+            Registro ${escapeHtml(details.createdTime)} &bull;
+            Entrega ${escapeHtml(details.routeTime)} &bull;
+            ${escapeHtml(details.seller)}
+          </span>
+        </div>
+        <div class="sale-history-side">
+          <strong>${currency.format(saleGrandTotal(sale))}</strong>
+          <span>${escapeHtml(details.payment)}</span>
+        </div>
+        <button type="button" class="sale-history-menu-button" data-history-menu-toggle="${sale.id}" aria-label="Acoes da venda ${escapeHtml(details.code)}">...</button>
+        <div class="sale-history-menu hidden" data-history-menu="${sale.id}">
           <button type="button" data-view-sale="${sale.id}">Ver detalhes</button>
           ${sale.cancelada ? "" : `<button type="button" data-edit-sale="${sale.id}">Editar venda</button><button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
         </div>
       </article>
     `;
+}
+
+function saleHistoryLineDetails(sale, products, linkedOrder) {
+  const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
+  const firstItem = saleDetailItems(sale)[0] || {};
+  return {
+    code: linkedOrder?.codigo || `Venda #${sale.id}`,
+    origin: linkedOrder ? "Site" : "Manual",
+    status: sale.cancelada ? "Cancelada" : (sale.status_entrega || sale.status || "Concluida"),
+    productName: firstItem.name || products.title || sale.nome_produto || "Venda",
+    image: firstItem.image || "./assets/fumacinha-logo.png",
+    createdTime: createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+    routeTime: `${formatDateBR(saleRouteDate(sale))} ${saleRouteTime(sale) || "--:--"}`,
+    seller: sale.vendedora_nome || "Vendedora nao informada",
+    payment: paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Pagamento",
+  };
 }
 
 function historyDateTitle(dateKey) {
@@ -2723,22 +2776,265 @@ function historyRowRevenue(row) {
   return row.type === "sale" ? saleTotal(row.sale) : toNumber(row.order.valor_produtos);
 }
 
-function viewSaleDetails(saleId) {
+function saleDetailItems(sale) {
+  const items = saleItemsForSale(sale.id);
+  if (items.length) {
+    return items.map((item) => {
+      const product = app.products.find((row) => String(row.id) === String(item.produto_id));
+      const quantity = toNumber(item.quantidade || 1);
+      const unitValue = toNumber(item.valor_unitario || item.preco_unitario || product?.preco || product?.valor || 0);
+      const subtotal = toNumber(item.subtotal || item.valor_total || (quantity * unitValue));
+      return {
+        image: item.produto_imagem || item.imagem || productImage(product),
+        name: item.nome_produto || product?.nome || "Produto",
+        variation: item.sabor || item.variacao || product?.sabor || product?.categoria || "",
+        quantity,
+        unitValue,
+        subtotal,
+      };
+    });
+  }
+
+  const product = app.products.find((row) => String(row.id) === String(sale.produto_id) || row.nome === sale.nome_produto);
+  const quantity = toNumber(sale.quantidade || 1);
+  const unitValue = quantity ? saleProductsValue(sale) / quantity : saleProductsValue(sale);
+  return [{
+    image: productImage(product),
+    name: sale.nome_produto || product?.nome || "Venda",
+    variation: product?.categoria || "",
+    quantity,
+    unitValue,
+    subtotal: saleProductsValue(sale),
+  }];
+}
+
+function saleDetailCode(sale) {
+  const linkedOrder = saleLinkedOrder(sale);
+  return linkedOrder?.codigo || `Venda #${sale.id}`;
+}
+
+function saleDetailOrigin(sale) {
+  return saleLinkedOrder(sale) ? "Pedido feito no site" : "Venda manual";
+}
+
+function salePaymentConferredLabel(sale) {
+  const value = String(sale.pagamento_conferido || sale.conferiu_pagamento || "").toLowerCase();
+  if (value === "sim" || value === "true" || value === "1") return "Sim";
+  if (value === "nao" || value === "não" || value === "false" || value === "0") return "Nao";
+  return "Nao informado";
+}
+
+function saleDetailStatus(sale) {
+  if (sale.cancelada) return { label: "Cancelada", className: "status-cancelled", icon: "!" };
+  const status = sale.status_entrega || sale.status || "Concluida";
+  const normalized = normalizeOrderStatus(status);
+  if (normalized.includes("rota")) return { label: status, className: "status-route", icon: ">" };
+  if (normalized.includes("entreg")) return { label: status, className: "status-delivered", icon: "ok" };
+  return { label: status, className: "status-confirmed", icon: "ok" };
+}
+
+function saleTimelineItems(sale) {
+  const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
+  const items = [{
+    title: "Venda registrada",
+    detail: createdAt.toLocaleString("pt-BR"),
+  }];
+  if (salePaymentConferredLabel(sale) === "Sim") {
+    items.push({
+      title: "Pagamento confirmado",
+      detail: createdAt.toLocaleString("pt-BR"),
+    });
+  }
+  if (saleRouteDate(sale) || saleRouteTime(sale)) {
+    items.push({
+      title: "Entrega prevista",
+      detail: `${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}`,
+    });
+  }
+  if (sale.cancelada) {
+    items.push({
+      title: "Venda cancelada",
+      detail: sale.cancelado_em ? new Date(sale.cancelado_em).toLocaleString("pt-BR") : "Cancelada",
+    });
+  }
+  return items;
+}
+
+function saleDetailListRow(label, value, highlight = false) {
+  return `<div class="${highlight ? "highlight" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
+function viewSaleDetails(saleId, trigger = null) {
   const sale = app.sales.find((item) => String(item.id) === String(saleId));
   if (!sale) return;
-  const items = saleItemsForSale(saleId);
+  openSaleDetailPanel(sale, trigger);
+}
+
+function openSaleDetailPanel(sale, trigger = null) {
+  if (!saleDetailShell || !saleDetailBody) return;
+  lastSaleDetailTrigger = trigger || document.activeElement;
+  const items = saleDetailItems(sale);
+  const statusInfo = saleDetailStatus(sale);
+  const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
+  const linkedOrder = saleLinkedOrder(sale);
+  const quantity = items.reduce((sum, item) => sum + toNumber(item.quantity), 0);
   const paymentDetails = paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Nao informado";
-  window.alert([
-    `Venda #${sale.id}`,
-    `Cliente: ${sale.cliente_nome || "Nao informado"}`,
-    `Produtos: ${items.map((item) => `${item.quantidade}x ${item.nome_produto}`).join(", ") || sale.nome_produto}`,
-    `Valor produtos: ${currency.format(saleTotal(sale))}`,
-    `Valor pago: ${currency.format(saleDeliveredValue(sale))}`,
-    `Taxa entrega: ${currency.format(saleDelivery(sale))}`,
-    `Pagamento: ${paymentDetails}`,
-    `Entrega: ${formatDateBR(saleRouteDate(sale))} as ${saleRouteTime(sale) || "--:--"}`,
-    `Status: ${sale.status_entrega || sale.status || "Nao informado"}`,
-  ].join("\n"));
+  const customerPhone = linkedOrder ? orderPhone(linkedOrder) : (sale.cliente_telefone || sale.telefone || "");
+  const customerName = sale.cliente_nome || linkedOrder?.cliente_nome || "Nao informado";
+  const total = saleGrandTotal(sale);
+  saleDetailBody.innerHTML = `
+    <header class="sale-detail-header ${statusInfo.className}">
+      <div class="sale-detail-icon" aria-hidden="true">${escapeHtml(statusInfo.icon)}</div>
+      <div>
+        <span class="sale-detail-status">${escapeHtml(statusInfo.label)}</span>
+        <h2>Detalhes da venda</h2>
+        <p><strong>${escapeHtml(saleDetailCode(sale))}</strong> &bull; ${escapeHtml(saleDetailOrigin(sale))}</p>
+      </div>
+    </header>
+
+    <section class="sale-detail-summary">
+      <article><span>Data</span><strong>${createdAt.toLocaleDateString("pt-BR")}</strong></article>
+      <article><span>Registro</span><strong>${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong></article>
+      <article><span>Itens</span><strong>${quantity} ${quantity === 1 ? "item" : "itens"}</strong></article>
+      <article><span>Total</span><strong>${currency.format(total)}</strong></article>
+    </section>
+
+    <section class="sale-detail-card">
+      <h3>Cliente</h3>
+      <div class="sale-detail-pairs">
+        ${saleDetailListRow("Nome", customerName)}
+        ${saleDetailListRow("Telefone", customerPhone ? phoneDisplay(customerPhone) : "Nao informado")}
+        ${saleDetailListRow("Origem", saleDetailOrigin(sale))}
+      </div>
+    </section>
+
+    <section class="sale-detail-card">
+      <h3>Produtos</h3>
+      <div class="sale-detail-products">
+        ${items.map((item) => `
+          <article>
+            <img src="${escapeHtml(item.image || "./assets/fumacinha-logo.png")}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
+            <div>
+              <strong>${escapeHtml(item.name)}</strong>
+              ${item.variation ? `<span>${escapeHtml(item.variation)}</span>` : ""}
+              <small>${item.quantity} ${item.quantity === 1 ? "unidade" : "unidades"} x ${currency.format(item.unitValue)}</small>
+            </div>
+            <b>${currency.format(item.subtotal)}</b>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+
+    <section class="sale-detail-card">
+      <h3>Valores</h3>
+      <div class="sale-detail-values">
+        ${saleDetailListRow("Produtos", currency.format(saleProductsValue(sale)))}
+        ${saleDetailListRow("Taxa entrega", currency.format(saleDelivery(sale)))}
+        ${saleDetailListRow("Desconto", currency.format(toNumber(sale.desconto || 0)))}
+        ${saleDetailListRow("Valor pago", currency.format(saleDeliveredValue(sale)))}
+        ${saleDetailListRow("Liquido produtos", currency.format(saleProductsValue(sale) - toNumber(sale.desconto || 0)))}
+        ${saleDetailListRow("Comissao", currency.format(saleCommission(sale)))}
+        ${saleDetailListRow("Total da venda", currency.format(total), true)}
+      </div>
+    </section>
+
+    <section class="sale-detail-card">
+      <h3>Entrega</h3>
+      <div class="sale-detail-pairs">
+        ${saleDetailListRow("Data prevista", formatDateBR(saleRouteDate(sale)))}
+        ${saleDetailListRow("Horario previsto", saleRouteTime(sale) || "Nao informado")}
+        ${saleDetailListRow("Taxa do entregador", currency.format(saleDelivery(sale)))}
+        ${saleDetailListRow("Status", sale.status_entrega || sale.status || "Nao informado")}
+      </div>
+    </section>
+
+    <section class="sale-detail-card">
+      <h3>Pagamento</h3>
+      <div class="sale-detail-pairs">
+        ${saleDetailListRow("Metodo", paymentDetails)}
+        ${saleDetailListRow("Valor pago", currency.format(saleDeliveredValue(sale)))}
+        ${saleDetailListRow("Conferido", salePaymentConferredLabel(sale))}
+        ${saleDetailListRow("Vendedora", sale.vendedora_nome || "Nao informado")}
+      </div>
+    </section>
+
+    <section class="sale-detail-card">
+      <h3>Linha do tempo</h3>
+      <ol class="sale-detail-timeline">
+        ${saleTimelineItems(sale).map((item) => `<li><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></li>`).join("")}
+      </ol>
+    </section>
+
+    <footer class="sale-detail-actions">
+      ${sale.cancelada ? "" : `<button type="button" class="sale-detail-secondary" data-edit-sale="${sale.id}">Editar venda</button><button type="button" class="sale-detail-danger" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
+    </footer>
+  `;
+  saleDetailShell.classList.remove("hidden");
+  saleDetailShell.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  requestAnimationFrame(() => saleDetailShell.classList.add("open"));
+  saleDetailShell.querySelector("[data-sale-detail-close]")?.focus();
+}
+
+function closeSaleDetailPanel() {
+  if (!saleDetailShell) return;
+  saleDetailShell.classList.remove("open");
+  saleDetailShell.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+  window.setTimeout(() => {
+    if (!saleDetailShell.classList.contains("open")) saleDetailShell.classList.add("hidden");
+  }, 260);
+  if (lastSaleDetailTrigger && typeof lastSaleDetailTrigger.focus === "function") lastSaleDetailTrigger.focus();
+  lastSaleDetailTrigger = null;
+}
+
+function closeHistoryMenus() {
+  $$("[data-history-menu]").forEach((menu) => menu.classList.add("hidden"));
+}
+
+function toggleHistoryMenu(menuId) {
+  const menu = $$("[data-history-menu]").find((item) => item.dataset.historyMenu === menuId);
+  if (!menu) return;
+  const willOpen = menu.classList.contains("hidden");
+  closeHistoryMenus();
+  if (willOpen) menu.classList.remove("hidden");
+}
+
+function requestConfirmation({ title, message, confirmText = "Confirmar", onConfirm }) {
+  if (!confirmShell || !confirmOkButton) return onConfirm?.();
+  pendingConfirmAction = onConfirm;
+  if (confirmTitle) confirmTitle.textContent = title;
+  if (confirmMessage) confirmMessage.textContent = message;
+  confirmOkButton.textContent = confirmText;
+  confirmShell.classList.remove("hidden");
+  confirmShell.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  requestAnimationFrame(() => confirmShell.classList.add("open"));
+  confirmOkButton.focus();
+}
+
+function closeConfirmation() {
+  if (!confirmShell) return;
+  confirmShell.classList.remove("open");
+  confirmShell.setAttribute("aria-hidden", "true");
+  pendingConfirmAction = null;
+  if (!saleDetailShell?.classList.contains("open")) document.body.classList.remove("modal-open");
+  window.setTimeout(() => {
+    if (!confirmShell.classList.contains("open")) confirmShell.classList.add("hidden");
+  }, 220);
+}
+
+function requestCancelSale(saleId) {
+  requestConfirmation({
+    title: "Cancelar venda",
+    message: "Tem certeza que deseja cancelar esta venda? O estoque sera devolvido e os valores serao ajustados.",
+    confirmText: "Cancelar venda",
+    onConfirm: async () => {
+      closeConfirmation();
+      closeSaleDetailPanel();
+      await cancelSale(saleId, { skipConfirm: true });
+    },
+  });
 }
 
 function viewOrderDetails(orderId) {
@@ -4365,6 +4661,26 @@ sideMenu?.addEventListener(
   { passive: true },
 );
 
+saleDetailShell?.addEventListener(
+  "touchstart",
+  (event) => {
+    if (!event.target.closest(".sale-detail-panel")) return;
+    saleDetailTouchStartY = event.touches?.[0]?.clientY ?? null;
+  },
+  { passive: true },
+);
+
+saleDetailShell?.addEventListener(
+  "touchend",
+  (event) => {
+    if (saleDetailTouchStartY === null) return;
+    const endY = event.changedTouches?.[0]?.clientY ?? saleDetailTouchStartY;
+    if (endY - saleDetailTouchStartY > 70) closeSaleDetailPanel();
+    saleDetailTouchStartY = null;
+  },
+  { passive: true },
+);
+
 window.addEventListener("offline", showConnectionStatus);
 window.addEventListener("online", () => {
   setStatus("Internet voltou. Toque em Atualizar para carregar os dados.", "success");
@@ -4372,6 +4688,20 @@ window.addEventListener("online", () => {
 });
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-confirm-cancel]")) {
+    closeConfirmation();
+    return;
+  }
+  if (event.target.closest("[data-confirm-ok]")) {
+    const action = pendingConfirmAction;
+    pendingConfirmAction = null;
+    if (action) await action();
+    return;
+  }
+  if (event.target.closest("[data-sale-detail-close]")) {
+    closeSaleDetailPanel();
+    return;
+  }
   if (event.target.closest("[data-order-drawer-close]")) {
     closeOrderDrawer();
     return;
@@ -4473,14 +4803,51 @@ document.addEventListener("click", async (event) => {
     app.stockCategory = app.stockCategories.length === 1 ? app.stockCategories[0] : "all";
     renderStock();
   }
+  const historyMenuToggle = event.target.closest("[data-history-menu-toggle]");
+  if (historyMenuToggle) {
+    event.stopPropagation();
+    toggleHistoryMenu(historyMenuToggle.dataset.historyMenuToggle);
+    return;
+  }
+  if (!event.target.closest("[data-history-menu]")) closeHistoryMenus();
   const cancel = event.target.closest("[data-cancel-sale]");
-  if (cancel) cancelSale(cancel.dataset.cancelSale);
+  if (cancel) {
+    event.stopPropagation();
+    requestCancelSale(cancel.dataset.cancelSale);
+    return;
+  }
   const viewSale = event.target.closest("[data-view-sale]");
-  if (viewSale) viewSaleDetails(viewSale.dataset.viewSale);
+  if (viewSale) {
+    event.stopPropagation();
+    viewSaleDetails(viewSale.dataset.viewSale, viewSale);
+    closeHistoryMenus();
+    return;
+  }
   const editSale = event.target.closest("[data-edit-sale]");
-  if (editSale) loadSaleForEdit(editSale.dataset.editSale);
+  if (editSale) {
+    event.stopPropagation();
+    closeSaleDetailPanel();
+    closeHistoryMenus();
+    loadSaleForEdit(editSale.dataset.editSale);
+    return;
+  }
   const viewOrder = event.target.closest("[data-view-order]");
-  if (viewOrder) viewOrderDetails(viewOrder.dataset.viewOrder);
+  if (viewOrder) {
+    event.stopPropagation();
+    viewOrderDetails(viewOrder.dataset.viewOrder);
+    closeHistoryMenus();
+    return;
+  }
+  const saleDetailRow = event.target.closest("[data-sale-detail-row]");
+  if (saleDetailRow && !event.target.closest("button, a, input, select, textarea, [data-history-menu]")) {
+    viewSaleDetails(saleDetailRow.dataset.saleDetailRow, saleDetailRow);
+    return;
+  }
+  const orderDetailRow = event.target.closest("[data-order-detail-row]");
+  if (orderDetailRow && !event.target.closest("button, a, input, select, textarea, [data-history-menu]")) {
+    viewOrderDetails(orderDetailRow.dataset.orderDetailRow);
+    return;
+  }
   const editOrder = event.target.closest("[data-edit-order]");
   if (editOrder) loadOrderForEdit(editOrder.dataset.editOrder);
   if (event.target.closest("[data-confirm-edited-order]")) confirmEditedOrder();
@@ -4688,7 +5055,34 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && orderDrawerShell?.classList.contains("open")) {
+  if (event.key === "Enter") {
+    const saleRow = event.target.closest?.("[data-sale-detail-row]");
+    if (saleRow) {
+      event.preventDefault();
+      viewSaleDetails(saleRow.dataset.saleDetailRow, saleRow);
+      return;
+    }
+    const orderRow = event.target.closest?.("[data-order-detail-row]");
+    if (orderRow) {
+      event.preventDefault();
+      viewOrderDetails(orderRow.dataset.orderDetailRow);
+      return;
+    }
+  }
+  if (event.key !== "Escape") return;
+  if (confirmShell?.classList.contains("open")) {
+    closeConfirmation();
+    return;
+  }
+  if (saleDetailShell?.classList.contains("open")) {
+    closeSaleDetailPanel();
+    return;
+  }
+  if ($$("[data-history-menu]").some((menu) => !menu.classList.contains("hidden"))) {
+    closeHistoryMenus();
+    return;
+  }
+  if (orderDrawerShell?.classList.contains("open")) {
     closeOrderDrawer();
   }
 });
