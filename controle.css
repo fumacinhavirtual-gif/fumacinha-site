@@ -2228,11 +2228,10 @@ body.modal-open {
 }
 
 .sale-detail-values {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
 }
 
-.sale-detail-pairs div,
-.sale-detail-values div {
+.sale-detail-pairs div {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2242,37 +2241,109 @@ body.modal-open {
   border-bottom: 1px solid rgba(17, 17, 17, 0.07);
 }
 
-.sale-detail-pairs div:last-child,
-.sale-detail-values div:last-child {
+.sale-detail-pairs div:last-child {
   border-bottom: 0;
 }
 
-.sale-detail-pairs span,
-.sale-detail-values span {
+.sale-detail-pairs span {
   color: var(--muted);
   font-weight: 850;
 }
 
-.sale-detail-pairs strong,
-.sale-detail-values strong {
+.sale-detail-pairs strong {
   color: #111827;
   font-weight: 950;
   text-align: right;
   overflow-wrap: anywhere;
 }
 
-.sale-detail-values .highlight {
-  grid-column: 1 / -1;
-  margin-top: 2px;
+.sale-values-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(17, 17, 17, 0.065);
+}
+
+.sale-values-row span {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 820;
+  line-height: 1.2;
+}
+
+.sale-values-row strong {
+  color: #111827;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.98rem;
+  font-weight: 900;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sale-values-total {
+  min-height: 50px;
+  margin: 8px 0 4px;
   border-radius: 14px;
-  padding: 12px;
+  padding: 0 12px;
   border-bottom: 0;
   background: #e8f6ef;
 }
 
-.sale-detail-values .highlight strong {
+.sale-values-total span {
+  color: #111827;
+  font-size: 0.92rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.sale-values-total strong {
   color: var(--green);
-  font-size: 1.12rem;
+  font-size: 1.24rem;
+  font-weight: 950;
+}
+
+.sale-values-extra {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  animation: saleValuesReveal 180ms ease both;
+}
+
+.sale-values-extra.hidden {
+  display: none;
+}
+
+.sale-values-toggle {
+  justify-self: center;
+  width: fit-content;
+  min-height: 36px;
+  margin-top: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: var(--green);
+  background: rgba(25, 135, 84, 0.08);
+  font-size: 0.88rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+@keyframes saleValuesReveal {
+  from {
+    max-height: 0;
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+
+  to {
+    max-height: 160px;
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .sale-detail-products {
@@ -3796,8 +3867,7 @@ body.modal-open {
     border-radius: 15px;
   }
 
-  .sale-detail-summary,
-  .sale-detail-values {
+  .sale-detail-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
   }

@@ -2864,6 +2864,10 @@ function saleDetailListRow(label, value, highlight = false) {
   return `<div class="${highlight ? "highlight" : ""}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
 }
 
+function saleDetailValueRow(label, value, extraClass = "") {
+  return `<div class="sale-values-row ${extraClass}"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+}
+
 function viewSaleDetails(saleId, trigger = null) {
   const sale = app.sales.find((item) => String(item.id) === String(saleId));
   if (!sale) return;
@@ -2928,13 +2932,16 @@ function openSaleDetailPanel(sale, trigger = null) {
     <section class="sale-detail-card">
       <h3>Valores</h3>
       <div class="sale-detail-values">
-        ${saleDetailListRow("Produtos", currency.format(saleProductsValue(sale)))}
-        ${saleDetailListRow("Taxa entrega", currency.format(saleDelivery(sale)))}
-        ${saleDetailListRow("Desconto", currency.format(toNumber(sale.desconto || 0)))}
-        ${saleDetailListRow("Valor pago", currency.format(saleDeliveredValue(sale)))}
-        ${saleDetailListRow("Liquido produtos", currency.format(saleProductsValue(sale) - toNumber(sale.desconto || 0)))}
-        ${saleDetailListRow("Comissao", currency.format(saleCommission(sale)))}
-        ${saleDetailListRow("Total da venda", currency.format(total), true)}
+        ${saleDetailValueRow("Produtos", currency.format(saleProductsValue(sale)))}
+        ${saleDetailValueRow("Entrega", currency.format(saleDelivery(sale)))}
+        ${saleDetailValueRow("Valor pago", currency.format(saleDeliveredValue(sale)))}
+        ${saleDetailValueRow("Total", currency.format(total), "sale-values-total")}
+        <div class="sale-values-extra hidden" data-sale-values-extra>
+          ${saleDetailValueRow("Desconto", currency.format(toNumber(sale.desconto || 0)))}
+          ${saleDetailValueRow("Comissao", currency.format(saleCommission(sale)))}
+          ${saleDetailValueRow("Liquido", currency.format(saleProductsValue(sale) - toNumber(sale.desconto || 0)))}
+        </div>
+        <button type="button" class="sale-values-toggle" data-sale-values-toggle aria-expanded="false">▼ Ver detalhamento</button>
       </div>
     </section>
 
@@ -4700,6 +4707,17 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-sale-detail-close]")) {
     closeSaleDetailPanel();
+    return;
+  }
+  const saleValuesToggle = event.target.closest("[data-sale-values-toggle]");
+  if (saleValuesToggle) {
+    const valuesCard = saleValuesToggle.closest(".sale-detail-values");
+    const extra = valuesCard?.querySelector("[data-sale-values-extra]");
+    if (extra) {
+      const expanded = extra.classList.toggle("hidden") === false;
+      saleValuesToggle.setAttribute("aria-expanded", String(expanded));
+      saleValuesToggle.textContent = expanded ? "▲ Ocultar detalhamento" : "▼ Ver detalhamento";
+    }
     return;
   }
   if (event.target.closest("[data-order-drawer-close]")) {
