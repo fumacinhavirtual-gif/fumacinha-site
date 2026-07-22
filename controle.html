@@ -142,7 +142,17 @@
                 <p class="eyebrow">Ranking</p>
                 <h2>Produtos mais vendidos</h2>
               </div>
-              <button type="button" class="ghost-action" data-home-top-products-more>Ver mais</button>
+              <div class="analytics-actions">
+                <select class="analytics-period-select" data-analytics-period="topProducts" aria-label="Periodo dos produtos mais vendidos">
+                  <option value="today">Hoje</option>
+                  <option value="last7">Ultimos 7 dias</option>
+                  <option value="month" selected>Este mes</option>
+                  <option value="lastMonth">Mes passado</option>
+                  <option value="year">Ano atual</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+                <button type="button" class="ghost-action" data-home-top-products-more>Ver mais</button>
+              </div>
             </div>
             <div data-report-top-products></div>
           </section>
@@ -422,14 +432,50 @@
           </div>
 
           <section class="panel-card">
-            <h2>Pagamento</h2>
+            <div class="analytics-section-head">
+              <h2>Pagamento</h2>
+              <select class="analytics-period-select" data-analytics-period="payments" aria-label="Periodo das formas de pagamento">
+                <option value="today">Hoje</option>
+                <option value="last7">Ultimos 7 dias</option>
+                <option value="month" selected>Este mes</option>
+                <option value="lastMonth">Mes passado</option>
+                <option value="year">Ano atual</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </div>
             <div data-report-payments></div>
           </section>
 
           <div class="report-grid">
             <section><h2>Valor total do estoque</h2><div data-report-stock-value></div></section>
-            <section><h2>Entregadores</h2><div data-report-deliverers></div></section>
-            <section><h2>Comissoes</h2><div data-report-commissions></div></section>
+            <section>
+              <div class="analytics-section-head">
+                <h2>Entregadores</h2>
+                <select class="analytics-period-select" data-analytics-period="deliverers" aria-label="Periodo dos entregadores">
+                  <option value="today">Hoje</option>
+                  <option value="last7">Ultimos 7 dias</option>
+                  <option value="month" selected>Este mes</option>
+                  <option value="lastMonth">Mes passado</option>
+                  <option value="year">Ano atual</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+              </div>
+              <div data-report-deliverers></div>
+            </section>
+            <section>
+              <div class="analytics-section-head">
+                <h2>Comissoes</h2>
+                <select class="analytics-period-select" data-analytics-period="sellers" aria-label="Periodo das comissoes">
+                  <option value="today">Hoje</option>
+                  <option value="last7">Ultimos 7 dias</option>
+                  <option value="month" selected>Este mes</option>
+                  <option value="lastMonth">Mes passado</option>
+                  <option value="year">Ano atual</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+              </div>
+              <div data-report-commissions></div>
+            </section>
           </div>
 
           <form class="panel-card" data-expense-form>
@@ -610,7 +656,17 @@
                 <p class="eyebrow">Clientes</p>
                 <h2>Top clientes</h2>
               </div>
-              <span class="clients-count" data-clients-count>0 clientes</span>
+              <div class="analytics-actions">
+                <select class="analytics-period-select" data-analytics-period="clients" aria-label="Periodo dos top clientes">
+                  <option value="today">Hoje</option>
+                  <option value="last7">Ultimos 7 dias</option>
+                  <option value="month" selected>Este mes</option>
+                  <option value="lastMonth">Mes passado</option>
+                  <option value="year">Ano atual</option>
+                  <option value="custom">Personalizado</option>
+                </select>
+                <span class="clients-count" data-clients-count>0 clientes</span>
+              </div>
             </div>
             <p class="muted-text">Ranking por nome e WhatsApp, considerando as vendas confirmadas do periodo selecionado.</p>
             <label class="client-search">Buscar cliente ou WhatsApp <input type="search" data-client-search placeholder="Digite nome ou numero" /></label>

@@ -32,6 +32,14 @@ const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
 const EXCHANGE_CHECK_KEY = "fumacinha:exchangeChecks";
 const CONFERENCE_PASSWORD_KEY = "fumacinha:conferencePassword";
 const DEFAULT_CONFERENCE_PASSWORD = "1234";
+const ANALYTICS_PERIOD_LABELS = {
+  today: "Hoje",
+  last7: "Ultimos 7 dias",
+  month: "Este mes",
+  lastMonth: "Mes passado",
+  year: "Ano atual",
+  custom: "Personalizado",
+};
 const app = {
   products: [],
   sales: [],
@@ -78,6 +86,13 @@ const app = {
   financePeriodMode: "month",
   financeMonth: localDateValue(new Date()).slice(0, 7),
   financeQuickPeriod: "month",
+  analyticsPeriods: {
+    topProducts: "month",
+    payments: "month",
+    deliverers: "month",
+    sellers: "month",
+    clients: "month",
+  },
   historyPeriod: "last7",
   showCancelledHistory: false,
   homeTopProductsExpanded: false,
@@ -343,6 +358,32 @@ function periodRange(period = app.period) {
   return { start: startOfDay(now), end: endOfDay(now) };
 }
 
+function analyticsPeriodRange(period = "month") {
+  return periodRange(period);
+}
+
+function analyticsPeriodFor(key) {
+  return app.analyticsPeriods?.[key] || "month";
+}
+
+function analyticsSales(key) {
+  const { start, end } = analyticsPeriodRange(analyticsPeriodFor(key));
+  return app.sales.filter((sale) => {
+    if (sale.cancelada) return false;
+    const date = saleDate(sale);
+    return date >= start && date <= end;
+  });
+}
+
+function analyticsConfirmedOrders(key) {
+  const { start, end } = analyticsPeriodRange(analyticsPeriodFor(key));
+  return app.orders.filter((order) => {
+    if (!isConfirmedOrder(order) || !order.venda_id) return false;
+    const date = orderHistoryDate(order);
+    return date >= start && date <= end;
+  });
+}
+
 function monthKey(date = new Date()) {
   return localDateValue(date).slice(0, 7);
 }
@@ -588,9 +629,9 @@ function orderMatchesPeriod(order) {
   return date >= start && date <= end;
 }
 
-function clientRows() {
+function clientRows(sales = analyticsSales("clients")) {
   const rank = new Map();
-  filteredSales().forEach((sale) => {
+  sales.forEach((sale) => {
     const linkedOrder = saleLinkedOrder(sale);
     const name = sale.cliente_nome || linkedOrder?.cliente_nome || "Cliente sem nome";
     const rawPhone = sale.cliente_telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || "";
@@ -1043,6 +1084,7 @@ async function loadAll() {
 
 function renderAll() {
   renderPeriods();
+  renderAnalyticsFilters();
   renderPeopleOptions();
   renderDashboard();
   renderSaleProductFilters();
@@ -1057,6 +1099,14 @@ function renderAll() {
   renderCashClosing();
   renderRoutes();
   renderStoreStatus();
+}
+
+function renderAnalyticsFilters() {
+  $$("[data-analytics-period]").forEach((select) => {
+    const key = select.dataset.analyticsPeriod;
+    select.value = analyticsPeriodFor(key);
+    select.title = ANALYTICS_PERIOD_LABELS[select.value] || "Este mes";
+  });
 }
 
 function renderStoreStatus() {
@@ -1290,7 +1340,10 @@ function renderDashboard() {
   $("[data-kpi-out-stock]").textContent = String(outStock.length);
   renderOperationalAlerts(alerts);
   renderHomeLowStockList();
-  const topProducts = dashboardRankedProducts(manualSales, confirmedSiteOrders);
+  const topProductsSales = analyticsSales("topProducts");
+  const topProductsConfirmedOrders = analyticsConfirmedOrders("topProducts");
+  const topProductsManualSales = manualSalesInPeriod(topProductsSales, topProductsConfirmedOrders);
+  const topProducts = dashboardRankedProducts(topProductsManualSales, topProductsConfirmedOrders);
   renderTopProductsRanking(topProducts.slice(0, app.homeTopProductsExpanded ? 20 : 5));
   updateHomeTopProductsMoreButton(topProducts.length);
 }
@@ -3177,7 +3230,7 @@ function ensureClientsTab() {
 function clientRowsUnfilteredCount() {
   const previousSearch = app.clientSearch;
   app.clientSearch = "";
-  const count = clientRows().length;
+  const count = clientRows(analyticsSales("clients")).length;
   app.clientSearch = previousSearch;
   return count;
 }
@@ -3248,6 +3301,9 @@ function renderReports() {
   const sales = filteredSales();
   const ranked = rankedProducts(sales);
   const soldNames = new Set(ranked.map((row) => row.label));
+  const paymentSales = analyticsSales("payments");
+  const delivererSales = analyticsSales("deliverers");
+  const commissionSales = analyticsSales("sellers");
   renderSmartOrderSuggestions();
   renderList("[data-report-low-products]", [...ranked].reverse().slice(0, 5), "Sem dados de venda.");
   renderList(
@@ -3261,7 +3317,7 @@ function renderReports() {
     "Nenhum produto com estoque baixo."
   );
   const paymentRows = Object.entries(
-    sales.reduce((acc, sale) => {
+    paymentSales.reduce((acc, sale) => {
       const breakdown = salePaymentBreakdown(sale);
       if (breakdown.length) {
         breakdown.forEach((payment) => {
@@ -3279,8 +3335,8 @@ function renderReports() {
   renderList("[data-report-profit-product]", ranked.map((row) => ({ label: row.label, total: row.profit })), "Sem lucro por produto.");
   const stockTotal = app.products.reduce((sum, product) => sum + toNumber(product.estoque) * productCost(product), 0);
   renderList("[data-report-stock-value]", [{ label: "Valor em custo no estoque", total: stockTotal }], "Sem produtos em estoque.");
-  renderDelivererReport(sales);
-  renderCommissionReport(sales);
+  renderDelivererReport(delivererSales);
+  renderCommissionReport(commissionSales);
 }
 
 function renderDelivererReport(sales) {
@@ -4366,6 +4422,15 @@ document.addEventListener("input", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-analytics-period]")) {
+    const key = event.target.dataset.analyticsPeriod;
+    app.analyticsPeriods[key] = event.target.value || "month";
+    if (key === "topProducts") app.homeTopProductsExpanded = false;
+    renderAnalyticsFilters();
+    renderDashboard();
+    renderReports();
+    renderTopClients();
+  }
   if (event.target.matches("[data-period-preset]")) {
     app.period = event.target.value === "custom" ? "custom" : event.target.value;
     renderAll();

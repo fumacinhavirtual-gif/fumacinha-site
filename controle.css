@@ -917,6 +917,41 @@ textarea {
   margin-bottom: 16px;
 }
 
+.analytics-actions,
+.analytics-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.analytics-section-head {
+  margin-bottom: 12px;
+}
+
+.analytics-section-head h2 {
+  margin: 0;
+}
+
+.analytics-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.analytics-period-select {
+  width: auto;
+  min-width: 118px;
+  height: 40px;
+  border-radius: 999px;
+  border: 1px solid rgba(25, 135, 84, 0.22);
+  padding: 0 34px 0 14px;
+  background-color: #ffffff;
+  color: var(--green);
+  font-size: 0.84rem;
+  font-weight: 900;
+  box-shadow: 0 10px 24px rgba(17, 17, 17, 0.06);
+}
+
 .home-section-head h2 {
   margin: 0;
   color: var(--black);
