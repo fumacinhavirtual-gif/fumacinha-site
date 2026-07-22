@@ -117,6 +117,8 @@ const loginView = $("[data-login-view]");
 const controlView = $("[data-control-view]");
 const sideShell = $("[data-side-shell]");
 const sideMenu = $("[data-side-menu]");
+const orderDrawerShell = $("[data-order-drawer-shell]");
+const orderDrawerBody = $("[data-order-drawer-body]");
 const loginForm = $("[data-login-form]");
 const loginStatus = $("[data-login-status]");
 const appStatus = $("[data-app-status]");
@@ -2725,16 +2727,92 @@ function viewOrderDetails(orderId) {
   const order = app.orders.find((item) => String(item.id) === String(orderId));
   if (!order) return;
   const items = orderItems(orderId);
-  window.alert([
-    `Pedido ${order.codigo || `#${order.id}`}`,
-    `Cliente: ${order.cliente_nome || "Nao informado"}`,
-    `Bairro: ${order.cliente_bairro || "Nao informado"}`,
-    `Produtos: ${items.map((item) => `${item.quantidade}x ${item.produto_nome}`).join(", ") || "Sem itens"}`,
-    `Valor produtos: ${currency.format(order.valor_produtos || 0)}`,
-    `Origem: ${order.origem || "Site"}`,
-    `Status: ${order.status || "Aguardando confirmacao"}`,
-    `Recebido em: ${new Date(order.created_at || Date.now()).toLocaleString("pt-BR")}`,
-  ].join("\n"));
+  openOrderDrawer(order, items);
+}
+
+function orderStatusDescription(status = "") {
+  const normalized = normalizeOrderStatus(status);
+  if (normalized === "confirmado") return "Este pedido ja foi confirmado.";
+  if (normalized === "em rota") return "Este pedido esta em rota de entrega.";
+  if (normalized === "entregue") return "Este pedido foi entregue.";
+  if (normalized === "cancelado") return "Este pedido foi cancelado.";
+  return "Este pedido ainda nao foi confirmado.";
+}
+
+function openOrderDrawer(order, items = []) {
+  if (!orderDrawerShell || !orderDrawerBody) return;
+  const statusInfo = orderStatusInfo(order.status);
+  const createdAt = new Date(order.created_at || Date.now());
+  const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
+  const subtotal = items.reduce((sum, item) => sum + toNumber(item.subtotal || (toNumber(item.valor_unitario) * toNumber(item.quantidade || 1))), 0);
+  const total = toNumber(order.valor_produtos || subtotal);
+  const phone = orderPhone(order) ? phoneDisplay(orderPhone(order)) : "Nao informado";
+  orderDrawerBody.innerHTML = `
+    <header class="order-drawer-header ${statusInfo.className}">
+      <div class="order-drawer-icon" aria-hidden="true">${statusInfo.icon}</div>
+      <div>
+        <span class="pending-order-status">${statusInfo.label}</span>
+        <h2>${escapeHtml(order.codigo || `Pedido #${order.id}`)}</h2>
+        <p>&#127760; Pedido realizado pelo ${escapeHtml(order.origem || "Site")}</p>
+      </div>
+    </header>
+
+    <section class="order-drawer-summary">
+      <article><span>&#128197; Data</span><strong>${createdAt.toLocaleDateString("pt-BR")}</strong></article>
+      <article><span>&#128338; Horario</span><strong>${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</strong></article>
+      <article><span>&#128230; Itens</span><strong>${quantity || items.length}</strong></article>
+      <article><span>&#128176; Valor total</span><strong>${currency.format(total)}</strong></article>
+    </section>
+
+    <section class="order-drawer-card ${statusInfo.className}">
+      <h3>Cliente</h3>
+      <dl class="order-drawer-list">
+        <div><dt>Nome</dt><dd>${escapeHtml(order.cliente_nome || "Nao informado")}</dd></div>
+        <div><dt>Telefone</dt><dd>${escapeHtml(phone)}</dd></div>
+        <div><dt>Origem</dt><dd>${escapeHtml(order.origem || "Site")}</dd></div>
+      </dl>
+    </section>
+
+    <section class="order-drawer-card">
+      <h3>Produtos</h3>
+      <div class="order-drawer-products">
+        ${items.length ? items.map((item) => `
+          <article>
+            <img src="${escapeHtml(item.produto_imagem || item.imagem || "")}" alt="" onerror="this.classList.add('hidden')" />
+            <div>
+              <strong>${escapeHtml(item.produto_nome || "Produto")}</strong>
+              <span>Qtd: ${toNumber(item.quantidade || 1)}</span>
+            </div>
+            <b>${currency.format(item.subtotal || (toNumber(item.valor_unitario) * toNumber(item.quantidade || 1)))}</b>
+          </article>
+        `).join("") : `<p>Sem itens cadastrados neste pedido.</p>`}
+      </div>
+      <div class="order-drawer-totals">
+        <span>Subtotal <strong>${currency.format(subtotal || total)}</strong></span>
+        <span>Total <strong>${currency.format(total)}</strong></span>
+      </div>
+    </section>
+
+    <section class="order-drawer-card">
+      <h3>Status do pedido</h3>
+      <div class="order-drawer-status">
+        <span class="pending-order-status">${statusInfo.label}</span>
+        <p>${orderStatusDescription(order.status)}</p>
+      </div>
+    </section>
+  `;
+  orderDrawerShell.classList.remove("hidden");
+  orderDrawerShell.setAttribute("aria-hidden", "false");
+  requestAnimationFrame(() => orderDrawerShell.classList.add("open"));
+}
+
+function closeOrderDrawer() {
+  if (!orderDrawerShell) return;
+  orderDrawerShell.classList.remove("open");
+  orderDrawerShell.setAttribute("aria-hidden", "true");
+  window.setTimeout(() => {
+    if (!orderDrawerShell.classList.contains("open")) orderDrawerShell.classList.add("hidden");
+  }, 260);
 }
 
 function loadOrderIntoSaleForm(orderId, mode = "confirm") {
@@ -4275,6 +4353,10 @@ window.addEventListener("online", () => {
 });
 
 document.addEventListener("click", async (event) => {
+  if (event.target.closest("[data-order-drawer-close]")) {
+    closeOrderDrawer();
+    return;
+  }
   if (event.target.closest("[data-side-open]")) {
     openSideMenu();
     return;
@@ -4579,6 +4661,12 @@ document.addEventListener("change", (event) => {
   if (event.target.closest("[data-cash-form]") && event.target.tagName === "INPUT") {
     formatMoneyInput(event.target);
     updateCashPreview();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && orderDrawerShell?.classList.contains("open")) {
+    closeOrderDrawer();
   }
 });
 
