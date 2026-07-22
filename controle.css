@@ -952,6 +952,7 @@ textarea {
 
 .home-section-head {
   display: flex;
+  flex-wrap: wrap;
   gap: 14px;
   align-items: center;
   justify-content: space-between;
@@ -991,6 +992,20 @@ textarea {
   font-size: 0.84rem;
   font-weight: 900;
   box-shadow: 0 10px 24px rgba(17, 17, 17, 0.06);
+}
+
+.home-period-select {
+  width: auto;
+  min-width: 150px;
+  height: 46px;
+  border: 1px solid rgba(25, 135, 84, 0.22);
+  border-radius: 999px;
+  padding: 0 42px 0 18px;
+  color: var(--green);
+  background-color: #ffffff;
+  box-shadow: 0 12px 26px rgba(17, 17, 17, 0.07);
+  font-size: 0.92rem;
+  font-weight: 950;
 }
 
 .home-section-head h2 {
@@ -1227,6 +1242,14 @@ textarea {
   .home-section-head {
     align-items: flex-start;
     margin-bottom: 12px;
+  }
+
+  .home-period-select {
+    min-width: 138px;
+    height: 42px;
+    padding-left: 14px;
+    padding-right: 34px;
+    font-size: 0.84rem;
   }
 
   .home-section-head h2 {

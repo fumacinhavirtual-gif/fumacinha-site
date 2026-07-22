@@ -1219,12 +1219,14 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["sales", "stock", "history", "finance"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
   const preset = $("[data-period-preset]");
   if (preset) preset.value = ["last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "custom";
+  const homePeriod = $("[data-home-period]");
+  if (homePeriod) homePeriod.value = ["today", "yesterday", "last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "today";
   renderFinancePeriodControls();
 }
 
@@ -4579,6 +4581,10 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-history-period]")) {
     app.historyPeriod = event.target.value || "last7";
     renderSalesHistory();
+  }
+  if (event.target.matches("[data-home-period]")) {
+    app.period = event.target.value || "today";
+    renderAll();
   }
 });
 
