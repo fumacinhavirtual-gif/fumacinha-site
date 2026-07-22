@@ -3225,13 +3225,13 @@ textarea {
   display: grid;
   gap: 8px;
   padding: 12px;
-  border: 1px solid rgba(229, 57, 53, 0.22);
+  border: 1px solid rgba(25, 135, 84, 0.18);
   border-radius: 14px;
-  background: #fff5f5;
+  background: #f0fbf5;
 }
 
 .edit-banner strong {
-  color: var(--red);
+  color: var(--green);
 }
 
 .side-menu-shell {

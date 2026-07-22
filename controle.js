@@ -159,6 +159,7 @@ const saleSubmit = $("[data-sale-submit]");
 const paymentCheckMessage = $("[data-payment-check-message]");
 const confirmEditedOrderButton = $("[data-confirm-edited-order]");
 const saleEditBanner = $("[data-sale-edit-banner]");
+const saleEditTitle = $("[data-sale-edit-title]");
 const saleEditLabel = $("[data-sale-edit-label]");
 const saleEditMotive = $("[data-sale-edit-motive]");
 const cashDateInput = $("[data-cash-date]");
@@ -2012,6 +2013,8 @@ function resetSaleForm() {
   saleEditBanner?.classList.add("hidden");
   saleEditMotive?.classList.add("hidden");
   confirmEditedOrderButton?.classList.add("hidden");
+  saleSubmit?.classList.remove("hidden");
+  if (saleEditTitle) saleEditTitle.textContent = "Editando venda";
   if (saleSubmit) saleSubmit.textContent = "Registrar venda";
   updateSaleItemPrices();
   updateSaleTotal();
@@ -2047,6 +2050,8 @@ function loadSaleForEdit(saleId) {
   saleEditBanner?.classList.remove("hidden");
   saleEditMotive?.classList.remove("hidden");
   confirmEditedOrderButton?.classList.add("hidden");
+  saleSubmit?.classList.remove("hidden");
+  if (saleEditTitle) saleEditTitle.textContent = "Editando venda";
   if (saleEditLabel) saleEditLabel.textContent = `Venda #${sale.id}`;
   if (saleSubmit) saleSubmit.textContent = "Salvar alteracoes";
   app.saleReceivedTouched = true;
@@ -2068,6 +2073,10 @@ async function registerSale(event) {
   if (saleSubmit) {
     saleSubmit.disabled = true;
     saleSubmit.textContent = confirmingOrderId ? "Confirmando pedido..." : "Registrando venda...";
+  }
+  if (confirmingOrderId && confirmEditedOrderButton) {
+    confirmEditedOrderButton.disabled = true;
+    confirmEditedOrderButton.textContent = "Confirmando pedido...";
   }
   if (saleSuccess) saleSuccess.textContent = "";
   setPaymentCheckMessage("");
@@ -2159,6 +2168,10 @@ async function registerSale(event) {
         saleSubmit.textContent = saleSubmitIdleLabel();
       }
     }
+    if (confirmEditedOrderButton) {
+      confirmEditedOrderButton.disabled = false;
+      confirmEditedOrderButton.textContent = "Confirmar pedido";
+    }
   }
 }
 
@@ -2232,7 +2245,10 @@ async function updateEditedSale(event) {
 }
 
 function saveSale(event) {
-  if (app.editingOrderId) return saveOrderEdit(event);
+  if (app.editingOrderId) {
+    event.preventDefault();
+    return confirmEditedOrder();
+  }
   return app.editingSaleId ? updateEditedSale(event) : registerSale(event);
 }
 
@@ -2860,8 +2876,10 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   saleForm.elements.horario_rota.value = order.horario_rota || nextRouteSuggestion().time;
   saleEditBanner?.classList.remove("hidden");
   saleEditMotive?.classList.remove("hidden");
-  if (saleEditLabel) saleEditLabel.textContent = mode === "edit" ? `Editando ${order.codigo || `pedido #${order.id}`}` : `Confirmando ${order.codigo || `pedido #${order.id}`}`;
-  if (saleSubmit) saleSubmit.textContent = mode === "edit" ? "Salvar alteracoes do pedido" : "Confirmar pedido e registrar venda";
+  if (saleEditTitle) saleEditTitle.textContent = mode === "edit" ? "Editando pedido" : "Confirmando pedido";
+  if (saleEditLabel) saleEditLabel.textContent = mode === "edit" ? `${order.codigo || `Pedido #${order.id}`}` : `Confirmando ${order.codigo || `pedido #${order.id}`}`;
+  saleSubmit?.classList.toggle("hidden", mode === "edit");
+  if (saleSubmit) saleSubmit.textContent = mode === "edit" ? "Confirmar pedido" : "Confirmar pedido e registrar venda";
   confirmEditedOrderButton?.classList.toggle("hidden", mode !== "edit");
   updateSaleItemPrices();
   updateSaleTotal();
@@ -2979,7 +2997,6 @@ function confirmEditedOrder() {
   app.confirmingOrderId = orderId;
   app.editingOrderId = null;
   app.editingSaleId = null;
-  confirmEditedOrderButton?.classList.add("hidden");
   if (saleSubmit) saleSubmit.textContent = "Confirmar pedido e registrar venda";
   saleForm?.requestSubmit();
 }
