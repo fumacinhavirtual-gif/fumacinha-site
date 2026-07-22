@@ -80,6 +80,7 @@ const app = {
   financeQuickPeriod: "month",
   historyPeriod: "last7",
   showCancelledHistory: false,
+  homeTopProductsExpanded: false,
   activeTab: "home",
   stockSearch: "",
   stockCategory: "all",
@@ -1289,7 +1290,9 @@ function renderDashboard() {
   $("[data-kpi-out-stock]").textContent = String(outStock.length);
   renderOperationalAlerts(alerts);
   renderHomeLowStockList();
-  renderTopProductsRanking(dashboardRankedProducts(manualSales, confirmedSiteOrders).slice(0, 5));
+  const topProducts = dashboardRankedProducts(manualSales, confirmedSiteOrders);
+  renderTopProductsRanking(topProducts.slice(0, app.homeTopProductsExpanded ? 20 : 5));
+  updateHomeTopProductsMoreButton(topProducts.length);
 }
 
 function dashboardRankedProducts(manualSales, confirmedOrders) {
@@ -1388,6 +1391,14 @@ function renderTopProductsRanking(rows) {
       </article>
     `;
   }).join("");
+}
+
+function updateHomeTopProductsMoreButton(totalProducts) {
+  const button = $("[data-home-top-products-more]");
+  if (!button) return;
+  const hasMore = totalProducts > 5;
+  button.hidden = !hasMore;
+  button.textContent = app.homeTopProductsExpanded ? "Ver menos" : "Ver mais";
 }
 function rankedProducts(sales = filteredSales()) {
   const rank = new Map();
@@ -4188,6 +4199,11 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-toggle-cancelled-history]")) {
     app.showCancelledHistory = !app.showCancelledHistory;
     renderSalesHistory();
+    return;
+  }
+  if (event.target.closest("[data-home-top-products-more]")) {
+    app.homeTopProductsExpanded = !app.homeTopProductsExpanded;
+    renderDashboard();
     return;
   }
   if (event.target.closest("[data-finance-filter-open]")) openFinanceFilter();
