@@ -3151,6 +3151,18 @@ function renderTopClients() {
     : `<p class="empty-state">Nenhum cliente encontrado neste periodo.</p>`;
 }
 
+function ensureClientsTab() {
+  if (!sideMenu || sideMenu.querySelector('[data-tab="clients"]')) return;
+  const nav = sideMenu.querySelector(".side-menu-nav");
+  const historyButton = nav?.querySelector('[data-tab="history"]');
+  if (!nav || !historyButton) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.tab = "clients";
+  button.innerHTML = '<span>&#128101;</span> Clientes';
+  nav.insertBefore(button, historyButton);
+}
+
 function clientRowsUnfilteredCount() {
   const previousSearch = app.clientSearch;
   app.clientSearch = "";
@@ -4054,6 +4066,7 @@ function switchTab(tab) {
     renderFinance();
     renderReports();
   }
+  if (tab === "clients") renderTopClients();
 }
 
 function openSideMenu() {
@@ -4430,6 +4443,7 @@ document.addEventListener("change", (event) => {
 });
 
 function initDefaults() {
+  ensureClientsTab();
   ensureSplitPaymentPanel();
   app.cashDate = localDateValue();
   app.routesDate = localDateValue();
