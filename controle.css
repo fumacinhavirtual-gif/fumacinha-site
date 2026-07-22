@@ -1788,11 +1788,15 @@ textarea {
 
 .exchange-route-row {
   display: grid;
-  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 8px;
+  min-height: 130px;
   border: 1px solid var(--line);
-  border-left: 6px solid #d1d5db;
+  border-left: 4px solid #d1d5db;
   border-radius: 20px;
-  padding: 16px;
+  padding: 14px;
   background: #ffffff;
   box-shadow: 0 12px 28px rgba(17, 17, 17, 0.06);
   animation: softCardIn 220ms ease both;
@@ -1825,8 +1829,10 @@ textarea {
 }
 
 .exchange-route-row header {
+  grid-column: 1 / -1;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px;
+  min-width: 0;
 }
 
 .exchange-route-row header strong {
@@ -1834,8 +1840,9 @@ textarea {
   align-items: center;
   gap: 8px;
   color: var(--black);
-  font-size: 1.35rem;
+  font-size: 1.65rem;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .exchange-route-row header strong span {
@@ -1847,17 +1854,19 @@ textarea {
   align-items: center;
   gap: 6px;
   border-radius: 999px;
-  padding: 7px 10px;
+  min-height: 26px;
+  padding: 4px 10px;
   color: var(--muted);
   background: #f1f3f5;
   font-size: 0.78rem;
   font-style: normal;
   font-weight: 950;
+  white-space: nowrap;
 }
 
 .exchange-status i {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: #9ca3af;
 }
@@ -1890,18 +1899,20 @@ textarea {
 }
 
 .exchange-route-body {
+  grid-column: 1 / -1;
   justify-content: space-between;
-  gap: 14px;
+  gap: 10px;
+  align-self: end;
 }
 
 .exchange-stepper {
   display: grid;
-  gap: 8px;
+  gap: 5px;
 }
 
 .exchange-stepper > span {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.74rem;
   font-weight: 950;
   text-transform: uppercase;
 }
@@ -1911,10 +1922,10 @@ textarea {
 }
 
 .exchange-stepper button {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 12px;
   color: var(--green);
   background: rgba(25, 135, 84, 0.11);
   font-size: 1.35rem;
@@ -1928,22 +1939,23 @@ textarea {
 }
 
 .exchange-stepper input {
-  width: 68px;
-  height: 48px;
+  width: 84px;
+  height: 38px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: 12px;
   padding: 0 8px;
   color: var(--black);
   background: #ffffff;
-  font-size: 1.35rem;
+  font-size: 1.25rem;
   font-weight: 950;
   text-align: center;
 }
 
 .exchange-switch {
-  gap: 10px;
+  gap: 8px;
   margin: 0;
   cursor: pointer;
+  align-self: end;
 }
 
 .exchange-switch input {
@@ -1954,8 +1966,8 @@ textarea {
 
 .exchange-switch span {
   position: relative;
-  width: 58px;
-  height: 34px;
+  width: 46px;
+  height: 26px;
   border-radius: 999px;
   background: #d1d5db;
   transition: background 220ms ease;
@@ -1964,10 +1976,10 @@ textarea {
 .exchange-switch span::after {
   content: "";
   position: absolute;
-  top: 4px;
-  left: 4px;
-  width: 26px;
-  height: 26px;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
   border-radius: 50%;
   background: #ffffff;
   box-shadow: 0 4px 10px rgba(17, 17, 17, 0.2);
@@ -1979,12 +1991,13 @@ textarea {
 }
 
 .exchange-switch input:checked + span::after {
-  transform: translateX(24px);
+  transform: translateX(20px);
 }
 
 .exchange-switch b {
+  order: -1;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.84rem;
   font-weight: 950;
 }
 
@@ -2922,18 +2935,45 @@ textarea {
 
 @media (max-width: 759px) {
   .app-shell {
+    padding: 12px;
     padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
 
+  .control-header {
+    min-height: 94px;
+    margin: -12px -12px 12px;
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .menu-toggle {
+    width: 46px;
+    height: 46px;
+    border-radius: 13px;
+    font-size: 1.25rem;
+  }
+
+  .control-header h1 {
+    font-size: 1.45rem;
+    line-height: 1.05;
+  }
+
+  .control-header .ghost-action {
+    min-height: 46px;
+    padding: 0 14px;
+    border-radius: 14px;
+  }
+
   .exchange-check-panel {
-    gap: 12px;
-    padding: 14px 10px;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 20px;
   }
 
   .exchange-head {
     align-items: stretch;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
   }
 
   .exchange-date-picker {
@@ -2942,17 +2982,17 @@ textarea {
   }
 
   .exchange-head h2 {
-    font-size: 1.55rem;
+    font-size: 1.42rem;
   }
 
   .exchange-head .muted-text {
-    margin-top: 4px;
-    font-size: 0.86rem;
-    line-height: 1.25;
+    margin-top: 3px;
+    font-size: 0.82rem;
+    line-height: 1.2;
   }
 
   .exchange-date-picker input {
-    min-height: 42px;
+    min-height: 40px;
   }
 
   .exchange-kpi-grid {
@@ -2992,30 +3032,39 @@ textarea {
 
   .exchange-route-list {
     grid-template-columns: 1fr;
+    gap: 9px;
   }
 
   .exchange-route-row {
-    padding: 14px;
+    min-height: 112px;
+    border-radius: 18px;
+    padding: 12px;
+    row-gap: 6px;
+    column-gap: 8px;
   }
 
   .exchange-route-body {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: end;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
   }
 
   .exchange-stepper > div {
-    justify-content: space-between;
+    justify-content: flex-start;
+    gap: 8px;
   }
 
   .exchange-stepper input {
-    flex: 1;
-    width: auto;
-    max-width: 120px;
+    flex: 0 0 84px;
+    width: 84px;
+    max-width: 84px;
   }
 
   .exchange-switch {
-    justify-content: space-between;
-    min-height: 46px;
+    justify-content: flex-end;
+    min-height: 38px;
+    white-space: nowrap;
   }
 
   [data-sale-form] {
@@ -3074,5 +3123,38 @@ textarea {
 
   .stock-total-summary p {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 359px) {
+  .exchange-route-row {
+    min-height: 108px;
+    padding: 10px;
+    column-gap: 8px;
+  }
+
+  .exchange-route-row header strong {
+    font-size: 1.5rem;
+  }
+
+  .exchange-status {
+    max-width: 145px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .exchange-stepper button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .exchange-stepper input {
+    flex-basis: 72px;
+    width: 72px;
+    max-width: 72px;
+  }
+
+  .exchange-switch b {
+    font-size: 0.78rem;
   }
 }
