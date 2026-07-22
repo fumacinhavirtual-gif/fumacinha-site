@@ -93,7 +93,7 @@ const app = {
     sellers: "month",
     clients: "month",
   },
-  historyPeriod: "last7",
+  historyPeriod: "month",
   showCancelledHistory: false,
   homeTopProductsExpanded: false,
   activeTab: "home",
@@ -1093,7 +1093,8 @@ async function loadAll() {
   };
   markOrdersSeen();
   setupOrdersRealtime();
-  setStatus("Controle atualizado.", "success");
+  showToast("Controle atualizado.", "success");
+  setStatus("", "");
   renderAll();
 }
 
@@ -2530,11 +2531,13 @@ function renderPendingOrders() {
 
 function renderSalesHistory() {
   if (!salesHistory) return;
+  updateHistoryPeriodOptions();
   if (historyPeriodSelect) historyPeriodSelect.value = app.historyPeriod;
   const cancelledToggle = $("[data-toggle-cancelled-history]");
   if (cancelledToggle) {
-    cancelledToggle.textContent = app.showCancelledHistory ? "Ocultar vendas canceladas" : "Mostrar vendas canceladas";
+    cancelledToggle.innerHTML = `<span>Incluir canceladas</span><i aria-hidden="true"></i>`;
     cancelledToggle.classList.toggle("active", app.showCancelledHistory);
+    cancelledToggle.setAttribute("aria-pressed", String(app.showCancelledHistory));
   }
   const sales = app.sales;
   const saleIds = new Set(sales.map((sale) => String(sale.id)));
@@ -2568,13 +2571,50 @@ function filterHistoryRowsByPeriod(rows) {
 }
 
 function historyPeriodLabel() {
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
   const labels = {
+    today: `Hoje, ${now.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
+    yesterday: `Ontem, ${yesterday.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
     last7: "Ultimos 7 dias",
+    month: monthLabel(monthKey()),
+    lastMonth: monthLabel(monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1))),
+    year: `Ano atual - ${now.getFullYear()}`,
+    custom: "Personalizado",
+  };
+  return labels[app.historyPeriod] || monthLabel(monthKey());
+}
+
+function historyPeriodBadge() {
+  const labels = {
+    today: "Hoje",
+    yesterday: "Ontem",
+    last7: "7 dias",
     month: "Mes atual",
     lastMonth: "Mes passado",
     year: "Ano atual",
+    custom: "Personalizado",
   };
-  return labels[app.historyPeriod] || "Ultimos 7 dias";
+  return labels[app.historyPeriod] || "Mes atual";
+}
+
+function updateHistoryPeriodOptions() {
+  if (!historyPeriodSelect) return;
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const optionLabels = {
+    today: "Hoje",
+    yesterday: "Ontem",
+    last7: "Ultimos 7 dias",
+    month: `📅 ${monthLabel(monthKey())}`,
+    lastMonth: monthLabel(monthKey(lastMonth)),
+    year: `Ano atual - ${now.getFullYear()}`,
+    custom: "Personalizado",
+  };
+  [...historyPeriodSelect.options].forEach((option) => {
+    option.textContent = optionLabels[option.value] || option.textContent;
+  });
 }
 
 function renderSalesHistoryPeriodSummary(rows) {
@@ -2582,16 +2622,30 @@ function renderSalesHistoryPeriodSummary(rows) {
   const salesCount = activeRows.length;
   const revenue = activeRows.reduce((sum, row) => sum + historyRowRevenue(row), 0);
   const ticket = salesCount ? revenue / salesCount : 0;
+  const completedCount = activeRows.length;
   return `
     <section class="history-period-summary">
-      <div>
-        <p>Resumo do periodo</p>
-        <h3>${escapeHtml(historyPeriodLabel())}</h3>
+      <div class="history-period-summary-head">
+        <h3><span aria-hidden="true">📅</span> ${escapeHtml(historyPeriodLabel())}</h3>
+        <span>${escapeHtml(historyPeriodBadge())}</span>
       </div>
-      <div class="history-day-summary">
-        <strong>${salesCount} ${salesCount === 1 ? "venda" : "vendas"}</strong>
-        <span>${currency.format(revenue)} faturados</span>
-        <span>Ticket medio ${currency.format(ticket)}</span>
+      <div class="history-period-metrics">
+        <article>
+          <strong>${salesCount}</strong>
+          <span>Vendas</span>
+        </article>
+        <article>
+          <strong>${currency.format(revenue)}</strong>
+          <span>Faturamento</span>
+        </article>
+        <article>
+          <strong>${currency.format(ticket)}</strong>
+          <span>Ticket medio</span>
+        </article>
+        <article>
+          <strong>${completedCount}</strong>
+          <span>Concluidas</span>
+        </article>
       </div>
     </section>
   `;
@@ -4998,7 +5052,7 @@ document.addEventListener("change", (event) => {
     renderAll();
   }
   if (event.target.matches("[data-history-period]")) {
-    app.historyPeriod = event.target.value || "last7";
+    app.historyPeriod = event.target.value || "month";
     renderSalesHistory();
   }
   if (event.target.matches("[data-home-period]")) {
