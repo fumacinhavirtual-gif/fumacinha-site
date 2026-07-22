@@ -256,6 +256,47 @@ textarea {
   .split-payment-grid {
     grid-template-columns: 1fr;
   }
+
+  [data-sale-form] .sale-summary-grid {
+    margin-bottom: 8px;
+  }
+
+  [data-sale-form] .form-status {
+    min-height: 0;
+    margin: 0;
+  }
+
+  [data-sale-form] [data-sale-success]:not(:empty) {
+    min-height: 34px;
+    margin: 8px 0 4px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: #e9f7ef;
+    color: var(--green);
+  }
+
+  [data-sale-form] .form-footer {
+    gap: 8px;
+    margin-top: 6px;
+  }
+
+  [data-sale-form] .payment-check-field {
+    padding: 10px;
+  }
+
+  [data-sale-form] .payment-check-field select {
+    height: 46px;
+    min-height: 46px;
+    font-size: 1rem;
+  }
+
+  [data-sale-form] .form-footer small {
+    line-height: 1.28;
+  }
+
+  [data-sale-form] .form-actions {
+    gap: 8px;
+  }
 }
 
 .stock-product-preview {
