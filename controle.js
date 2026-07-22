@@ -2607,13 +2607,12 @@ function renderSalesHistoryDay(dateKey, rows) {
     <section class="history-day-group">
       <header class="history-day-header">
         <div>
-          <p>Data</p>
-          <h3>${escapeHtml(title)}</h3>
+          <h3><span aria-hidden="true">📅</span> ${escapeHtml(title)}</h3>
         </div>
         <div class="history-day-summary">
-          <strong>${salesCount} ${salesCount === 1 ? "venda" : "vendas"}</strong>
-          <span>${currency.format(revenue)} faturados</span>
-          <span>Ticket medio ${currency.format(ticket)}</span>
+          <strong>🛒 ${salesCount} ${salesCount === 1 ? "venda" : "vendas"}</strong>
+          <span>💰 ${currency.format(revenue)}</span>
+          <span>📈 Ticket ${currency.format(ticket)}</span>
         </div>
       </header>
       <div class="history-day-list">
@@ -2656,8 +2655,7 @@ function renderCancelledHistoryDay(dateKey, rows) {
     <section class="history-day-group history-cancelled-day">
       <header class="history-day-header">
         <div>
-          <p>Canceladas</p>
-          <h3>${escapeHtml(historyDateTitle(dateKey))}</h3>
+          <h3><span aria-hidden="true">📅</span> ${escapeHtml(historyDateTitle(dateKey))}</h3>
         </div>
         <div class="history-day-summary">
           <strong>${rows.length} ${rows.length === 1 ? "cancelada" : "canceladas"}</strong>
@@ -2678,6 +2676,8 @@ function renderSalesHistoryRow(row) {
     const firstItem = orderItems(order.id)[0] || {};
     const image = firstItem.produto_imagem || firstItem.imagem || "./assets/fumacinha-logo.png";
     const code = order.codigo || `Pedido #${order.id}`;
+    const productName = firstItem.produto_nome || products.title || "Pedido";
+    const productVariation = firstItem.sabor || firstItem.variacao || "";
     return `
       <article class="history-row sale-history-line site-order-history" data-order-detail-row="${order.id}" tabindex="0" role="button" aria-label="Abrir detalhes do pedido ${escapeHtml(code)}">
         <img class="sale-history-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
@@ -2685,13 +2685,14 @@ function renderSalesHistoryRow(row) {
           <div class="sale-history-top">
             <span class="sale-history-status status-site">Confirmado</span>
             <strong>${escapeHtml(code)}</strong>
-            <span>Site</span>
+            <span>🌐 Site</span>
           </div>
-          <strong class="sale-history-product">${escapeHtml(products.title)}</strong>
+          <strong class="sale-history-product">${escapeHtml(productName)}</strong>
+          ${productVariation ? `<span class="sale-history-flavor">${escapeHtml(productVariation)}</span>` : ""}
           <span class="sale-history-meta">
-            ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"} &bull;
-            Registro ${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })} &bull;
-            Cliente ${escapeHtml(order.cliente_nome || "Nao informado")}
+            <b>🕒${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b>
+            <b>📦${products.quantity} ${products.quantity === 1 ? "un" : "un"}</b>
+            <b>👤${escapeHtml(order.cliente_nome || "Nao informado")}</b>
           </span>
         </div>
         <div class="sale-history-side">
@@ -2701,6 +2702,10 @@ function renderSalesHistoryRow(row) {
         <button type="button" class="sale-history-menu-button" data-history-menu-toggle="${escapeHtml(`order-${order.id}`)}" aria-label="Acoes do pedido ${escapeHtml(code)}">...</button>
         <div class="sale-history-menu hidden" data-history-menu="${escapeHtml(`order-${order.id}`)}">
           <button type="button" data-view-order="${order.id}">Ver detalhes</button>
+          <button type="button" data-history-menu-placeholder>Editar</button>
+          <button type="button" data-history-menu-placeholder>Duplicar</button>
+          <button type="button" data-history-menu-placeholder>Imprimir</button>
+          <button type="button" data-history-menu-placeholder>Compartilhar</button>
         </div>
       </article>
     `;
@@ -2715,16 +2720,17 @@ function renderSalesHistoryRow(row) {
         <img class="sale-history-thumb" src="${escapeHtml(details.image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
         <div class="sale-history-main">
           <div class="sale-history-top">
-            <span class="sale-history-status ${sale.cancelada ? "status-cancelled" : "status-sale"}">${escapeHtml(details.status)}</span>
+            <span class="sale-history-status ${escapeHtml(details.statusClass)}">${escapeHtml(details.status)}</span>
             <strong>${escapeHtml(details.code)}</strong>
-            <span>${escapeHtml(details.origin)}</span>
+            <span>${escapeHtml(details.originIcon)} ${escapeHtml(details.origin)}</span>
           </div>
           <strong class="sale-history-product">${escapeHtml(details.productName)}</strong>
+          ${details.variation ? `<span class="sale-history-flavor">${escapeHtml(details.variation)}</span>` : ""}
           <span class="sale-history-meta">
-            ${products.quantity} ${products.quantity === 1 ? "unidade" : "unidades"} &bull;
-            Registro ${escapeHtml(details.createdTime)} &bull;
-            Entrega ${escapeHtml(details.routeTime)} &bull;
-            ${escapeHtml(details.seller)}
+            <b>🕒${escapeHtml(details.createdTime)}</b>
+            <b>🚚${escapeHtml(details.routeTime)}</b>
+            <b>👤${escapeHtml(details.seller)}</b>
+            <b>📦${products.quantity} ${products.quantity === 1 ? "un" : "un"}</b>
           </span>
         </div>
         <div class="sale-history-side">
@@ -2733,8 +2739,10 @@ function renderSalesHistoryRow(row) {
         </div>
         <button type="button" class="sale-history-menu-button" data-history-menu-toggle="${sale.id}" aria-label="Acoes da venda ${escapeHtml(details.code)}">...</button>
         <div class="sale-history-menu hidden" data-history-menu="${sale.id}">
-          <button type="button" data-view-sale="${sale.id}">Ver detalhes</button>
-          ${sale.cancelada ? "" : `<button type="button" data-edit-sale="${sale.id}">Editar venda</button><button type="button" data-cancel-sale="${sale.id}">Cancelar venda</button>`}
+          ${sale.cancelada ? "" : `<button type="button" data-edit-sale="${sale.id}">Editar</button><button type="button" data-cancel-sale="${sale.id}">Cancelar</button>`}
+          <button type="button" data-history-menu-placeholder>Duplicar</button>
+          <button type="button" data-history-menu-placeholder>Imprimir</button>
+          <button type="button" data-history-menu-placeholder>Compartilhar</button>
         </div>
       </article>
     `;
@@ -2746,11 +2754,14 @@ function saleHistoryLineDetails(sale, products, linkedOrder) {
   return {
     code: linkedOrder?.codigo || `Venda #${sale.id}`,
     origin: linkedOrder ? "Site" : "Manual",
-    status: sale.cancelada ? "Cancelada" : (sale.status_entrega || sale.status || "Concluida"),
+    originIcon: linkedOrder ? "🌐" : "🛒",
+    status: sale.cancelada ? "Cancelada" : (salePaymentConferredLabel(sale) === "Sim" ? "Pago" : (sale.status_entrega || sale.status || "Concluida")),
+    statusClass: sale.cancelada ? "status-cancelled" : (salePaymentConferredLabel(sale) === "Sim" ? "status-paid" : "status-awaiting"),
     productName: firstItem.name || products.title || sale.nome_produto || "Venda",
+    variation: firstItem.variation || "",
     image: firstItem.image || "./assets/fumacinha-logo.png",
     createdTime: createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
-    routeTime: `${formatDateBR(saleRouteDate(sale))} ${saleRouteTime(sale) || "--:--"}`,
+    routeTime: saleRouteTime(sale) || "--:--",
     seller: sale.vendedora_nome || "Vendedora nao informada",
     payment: paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Pagamento",
   };
@@ -4853,6 +4864,12 @@ document.addEventListener("click", async (event) => {
   if (viewOrder) {
     event.stopPropagation();
     viewOrderDetails(viewOrder.dataset.viewOrder);
+    closeHistoryMenus();
+    return;
+  }
+  const historyMenuPlaceholder = event.target.closest("[data-history-menu-placeholder]");
+  if (historyMenuPlaceholder) {
+    event.stopPropagation();
     closeHistoryMenus();
     return;
   }
