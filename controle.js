@@ -2137,6 +2137,10 @@ function updateSaleTotal() {
   setAllText("[data-sale-payment]", draft.paymentLabel || draft.payment);
   setAllText("[data-sale-commission]", currency.format(commission.total));
   setAllText("[data-sale-route-summary]", draft.routeTime);
+  setAllText("[data-sale-route-current]", draft.routeTime || "Selecionar");
+  $$("[data-sale-route-toggle]").forEach((button) => {
+    button.setAttribute("aria-label", `Horario da rota, ${draft.routeTime || "selecionar"}`);
+  });
   setAllText("[data-sale-grand-total], [data-sale-footer-total]", currency.format(draft.totalSale));
   setAllText("[data-sale-items-count]", `${$$(".sale-item").length} ${$$(".sale-item").length === 1 ? "item" : "itens"}`);
   renderSaleProductState();
@@ -5381,7 +5385,18 @@ document.addEventListener("click", async (event) => {
   if (routeOption && saleForm?.elements.horario_rota) {
     saleForm.elements.horario_rota.value = routeOption.dataset.saleRouteOption;
     saleForm.elements.horario_rota.dispatchEvent(new Event("change", { bubbles: true }));
+    const panel = routeOption.closest(".route-chip-panel");
+    const toggle = panel?.querySelector("[data-sale-route-toggle]");
+    panel?.classList.remove("open");
+    toggle?.setAttribute("aria-expanded", "false");
     updateSaleTotal();
+  }
+  const routeToggle = event.target.closest("[data-sale-route-toggle]");
+  if (routeToggle) {
+    const panel = routeToggle.closest(".route-chip-panel");
+    const isOpen = !panel?.classList.contains("open");
+    panel?.classList.toggle("open", isOpen);
+    routeToggle.setAttribute("aria-expanded", String(isOpen));
   }
   if (event.target.closest("[data-remove-sale-item]")) {
     event.target.closest(".sale-item")?.remove();

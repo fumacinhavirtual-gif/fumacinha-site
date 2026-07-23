@@ -330,22 +330,30 @@
   }
 
   .route-chip-panel {
-    gap: 8px;
-    padding: 10px;
+    gap: 0;
+    padding: 0;
   }
 
-  .route-chip-panel > strong::before {
-    content: "Entrega";
-    display: block;
-    margin-bottom: 8px;
-    color: var(--black);
-    font-size: 0.98rem;
-    font-weight: 950;
+  .route-chip-toggle {
+    min-height: 54px;
+    padding: 0 14px;
   }
 
-  .route-chip-panel > label:not(.route-select-label) {
-    gap: 5px;
-    font-size: 0.74rem;
+  .route-chip-title {
+    font-size: 0.9rem;
+  }
+
+  .route-chip-current {
+    font-size: 0.9rem;
+  }
+
+  .route-chip-content {
+    padding-inline: 14px;
+  }
+
+  .route-chip-panel.open .route-chip-content {
+    max-height: 112px;
+    padding-bottom: 12px;
   }
 
   .route-chip-panel input,
@@ -3814,12 +3822,66 @@ body.modal-open {
 
 .route-chip-panel {
   display: grid;
-  gap: 10px;
+  gap: 0;
+  padding: 0;
+  overflow: hidden;
 }
 
-.route-chip-panel > strong {
+.route-chip-toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 0 16px;
+  border: 0;
   color: var(--black);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.route-chip-title {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  gap: 8px;
+  font-size: 0.98rem;
   font-weight: 950;
+}
+
+.route-chip-current {
+  color: var(--green);
+  font-size: 0.95rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.route-chip-caret {
+  color: var(--muted);
+  font-size: 1.4rem;
+  font-weight: 900;
+  line-height: 1;
+  transition: transform 0.2s ease;
+}
+
+.route-chip-panel.open .route-chip-caret {
+  transform: rotate(90deg);
+}
+
+.route-chip-content {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  padding: 0 16px;
+  transition: max-height 0.2s ease, opacity 0.18s ease, padding-bottom 0.2s ease;
+}
+
+.route-chip-panel.open .route-chip-content {
+  max-height: 118px;
+  opacity: 1;
+  padding-bottom: 14px;
 }
 
 .route-chip-grid {

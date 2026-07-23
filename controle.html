@@ -275,14 +275,20 @@
                   <option value="21:00">21:00</option>
                 </select>
               </label>
-              <strong>Horario da rota</strong>
-              <div class="route-chip-grid" data-sale-route-buttons>
-                <button type="button" data-sale-route-option="11:00">11:00</button>
-                <button type="button" data-sale-route-option="13:00">13:00</button>
-                <button type="button" data-sale-route-option="15:00">15:00</button>
-                <button type="button" data-sale-route-option="17:00">17:00</button>
-                <button type="button" data-sale-route-option="19:00">19:00</button>
-                <button type="button" data-sale-route-option="21:00">21:00</button>
+              <button class="route-chip-toggle" type="button" data-sale-route-toggle aria-expanded="false" aria-controls="sale-route-options" aria-label="Horario da rota, selecionar">
+                <span class="route-chip-title"><span aria-hidden="true">🚚</span> Horario da rota</span>
+                <span class="route-chip-current" data-sale-route-current>Selecionar</span>
+                <span class="route-chip-caret" aria-hidden="true">›</span>
+              </button>
+              <div class="route-chip-content" id="sale-route-options" data-sale-route-content>
+                <div class="route-chip-grid" data-sale-route-buttons>
+                  <button type="button" data-sale-route-option="11:00">11:00</button>
+                  <button type="button" data-sale-route-option="13:00">13:00</button>
+                  <button type="button" data-sale-route-option="15:00">15:00</button>
+                  <button type="button" data-sale-route-option="17:00">17:00</button>
+                  <button type="button" data-sale-route-option="19:00">19:00</button>
+                  <button type="button" data-sale-route-option="21:00">21:00</button>
+                </div>
               </div>
               <input type="hidden" name="status_entrega" value="Aguardando" />
             </section>
