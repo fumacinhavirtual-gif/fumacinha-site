@@ -28,6 +28,8 @@ const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PRODUCT_SELECT_FIELDS = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home";
+const PRODUCT_SELECT_FALLBACK_FIELDS = "id,nome,preco,imagem,categoria,estoque,ativo";
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
 const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
 const EXCHANGE_CHECK_KEY = "fumacinha:exchangeChecks";
@@ -997,16 +999,43 @@ async function loadProductsFromSupabase({ silent = false } = {}) {
   app.productsLoading = true;
   app.productsError = "";
   if (!silent) renderProductDependentViews();
-  const { data, error } = await supabaseClient
+  let { data, error } = await supabaseClient
     .from(TABLES.products)
-    .select("*")
+    .select(PRODUCT_SELECT_FIELDS)
+    .order("categoria", { ascending: true })
     .order("nome", { ascending: true });
+  if (error) {
+    const missingOptionalColumns =
+      error.message?.includes("PRODUTOS.descricao") ||
+      error.message?.includes("PRODUTOS.destaque_home") ||
+      error.message?.includes("PRODUTOS.ocultar_home");
+    if (missingOptionalColumns) {
+      console.warn("Consulta completa de produtos falhou, usando consulta minima:", error.message);
+      const fallback = await supabaseClient
+        .from(TABLES.products)
+        .select(PRODUCT_SELECT_FALLBACK_FIELDS)
+        .order("categoria", { ascending: true })
+        .order("nome", { ascending: true });
+      data = fallback.data;
+      error = fallback.error;
+    }
+  }
+  if (error) {
+    const minimal = await supabaseClient
+      .from(TABLES.products)
+      .select("id,nome,preco,imagem,categoria")
+      .order("nome", { ascending: true });
+    if (!minimal.error) {
+      data = minimal.data;
+      error = null;
+    }
+  }
   app.productsLoading = false;
   if (error) {
     app.productsError = error.message || "Erro ao carregar produtos.";
     console.error("Erro ao carregar produtos da Fumacinha:", {
       table: TABLES.products,
-      filters: "select * order nome asc",
+      filters: PRODUCT_SELECT_FIELDS,
       error,
     });
     if (!silent) renderProductDependentViews();
@@ -1094,8 +1123,13 @@ async function loadAll() {
     return;
   }
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
-    supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
+  try {
+    await loadProductsFromSupabase({ silent: true });
+  } catch (error) {
+    showToast("Nao foi possivel carregar os produtos.", "error");
+  }
+
+  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
@@ -1128,21 +1162,6 @@ async function loadAll() {
     return result.value.data ?? fallback;
   };
 
-  const loadedProducts = readData(productsResult, "produtos", []);
-  if (productsResult.status === "fulfilled" && !productsResult.value.error) {
-    app.productsLoading = false;
-    app.productsError = "";
-    try {
-      app.products = await ensureDukeAvailability(loadedProducts);
-    } catch (error) {
-      app.products = loadedProducts;
-      console.error("Erro ao corrigir disponibilidade do Duke:", error);
-    }
-  } else {
-    app.productsLoading = false;
-    app.productsError = loadErrors.find((message) => message.startsWith("produtos:")) || "Erro ao carregar produtos.";
-    app.products = [];
-  }
   app.sales = readData(salesResult, "vendas", app.sales);
   app.saleItems = readData(itemsResult, "itens de venda", app.saleItems);
   app.orders = readData(ordersResult, "pedidos", app.orders);
