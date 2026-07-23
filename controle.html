@@ -204,7 +204,13 @@
               </div>
             </section>
             <details class="sale-section sale-payment-panel" open>
-              <summary>Pagamento</summary>
+              <summary class="sale-section-header">
+                <span class="sale-section-title">
+                  <svg class="sale-section-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3 10h18"></path><path d="M7 15h3"></path></svg>
+                  <span>Pagamento</span>
+                </span>
+                <svg class="sale-section-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </summary>
               <div class="form-grid sale-form-grid">
               <label>Desconto <input type="number" name="desconto" min="0" step="0.01" value="0" /></label>
               <label>
@@ -275,10 +281,13 @@
                   <option value="21:00">21:00</option>
                 </select>
               </label>
-              <button class="route-chip-toggle" type="button" data-sale-route-toggle aria-expanded="false" aria-controls="sale-route-options" aria-label="Horario da rota, selecionar">
-                <span class="route-chip-title"><span aria-hidden="true">🚚</span> Horario da rota</span>
+              <button class="sale-section-header route-chip-toggle" type="button" data-sale-route-toggle aria-expanded="false" aria-controls="sale-route-options" aria-label="Horario da rota, selecionar">
+                <span class="sale-section-title route-chip-title">
+                  <svg class="sale-section-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+                  <span>Horario da rota</span>
+                </span>
                 <span class="route-chip-current" data-sale-route-current>Selecionar</span>
-                <span class="route-chip-caret" aria-hidden="true">›</span>
+                <svg class="sale-section-caret route-chip-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
               </button>
               <div class="route-chip-content" id="sale-route-options" data-sale-route-content>
                 <div class="route-chip-grid" data-sale-route-buttons>
@@ -293,7 +302,13 @@
               <input type="hidden" name="status_entrega" value="Aguardando" />
             </section>
             <details class="sale-section sale-client-panel">
-              <summary>Cliente</summary>
+              <summary class="sale-section-header">
+                <span class="sale-section-title">
+                  <svg class="sale-section-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+                  <span>Cliente <small>(opcional)</small></span>
+                </span>
+                <svg class="sale-section-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </summary>
               <div class="sale-client-grid">
                 <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
                 <label>Bairro <input type="text" name="bairro" placeholder="Bairro do cliente" /></label>
@@ -301,7 +316,13 @@
               </div>
             </details>
             <section class="sale-summary-panel" aria-label="Resumo da venda">
-              <h3>Resumo da venda</h3>
+              <div class="sale-section-header sale-summary-header">
+                <span class="sale-section-title">
+                  <svg class="sale-section-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 3 5-7"></path></svg>
+                  <span>Resumo da venda</span>
+                </span>
+                <svg class="sale-section-caret sale-section-caret-open" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </div>
               <div class="sale-summary-list">
                 <div><span>Produtos</span><strong data-sale-products>R$ 0,00</strong></div>
                 <div><span>Taxa entrega</span><strong data-sale-delivery>R$ 0,00</strong></div>
