@@ -3245,7 +3245,7 @@ body.modal-open {
 }
 
 .stock-category-title {
-  margin: 14px 0 8px;
+  margin: 14px 0 10px;
   color: var(--black);
   font-size: 1rem;
   font-weight: 950;
@@ -3255,7 +3255,7 @@ body.modal-open {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 10px 0;
+  margin: 10px 0 12px;
 }
 
 .stock-category-selector button {
@@ -3469,6 +3469,36 @@ body.modal-open {
 
   .stock-save-status {
     width: 100%;
+  }
+
+  .stock-category-title {
+    margin: 12px 0 10px;
+    font-size: clamp(1.18rem, 5vw, 1.45rem);
+    line-height: 1.1;
+  }
+
+  .stock-category-selector {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 0 0 12px;
+    width: 100%;
+  }
+
+  .stock-category-selector button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+    min-height: 42px;
+    width: 100%;
+    padding: 0 8px;
+    border-radius: 16px;
+    font-size: clamp(0.75rem, 3.15vw, 0.9rem);
+    line-height: 1;
+    text-align: center;
+    white-space: nowrap;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05);
   }
 
   .client-row {
@@ -4731,6 +4761,17 @@ body.modal-open {
 }
 
 @media (max-width: 359px) {
+  .stock-category-selector {
+    gap: 6px;
+  }
+
+  .stock-category-selector button {
+    min-height: 38px;
+    border-radius: 14px;
+    padding: 0 6px;
+    font-size: 0.7rem;
+  }
+
   .exchange-route-row {
     min-height: 108px;
     padding: 10px;
