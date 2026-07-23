@@ -185,8 +185,18 @@
               <label>Categoria <select data-sale-product-category></select></label>
             </div>
             <p class="sale-product-filter-status" data-sale-product-filter-status></p>
-            <div class="sale-items" data-sale-items></div>
-            <button class="sale-add-product-button" type="button" data-add-sale-item>+ Selecionar produto</button>
+            <section class="sale-products-panel">
+              <div class="sale-products-head">
+                <strong>Produtos da venda</strong>
+                <span data-sale-items-count>1 item</span>
+              </div>
+              <div class="sale-items" data-sale-items></div>
+              <button class="sale-add-product-button" type="button" data-add-sale-item>+ Selecionar produto</button>
+              <div class="sale-products-subtotal">
+                <span>Subtotal dos produtos</span>
+                <strong data-sale-products>R$ 0,00</strong>
+              </div>
+            </section>
             <section class="sale-summary-panel" aria-label="Resumo da venda">
               <h3>Resumo da venda</h3>
               <div class="sale-summary-list">

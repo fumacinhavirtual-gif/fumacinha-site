@@ -1703,11 +1703,18 @@ function saleItemTemplate(item = {}) {
           <span>${escapeHtml(firstProduct?.categoria || "Produto")}</span>
         </div>
       </div>
+      <button class="ghost-action sale-remove-icon" type="button" data-remove-sale-item aria-label="Remover produto">Excluir</button>
       <label>Produto <select name="produto_id">${productOptions(firstProduct?.id || "")}</select></label>
-      <label>Qtd <input type="number" name="quantidade" min="1" step="1" value="${toNumber(item.quantidade || 1)}" /></label>
-      <label>Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" value="${item.valor_unitario !== undefined ? toNumber(item.valor_unitario).toFixed(2) : ""}" readonly /></label>
+      <label class="sale-quantity-field">
+        <span>Qtd</span>
+        <span class="sale-quantity-control">
+          <button type="button" data-sale-quantity-step="-1" aria-label="Diminuir quantidade">-</button>
+          <input type="number" name="quantidade" min="1" step="1" value="${toNumber(item.quantidade || 1)}" />
+          <button type="button" data-sale-quantity-step="1" aria-label="Aumentar quantidade">+</button>
+        </span>
+      </label>
+      <label class="sale-unit-field">Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" value="${item.valor_unitario !== undefined ? toNumber(item.valor_unitario).toFixed(2) : ""}" readonly /></label>
       <div class="sale-line-total"><span>Subtotal</span><strong data-item-subtotal>R$ 0,00</strong></div>
-      <button class="ghost-action" type="button" data-remove-sale-item>Remover</button>
     </article>
   `;
 }
@@ -1838,6 +1845,7 @@ function updateSaleTotal() {
   setAllText("[data-sale-commission]", currency.format(commission.total));
   setAllText("[data-sale-route-summary]", draft.routeTime);
   setAllText("[data-sale-grand-total], [data-sale-footer-total]", currency.format(draft.totalSale));
+  setAllText("[data-sale-items-count]", `${$$(".sale-item").length} ${$$(".sale-item").length === 1 ? "item" : "itens"}`);
   $$("[data-sale-route-option]").forEach((button) => {
     button.classList.toggle("active", button.dataset.saleRouteOption === draft.routeTime);
   });
@@ -4983,6 +4991,16 @@ document.addEventListener("click", async (event) => {
     saleItemsRoot?.insertAdjacentHTML("beforeend", saleItemTemplate());
     updateSaleItemPrices();
     updateSaleTotal();
+  }
+  const quantityStep = event.target.closest("[data-sale-quantity-step]");
+  if (quantityStep) {
+    const input = quantityStep.closest(".sale-item")?.querySelector('[name="quantidade"]');
+    if (input) {
+      const step = Number.parseInt(quantityStep.dataset.saleQuantityStep || "0", 10);
+      const max = input.max ? Number.parseInt(input.max, 10) : Number.POSITIVE_INFINITY;
+      input.value = String(Math.min(max, Math.max(1, toNumber(input.value) + step)));
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    }
   }
   const routeOption = event.target.closest("[data-sale-route-option]");
   if (routeOption && saleForm?.elements.horario_rota) {
