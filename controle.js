@@ -120,6 +120,11 @@ let pendingConfirmAction = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+function setAllText(selector, value) {
+  $$(selector).forEach((element) => {
+    element.textContent = value;
+  });
+}
 
 const loginView = $("[data-login-view]");
 const controlView = $("[data-control-view]");
@@ -977,10 +982,10 @@ async function ensureDukeAvailability(products) {
 function splitPaymentPanelMarkup() {
   return `
     <div>
-      <strong>Pagamento dividido - marque aqui</strong>
-      <span>Use quando o cliente pagar em duas formas, exemplo: R$ 100 no Pix e R$ 20 no Debito ou Dinheiro.</span>
+      <strong>Pagamento dividido</strong>
+      <span>Use quando o cliente pagar em duas formas.</span>
     </div>
-    <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /> Ativar pagamento dividido</label>
+    <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /><span></span></label>
     <div class="split-payment-grid hidden" data-split-payment-fields>
       <label>
         Forma 1
@@ -1694,7 +1699,7 @@ function saleItemTemplate(item = {}) {
       <div class="sale-product-preview" data-sale-product-preview>
         <img src="${escapeHtml(productImage(firstProduct))}" alt="${escapeHtml(firstProduct?.nome || "Produto")}" loading="lazy" decoding="async" />
         <div>
-          <strong>${escapeHtml(firstProduct?.nome || "Selecione um produto")}</strong>
+          <strong>${escapeHtml(firstProduct?.nome || "Selecionar produto")}</strong>
           <span>${escapeHtml(firstProduct?.categoria || "Produto")}</span>
         </div>
       </div>
@@ -1743,7 +1748,7 @@ function updateSaleItemPreview(row, product) {
   preview.innerHTML = `
     <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product?.nome || "Produto")}" loading="lazy" decoding="async" />
     <div>
-      <strong>${escapeHtml(product?.nome || "Selecione um produto")}</strong>
+      <strong>${escapeHtml(product?.nome || "Selecionar produto")}</strong>
       <span>${escapeHtml(product?.categoria || "Produto")} | Estoque: ${toNumber(product?.estoque || 0)}</span>
     </div>
   `;
@@ -1824,14 +1829,18 @@ function updateSaleTotal() {
   const changeInvalid = draft.cash && draft.hasChange && (!String(changeInput?.value || "").trim() || draft.changeValue < 0);
   const deliveryInvalid = draft.deliveryValue < 0;
 
-  $("[data-sale-products]").textContent = currency.format(draft.productsValue);
-  $("[data-sale-received]").textContent = currency.format(draft.paidValue);
-  $("[data-sale-delivery]").textContent = currency.format(Math.max(0, draft.deliveryValue));
-  $("[data-sale-net-products]").textContent = currency.format(draft.productsValue);
-  $("[data-sale-change]").textContent = currency.format(draft.changeValue);
-  $("[data-sale-payment]").textContent = draft.paymentLabel || draft.payment;
-  $("[data-sale-commission]").textContent = currency.format(commission.total);
-  $("[data-sale-route-summary]").textContent = `${formatDateBR(draft.routeDate)} as ${draft.routeTime}`;
+  setAllText("[data-sale-products]", currency.format(draft.productsValue));
+  setAllText("[data-sale-received]", currency.format(draft.paidValue));
+  setAllText("[data-sale-delivery]", currency.format(Math.max(0, draft.deliveryValue)));
+  setAllText("[data-sale-net-products]", currency.format(draft.productsValue));
+  setAllText("[data-sale-change]", currency.format(draft.changeValue));
+  setAllText("[data-sale-payment]", draft.paymentLabel || draft.payment);
+  setAllText("[data-sale-commission]", currency.format(commission.total));
+  setAllText("[data-sale-route-summary]", draft.routeTime);
+  setAllText("[data-sale-grand-total], [data-sale-footer-total]", currency.format(draft.totalSale));
+  $$("[data-sale-route-option]").forEach((button) => {
+    button.classList.toggle("active", button.dataset.saleRouteOption === draft.routeTime);
+  });
   $$("[data-sale-cash-only]").forEach((element) => element.classList.toggle("hidden", !draft.cash));
   $$("[data-sale-change-field]").forEach((element) => element.classList.toggle("hidden", !draft.cash || !draft.hasChange));
   if (saleWarning) {
@@ -4973,6 +4982,12 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-add-sale-item]")) {
     saleItemsRoot?.insertAdjacentHTML("beforeend", saleItemTemplate());
     updateSaleItemPrices();
+    updateSaleTotal();
+  }
+  const routeOption = event.target.closest("[data-sale-route-option]");
+  if (routeOption && saleForm?.elements.horario_rota) {
+    saleForm.elements.horario_rota.value = routeOption.dataset.saleRouteOption;
+    saleForm.elements.horario_rota.dispatchEvent(new Event("change", { bubbles: true }));
     updateSaleTotal();
   }
   if (event.target.closest("[data-remove-sale-item]")) {

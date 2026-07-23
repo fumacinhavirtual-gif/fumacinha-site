@@ -171,7 +171,7 @@
               <p class="eyebrow">Vender</p>
               <h2>Registrar venda manual</h2>
             </div>
-            <button class="ghost-action" type="button" data-add-sale-item>Adicionar produto</button>
+            <button class="ghost-action sale-head-add" type="button" data-add-sale-item>Selecionar produto</button>
           </div>
 
           <form class="panel-card" data-sale-form>
@@ -186,7 +186,22 @@
             </div>
             <p class="sale-product-filter-status" data-sale-product-filter-status></p>
             <div class="sale-items" data-sale-items></div>
-            <div class="form-grid">
+            <button class="sale-add-product-button" type="button" data-add-sale-item>+ Selecionar produto</button>
+            <section class="sale-summary-panel" aria-label="Resumo da venda">
+              <h3>Resumo da venda</h3>
+              <div class="sale-summary-list">
+                <div><span>Produtos</span><strong data-sale-products>R$ 0,00</strong></div>
+                <div><span>Taxa entrega</span><strong data-sale-delivery>R$ 0,00</strong></div>
+                <div><span>Comissao</span><strong data-sale-commission>R$ 0,50</strong></div>
+                <div><span>Forma pagamento</span><strong data-sale-payment>Pix</strong></div>
+                <div><span>Horario rota</span><strong data-sale-route-summary>Hoje</strong></div>
+                <div class="sale-summary-change hidden" data-sale-cash-only><span>Troco</span><strong data-sale-change>R$ 0,00</strong></div>
+                <div class="sale-summary-total"><span>Total</span><strong data-sale-grand-total>R$ 0,00</strong></div>
+              </div>
+            </section>
+            <details class="sale-section sale-payment-panel" open>
+              <summary>Pagamento</summary>
+              <div class="form-grid sale-form-grid">
               <label>Desconto <input type="number" name="desconto" min="0" step="0.01" value="0" /></label>
               <label>
                 Forma de pagamento
@@ -200,10 +215,10 @@
               </label>
               <section class="split-payment-panel" data-split-payment-panel data-testid="split-payment-panel" aria-label="Pagamento dividido">
                 <div>
-                  <strong>Pagamento dividido - marque aqui</strong>
-                  <span>Use quando o cliente pagar em duas formas, exemplo: R$ 100 no Pix e R$ 20 no Debito ou Dinheiro.</span>
+                  <strong>Pagamento dividido</strong>
+                  <span>Use quando o cliente pagar em duas formas.</span>
                 </div>
-                <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /> Ativar pagamento dividido</label>
+                <label class="inline-check split-payment-toggle"><input type="checkbox" name="pagamento_dividido" /><span></span></label>
                 <div class="split-payment-grid hidden" data-split-payment-fields>
                   <label>
                     Forma 1
@@ -241,8 +256,11 @@
                 </select>
               </label>
               <label data-sale-change-field>Valor do troco entregue <input type="text" name="troco" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
+              </div>
+            </details>
+            <section class="sale-section route-chip-panel">
               <label>Data da entrega <input type="date" name="data_entrega" required /></label>
-              <label>
+              <label class="route-select-label">
                 Horario da rota
                 <select name="horario_rota" required>
                   <option value="11:00">11:00</option>
@@ -253,9 +271,15 @@
                   <option value="21:00">21:00</option>
                 </select>
               </label>
-              <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
-              <label>Bairro <input type="text" name="bairro" placeholder="Bairro do cliente" /></label>
-              <label>Telefone <input type="tel" name="telefone" placeholder="62991877597" /></label>
+              <strong>Horario da rota</strong>
+              <div class="route-chip-grid" data-sale-route-buttons>
+                <button type="button" data-sale-route-option="11:00">11:00</button>
+                <button type="button" data-sale-route-option="13:00">13:00</button>
+                <button type="button" data-sale-route-option="15:00">15:00</button>
+                <button type="button" data-sale-route-option="17:00">17:00</button>
+                <button type="button" data-sale-route-option="19:00">19:00</button>
+                <button type="button" data-sale-route-option="21:00">21:00</button>
+              </div>
               <label>
                 Status da entrega
                 <select name="status_entrega">
@@ -266,8 +290,16 @@
                   <option value="Cancelado">Cancelado</option>
                 </select>
               </label>
-            </div>
-            <div class="sale-summary-grid">
+            </section>
+            <details class="sale-section sale-client-panel">
+              <summary>Cliente</summary>
+              <div class="sale-client-grid">
+                <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
+                <label>Bairro <input type="text" name="bairro" placeholder="Bairro do cliente" /></label>
+                <label>Telefone <input type="tel" name="telefone" placeholder="62991877597" /></label>
+              </div>
+            </details>
+            <div class="sale-summary-grid hidden" aria-hidden="true">
               <article><span>Valor dos produtos</span><strong data-sale-products>R$ 0,00</strong></article>
               <article><span>Valor pago pelo cliente</span><strong data-sale-received>R$ 0,00</strong></article>
               <article data-sale-cash-only><span>Troco entregue</span><strong data-sale-change>R$ 0,00</strong></article>
@@ -292,6 +324,10 @@
               </label>
               <small>A taxa de entrega pertence ao entregador e nao entra no faturamento dos produtos.</small>
               <div class="form-actions">
+                <div class="sale-footer-total">
+                  <span>Total da venda</span>
+                  <strong data-sale-footer-total>R$ 0,00</strong>
+                </div>
                 <button class="primary-action" type="submit" data-sale-submit>Registrar venda</button>
                 <button class="confirm-order-action hidden" type="button" data-confirm-edited-order>Confirmar pedido</button>
               </div>
