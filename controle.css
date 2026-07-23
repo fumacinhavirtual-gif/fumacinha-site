@@ -134,9 +134,10 @@
   }
 
   .sale-remove-icon::before {
-    content: "🗑";
+    content: "X";
     color: #475569;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 950;
     line-height: 1;
   }
 
@@ -6134,7 +6135,7 @@ body.modal-open {
   }
 
   .sale-remove-icon::before {
-    content: "x";
+    content: "X";
     color: #334155;
     font-size: 0.95rem;
     font-weight: 950;
@@ -6697,9 +6698,10 @@ body.modal-open {
   }
 
   .sale-remove-icon::before {
-    content: "🗑";
+    content: "X";
     color: #475569;
-    font-size: 0.9rem;
+    font-size: 0.95rem;
+    font-weight: 950;
     line-height: 1;
   }
 
