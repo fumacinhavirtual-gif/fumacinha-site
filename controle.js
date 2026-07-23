@@ -1742,10 +1742,25 @@ function renderSaleProductState() {
 function renderSaleProductPicker() {
   if (salePickerSearchInput) salePickerSearchInput.value = app.salePickerSearch;
   const categories = ["all", ...saleProductCategories()];
+  const categoryLabel = (category) => {
+    if (category === "all") return "Todos";
+    const normalized = normalizeText(category);
+    const labels = {
+      acessorios: "Acessorios",
+      descartavel: "Descartaveis",
+      descartaveis: "Descartaveis",
+      coil: "Coil",
+      kit: "Kit",
+      refil: "Refil",
+      salt: "Salt",
+      pods: "Pods",
+    };
+    return labels[normalized] || category;
+  };
   if (salePickerCategoriesRoot) {
     salePickerCategoriesRoot.innerHTML = categories.map((category) => `
       <button type="button" class="${category === app.salePickerCategory ? "active" : ""}" data-sale-picker-category="${escapeHtml(category)}">
-        ${category === "all" ? "Todos" : escapeHtml(category)}
+        ${escapeHtml(categoryLabel(category))}
       </button>
     `).join("");
   }
@@ -1770,6 +1785,15 @@ function renderSaleProductPicker() {
         </button>
       `;
     }).join("") : '<p class="sale-picker-empty">Nenhum produto encontrado.</p>';
+    salePickerListRoot.querySelectorAll(".sale-picker-product").forEach((button, index) => {
+      const product = rows[index];
+      const checked = selectedIds.has(String(product.id)) || app.salePickerSelected.has(String(product.id));
+      const disabled = toNumber(product.estoque) <= 0;
+      const meta = button.querySelector("small");
+      const marker = button.querySelector("i");
+      if (meta) meta.textContent = `${product.categoria || "Produto"} \u2022 Estoque: ${toNumber(product.estoque)}`;
+      if (marker) marker.textContent = disabled ? "Sem estoque" : checked ? "\u2713" : "+";
+    });
   }
   if (salePickerConfirmButton) salePickerConfirmButton.disabled = app.salePickerSelected.size === 0;
 }
