@@ -1198,23 +1198,31 @@ async function loadAll() {
   renderAll();
 }
 
+function renderSafely(label, callback) {
+  try {
+    callback();
+  } catch (error) {
+    console.error(`Erro ao renderizar ${label}:`, error);
+  }
+}
+
 function renderAll() {
-  renderPeriods();
-  renderAnalyticsFilters();
-  renderPeopleOptions();
-  renderDashboard();
-  renderSaleProductFilters();
-  renderSaleItems();
-  updateSaleItemPrices();
-  updateSaleTotal();
-  renderPendingOrders();
-  renderSalesHistory();
-  renderStock();
-  renderFinance();
-  renderReports();
-  renderCashClosing();
-  renderRoutes();
-  renderStoreStatus();
+  renderSafely("periodos", renderPeriods);
+  renderSafely("filtros analiticos", renderAnalyticsFilters);
+  renderSafely("equipe", renderPeopleOptions);
+  renderSafely("dashboard", renderDashboard);
+  renderSafely("filtros de venda", renderSaleProductFilters);
+  renderSafely("itens da venda", renderSaleItems);
+  renderSafely("precos da venda", updateSaleItemPrices);
+  renderSafely("total da venda", updateSaleTotal);
+  renderSafely("pedidos pendentes", renderPendingOrders);
+  renderSafely("historico de vendas", renderSalesHistory);
+  renderSafely("estoque", renderStock);
+  renderSafely("financeiro", renderFinance);
+  renderSafely("relatorios", renderReports);
+  renderSafely("conferencia", renderCashClosing);
+  renderSafely("rotas", renderRoutes);
+  renderSafely("status da loja", renderStoreStatus);
 }
 
 function renderAnalyticsFilters() {
@@ -1708,6 +1716,10 @@ function saleFilterText(value = "") {
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim();
+}
+
+function normalizeText(value = "") {
+  return saleFilterText(value);
 }
 
 function productMatchesSaleFilters(product) {
