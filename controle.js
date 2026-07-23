@@ -76,6 +76,9 @@ const app = {
   orderSort: "recent",
   saleProductSearch: "",
   saleProductCategory: "all",
+  salePickerSearch: "",
+  salePickerCategory: "all",
+  salePickerSelected: new Set(),
   seenOrderIds: new Set(),
   notifiedOrderIds: new Set(),
   realtimeChannel: null,
@@ -115,6 +118,7 @@ const app = {
 
 let sideTouchStartX = null;
 let saleDetailTouchStartY = null;
+let salePickerTouchStartY = null;
 let lastSaleDetailTrigger = null;
 let pendingConfirmAction = null;
 
@@ -145,6 +149,11 @@ const saleForm = $("[data-sale-form]");
 const saleItemsRoot = $("[data-sale-items]");
 const saleProductSearchInput = $("[data-sale-product-search]");
 const saleProductCategorySelect = $("[data-sale-product-category]");
+const saleProductSheet = $("[data-sale-product-sheet]");
+const salePickerSearchInput = $("[data-sale-picker-search]");
+const salePickerCategoriesRoot = $("[data-sale-picker-categories]");
+const salePickerListRoot = $("[data-sale-picker-list]");
+const salePickerConfirmButton = $("[data-confirm-sale-picker]");
 const stockList = $("[data-stock-list]");
 const stockHistory = $("[data-stock-history]");
 const stockProductForm = $("[data-stock-product-form]");
@@ -1610,7 +1619,7 @@ function hasActiveSaleProductFilter() {
 
 function saleProducts(selected = "") {
   const selectedText = String(selected || "");
-  const canKeepSelectedOutsideFilter = selectedText && !hasActiveSaleProductFilter();
+  const canKeepSelectedOutsideFilter = Boolean(selectedText);
   return app.products.filter((product) => {
     const isSelected = canKeepSelectedOutsideFilter && String(product.id) === selectedText;
     if (!isProductAvailable(product) && !isSelected) return false;
@@ -1637,6 +1646,28 @@ function productMatchesSaleFilters(product) {
     product.categoria,
     product.descricao,
   ].filter(Boolean).join(" ")).includes(search);
+}
+
+function productMatchesPickerFilters(product) {
+  if (!isProductAvailable(product)) return false;
+  const search = saleFilterText(app.salePickerSearch);
+  if (app.salePickerCategory !== "all" && String(product.categoria || "") !== app.salePickerCategory) return false;
+  if (!search) return true;
+  return saleFilterText([
+    product.nome,
+    product.categoria,
+    product.descricao,
+    product.marca,
+    product.sabor,
+  ].filter(Boolean).join(" ")).includes(search);
+}
+
+function salePickerProducts() {
+  return app.products.filter(productMatchesPickerFilters);
+}
+
+function selectedSaleProductIds() {
+  return new Set($$(".sale-item").map((row) => String(row.querySelector('[name="produto_id"]')?.value || "")).filter(Boolean));
 }
 
 function productOptions(selected = "") {
@@ -1696,6 +1727,98 @@ function updateSaleProductFilterStatus() {
   status.className = "sale-product-filter-status success";
 }
 
+function renderSaleProductState() {
+  const rows = $$(".sale-item");
+  const empty = $("[data-sale-empty]");
+  empty?.classList.toggle("hidden", rows.length > 0);
+  saleItemsRoot?.classList.toggle("hidden", rows.length === 0);
+  const addButtons = $$("[data-add-sale-item]");
+  addButtons.forEach((button) => {
+    if (button.closest("[data-sale-empty]")) return;
+    button.classList.toggle("hidden", rows.length === 0);
+  });
+}
+
+function renderSaleProductPicker() {
+  if (salePickerSearchInput) salePickerSearchInput.value = app.salePickerSearch;
+  const categories = ["all", ...saleProductCategories()];
+  if (salePickerCategoriesRoot) {
+    salePickerCategoriesRoot.innerHTML = categories.map((category) => `
+      <button type="button" class="${category === app.salePickerCategory ? "active" : ""}" data-sale-picker-category="${escapeHtml(category)}">
+        ${category === "all" ? "Todos" : escapeHtml(category)}
+      </button>
+    `).join("");
+  }
+  const selectedIds = selectedSaleProductIds();
+  const rows = salePickerProducts();
+  if (salePickerListRoot) {
+    salePickerListRoot.innerHTML = rows.length ? rows.map((product) => {
+      const id = String(product.id);
+      const alreadySelected = selectedIds.has(id);
+      const pending = app.salePickerSelected.has(id);
+      const checked = alreadySelected || pending;
+      const disabled = toNumber(product.estoque) <= 0;
+      return `
+        <button class="sale-picker-product ${checked ? "selected" : ""}" type="button" data-sale-picker-product="${escapeHtml(id)}" ${disabled ? "disabled" : ""}>
+          <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.nome || "Produto")}" loading="lazy" decoding="async" />
+          <span>
+            <strong>${escapeHtml(product.nome || "Produto")}</strong>
+            <small>${escapeHtml(product.categoria || "Produto")} • Estoque: ${toNumber(product.estoque)}</small>
+          </span>
+          <b>${currency.format(toNumber(product.preco))}</b>
+          <i>${disabled ? "Sem estoque" : checked ? "✓" : "+"}</i>
+        </button>
+      `;
+    }).join("") : '<p class="sale-picker-empty">Nenhum produto encontrado.</p>';
+  }
+  if (salePickerConfirmButton) salePickerConfirmButton.disabled = app.salePickerSelected.size === 0;
+}
+
+function openSaleProductPicker() {
+  app.salePickerSearch = app.saleProductSearch || "";
+  app.salePickerCategory = app.saleProductCategory || "all";
+  app.salePickerSelected = new Set();
+  renderSaleProductPicker();
+  saleProductSheet?.classList.add("open");
+  saleProductSheet?.setAttribute("aria-hidden", "false");
+  document.body.classList.add("sheet-open");
+  window.setTimeout(() => salePickerSearchInput?.focus(), 60);
+}
+
+function closeSaleProductPicker() {
+  saleProductSheet?.classList.remove("open");
+  saleProductSheet?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("sheet-open");
+  app.salePickerSelected = new Set();
+}
+
+function addProductToSale(productId) {
+  const product = app.products.find((item) => String(item.id) === String(productId));
+  if (!product || !isProductAvailable(product)) return false;
+  const existing = $$(".sale-item").find((row) => String(row.querySelector('[name="produto_id"]')?.value) === String(productId));
+  if (existing) {
+    const quantityInput = existing.querySelector('[name="quantidade"]');
+    const current = toNumber(quantityInput?.value || 1);
+    const stock = Math.max(1, toNumber(product.estoque));
+    if (quantityInput) quantityInput.value = String(Math.min(stock, current + 1));
+    updateSaleItemPrices();
+    updateSaleTotal();
+    return true;
+  }
+  saleItemsRoot?.insertAdjacentHTML("beforeend", saleItemTemplate({ product, produto_id: product.id, valor_unitario: product.preco, quantidade: 1 }));
+  updateSaleItemPrices();
+  updateSaleTotal();
+  return true;
+}
+
+function confirmSaleProductPicker() {
+  const ids = [...app.salePickerSelected];
+  if (!ids.length) return;
+  ids.forEach(addProductToSale);
+  closeSaleProductPicker();
+  updateSaleTotal();
+}
+
 function saleItemTemplate(item = {}) {
   const firstProduct = item.product || app.products.find((product) => String(product.id) === String(item.produto_id)) || firstAvailableProduct();
   return `
@@ -1707,7 +1830,7 @@ function saleItemTemplate(item = {}) {
           <span>${escapeHtml(firstProduct?.categoria || "Produto")}</span>
         </div>
       </div>
-      <button class="ghost-action sale-remove-icon" type="button" data-remove-sale-item aria-label="Remover produto">Excluir</button>
+      <button class="ghost-action sale-remove-icon" type="button" data-remove-sale-item aria-label="Remover produto"></button>
       <label>Produto <select name="produto_id">${productOptions(firstProduct?.id || "")}</select></label>
       <label class="sale-quantity-field">
         <span>Qtd</span>
@@ -1718,14 +1841,14 @@ function saleItemTemplate(item = {}) {
         </span>
       </label>
       <label class="sale-unit-field">Valor unitario <input type="number" name="valor_unitario" min="0" step="0.01" value="${item.valor_unitario !== undefined ? toNumber(item.valor_unitario).toFixed(2) : ""}" readonly /></label>
+      <div class="sale-unit-value"><strong data-item-unit>R$ 0,00</strong><span>cada</span></div>
       <div class="sale-line-total"><span>Subtotal</span><strong data-item-subtotal>R$ 0,00</strong></div>
     </article>
   `;
 }
 
 function renderSaleItems() {
-  if (!saleItemsRoot || saleItemsRoot.children.length) return;
-  saleItemsRoot.innerHTML = saleItemTemplate();
+  if (!saleItemsRoot) return;
   updateSaleItemPrices();
   updateSaleTotal();
 }
@@ -1753,8 +1876,10 @@ function updateSaleItemPreview(row, product) {
   const quantity = toNumber(row.querySelector('[name="quantidade"]')?.value);
   const unitValue = parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
   const subtotal = row.querySelector("[data-item-subtotal]");
+  const unit = row.querySelector("[data-item-unit]");
   const preview = row.querySelector("[data-sale-product-preview]");
   if (subtotal) subtotal.textContent = currency.format(quantity * unitValue);
+  if (unit) unit.textContent = currency.format(unitValue);
   if (!preview) return;
   preview.innerHTML = `
     <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product?.nome || "Produto")}" loading="lazy" decoding="async" />
@@ -1850,6 +1975,7 @@ function updateSaleTotal() {
   setAllText("[data-sale-route-summary]", draft.routeTime);
   setAllText("[data-sale-grand-total], [data-sale-footer-total]", currency.format(draft.totalSale));
   setAllText("[data-sale-items-count]", `${$$(".sale-item").length} ${$$(".sale-item").length === 1 ? "item" : "itens"}`);
+  renderSaleProductState();
   $$("[data-sale-route-option]").forEach((button) => {
     button.classList.toggle("active", button.dataset.saleRouteOption === draft.routeTime);
   });
@@ -2051,7 +2177,7 @@ function resetSaleForm() {
   app.deliveryManuallyEdited = false;
   app.saleReceivedTouched = false;
   setSuggestedDeliveryRoute();
-  saleItemsRoot.innerHTML = saleItemTemplate();
+  saleItemsRoot.innerHTML = "";
   renderPeopleOptions();
   saleEditBanner?.classList.add("hidden");
   saleEditMotive?.classList.add("hidden");
@@ -4895,6 +5021,26 @@ saleDetailShell?.addEventListener(
   { passive: true },
 );
 
+saleProductSheet?.addEventListener(
+  "touchstart",
+  (event) => {
+    if (!event.target.closest(".sale-product-sheet-panel")) return;
+    salePickerTouchStartY = event.touches?.[0]?.clientY ?? null;
+  },
+  { passive: true },
+);
+
+saleProductSheet?.addEventListener(
+  "touchend",
+  (event) => {
+    if (salePickerTouchStartY === null) return;
+    const endY = event.changedTouches?.[0]?.clientY ?? salePickerTouchStartY;
+    if (endY - salePickerTouchStartY > 70) closeSaleProductPicker();
+    salePickerTouchStartY = null;
+  },
+  { passive: true },
+);
+
 window.addEventListener("offline", showConnectionStatus);
 window.addEventListener("online", () => {
   setStatus("Internet voltou. Toque em Atualizar para carregar os dados.", "success");
@@ -4992,9 +5138,30 @@ document.addEventListener("click", async (event) => {
     renderPendingOrders();
   }
   if (event.target.closest("[data-add-sale-item]")) {
-    saleItemsRoot?.insertAdjacentHTML("beforeend", saleItemTemplate());
-    updateSaleItemPrices();
-    updateSaleTotal();
+    openSaleProductPicker();
+    return;
+  }
+  if (event.target.closest("[data-close-sale-picker]")) {
+    closeSaleProductPicker();
+    return;
+  }
+  if (event.target.closest("[data-confirm-sale-picker]")) {
+    confirmSaleProductPicker();
+    return;
+  }
+  const pickerCategory = event.target.closest("[data-sale-picker-category]");
+  if (pickerCategory) {
+    app.salePickerCategory = pickerCategory.dataset.salePickerCategory || "all";
+    renderSaleProductPicker();
+    return;
+  }
+  const pickerProduct = event.target.closest("[data-sale-picker-product]");
+  if (pickerProduct) {
+    const id = String(pickerProduct.dataset.salePickerProduct || "");
+    if (app.salePickerSelected.has(id)) app.salePickerSelected.delete(id);
+    else app.salePickerSelected.add(id);
+    renderSaleProductPicker();
+    return;
   }
   const quantityStep = event.target.closest("[data-sale-quantity-step]");
   if (quantityStep) {
@@ -5014,7 +5181,6 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-remove-sale-item]")) {
     event.target.closest(".sale-item")?.remove();
-    if (!saleItemsRoot?.children.length) saleItemsRoot.innerHTML = saleItemTemplate();
     updateSaleTotal();
   }
   const plus = event.target.closest("[data-stock-plus]");
@@ -5182,9 +5348,12 @@ document.addEventListener("input", (event) => {
   }
   if (event.target.matches("[data-sale-product-search]")) {
     app.saleProductSearch = event.target.value;
-    syncSaleItemSelectionsWithFilters();
-    updateSaleItemPrices();
+    updateSaleProductFilterStatus();
     updateSaleTotal();
+  }
+  if (event.target.matches("[data-sale-picker-search]")) {
+    app.salePickerSearch = event.target.value;
+    renderSaleProductPicker();
   }
   if (event.target.matches("[data-stock-value]")) updateStockSaveState(event.target.dataset.stockValue);
   if (event.target.matches("[data-finance-date-start], [data-finance-date-end]")) {
@@ -5282,8 +5451,7 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.matches("[data-sale-product-category]")) {
     app.saleProductCategory = event.target.value || "all";
-    syncSaleItemSelectionsWithFilters();
-    updateSaleItemPrices();
+    updateSaleProductFilterStatus();
     updateSaleTotal();
   }
   if (event.target.name === "vendedora_id") localStorage.setItem(LAST_SELLER_KEY, event.target.value);
@@ -5332,6 +5500,10 @@ document.addEventListener("keydown", (event) => {
     }
   }
   if (event.key !== "Escape") return;
+  if (saleProductSheet?.classList.contains("open")) {
+    closeSaleProductPicker();
+    return;
+  }
   if (confirmShell?.classList.contains("open")) {
     closeConfirmation();
     return;

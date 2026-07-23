@@ -190,23 +190,17 @@
                 <strong>Produtos da venda</strong>
                 <span data-sale-items-count>1 item</span>
               </div>
+              <div class="sale-empty-state" data-sale-empty>
+                <span aria-hidden="true">+</span>
+                <strong>Nenhum produto adicionado</strong>
+                <p>Selecione um produto para iniciar a venda.</p>
+                <button class="sale-add-product-button" type="button" data-add-sale-item>+ Selecionar produto</button>
+              </div>
               <div class="sale-items" data-sale-items></div>
               <button class="sale-add-product-button" type="button" data-add-sale-item>+ Selecionar produto</button>
               <div class="sale-products-subtotal">
                 <span>Subtotal dos produtos</span>
                 <strong data-sale-products>R$ 0,00</strong>
-              </div>
-            </section>
-            <section class="sale-summary-panel" aria-label="Resumo da venda">
-              <h3>Resumo da venda</h3>
-              <div class="sale-summary-list">
-                <div><span>Produtos</span><strong data-sale-products>R$ 0,00</strong></div>
-                <div><span>Taxa entrega</span><strong data-sale-delivery>R$ 0,00</strong></div>
-                <div><span>Comissao</span><strong data-sale-commission>R$ 0,50</strong></div>
-                <div><span>Forma pagamento</span><strong data-sale-payment>Pix</strong></div>
-                <div><span>Horario rota</span><strong data-sale-route-summary>Hoje</strong></div>
-                <div class="sale-summary-change hidden" data-sale-cash-only><span>Troco</span><strong data-sale-change>R$ 0,00</strong></div>
-                <div class="sale-summary-total"><span>Total</span><strong data-sale-grand-total>R$ 0,00</strong></div>
               </div>
             </section>
             <details class="sale-section sale-payment-panel" open>
@@ -309,6 +303,19 @@
                 <label>Telefone <input type="tel" name="telefone" placeholder="62991877597" /></label>
               </div>
             </details>
+            <section class="sale-summary-panel" aria-label="Resumo da venda">
+              <h3>Resumo da venda</h3>
+              <div class="sale-summary-list">
+                <div><span>Produtos</span><strong data-sale-products>R$ 0,00</strong></div>
+                <div><span>Taxa entrega</span><strong data-sale-delivery>R$ 0,00</strong></div>
+                <div><span>Comissao da vendedora</span><strong data-sale-commission>R$ 0,50</strong></div>
+                <div><span>Forma de pagamento</span><strong data-sale-payment>Pix</strong></div>
+                <div><span>Horario da rota</span><strong data-sale-route-summary>Hoje</strong></div>
+                <div><span>Valor pago pelo cliente</span><strong data-sale-received>R$ 0,00</strong></div>
+                <div class="sale-summary-change hidden" data-sale-cash-only><span>Troco</span><strong data-sale-change>R$ 0,00</strong></div>
+                <div class="sale-summary-total"><span>Total</span><strong data-sale-grand-total>R$ 0,00</strong></div>
+              </div>
+            </section>
             <div class="sale-summary-grid hidden" aria-hidden="true">
               <article><span>Valor dos produtos</span><strong data-sale-products>R$ 0,00</strong></article>
               <article><span>Valor pago pelo cliente</span><strong data-sale-received>R$ 0,00</strong></article>
@@ -328,8 +335,8 @@
               <label class="payment-check-field">
                 Conferiu pagamento?
                 <select name="pagamento_conferido">
-                  <option value="">Responder</option>
-                  <option value="sim">Conferi sim</option>
+                  <option value="">Nao</option>
+                  <option value="sim">Sim</option>
                 </select>
               </label>
               <small>A taxa de entrega pertence ao entregador e nao entra no faturamento dos produtos.</small>
@@ -343,6 +350,26 @@
               </div>
             </div>
           </form>
+          <div class="sale-product-sheet" data-sale-product-sheet aria-hidden="true">
+            <button class="sale-product-sheet-overlay" type="button" data-close-sale-picker aria-label="Fechar selecao de produtos"></button>
+            <section class="sale-product-sheet-panel" role="dialog" aria-modal="true" aria-label="Adicionar produto">
+              <div class="sale-product-sheet-handle" aria-hidden="true"></div>
+              <header class="sale-product-sheet-header">
+                <h3>Adicionar produto</h3>
+                <button type="button" data-close-sale-picker aria-label="Fechar">x</button>
+              </header>
+              <label class="sale-picker-search">
+                <span>Buscar produto</span>
+                <input type="search" data-sale-picker-search placeholder="Buscar produto" />
+              </label>
+              <div class="sale-picker-categories" data-sale-picker-categories></div>
+              <div class="sale-picker-list" data-sale-picker-list></div>
+              <footer class="sale-picker-footer">
+                <button type="button" data-close-sale-picker>Cancelar</button>
+                <button type="button" data-confirm-sale-picker disabled>Adicionar</button>
+              </footer>
+            </section>
+          </div>
 
         </section>
 
