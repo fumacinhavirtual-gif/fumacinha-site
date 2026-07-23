@@ -17,6 +17,7 @@ const TABLES = {
   cashMovements: "MOVIMENTACOES_CAIXA",
   changeBox: "CAIXA_TROCO",
   changeMoves: "MOVIMENTACOES_TROCO",
+  exchangeChecks: "CONFERENCIAS_TROCAS",
   siteConfig: "SITE_CONFIG",
 };
 
@@ -55,6 +56,10 @@ const app = {
   cashMovements: [],
   changeBox: null,
   changeMoves: [],
+  exchangeChecks: [],
+  exchangeSaving: {},
+  exchangeSaveTimers: {},
+  exchangeSaveVersions: {},
   siteConfig: {
     loja_online: true,
     mensagem_loja_fechada: "Loja temporariamente fechada. Voltaremos em breve.",
@@ -1033,7 +1038,7 @@ async function loadAll() {
     return;
   }
   setStatus("Carregando controle...", "loading");
-  const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult] = await Promise.allSettled([
+  const [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.products).select("*").order("nome", { ascending: true }),
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
@@ -1048,6 +1053,7 @@ async function loadAll() {
     supabaseClient.from(TABLES.cashMovements).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
+    supabaseClient.from(TABLES.exchangeChecks).select("*").order("data_caixa", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
@@ -1087,6 +1093,12 @@ async function loadAll() {
   app.cashMovements = cashMovesResult.value.data || [];
   app.changeBox = changeBoxResult.value.data?.[0] || null;
   app.changeMoves = changeMovesResult.value.data || [];
+  app.exchangeChecks = exchangeChecksResult.status === "fulfilled" && !exchangeChecksResult.value.error
+    ? exchangeChecksResult.value.data || []
+    : [];
+  if (exchangeChecksResult.status === "rejected" || exchangeChecksResult.value?.error) {
+    console.error("Erro ao carregar conferencias de trocas:", exchangeChecksResult.reason || exchangeChecksResult.value?.error);
+  }
   app.siteConfig = {
     loja_online: siteConfigResult.value.data?.loja_online !== false,
     mensagem_loja_fechada: siteConfigResult.value.data?.mensagem_loja_fechada || "Loja temporariamente fechada. Voltaremos em breve.",
@@ -4162,15 +4174,33 @@ function exchangeStore() {
   }
 }
 
+function exchangeRowKey(dateKey, time) {
+  return `${dateKey || app.cashDate}|${time}`;
+}
+
+function exchangeSavedRow(dateKey, time) {
+  return app.exchangeChecks.find((row) => row.data_caixa === dateKey && row.horario_rota === time);
+}
+
+function exchangeLocalFallback(dateKey, time) {
+  return exchangeStore()[dateKey]?.[time] || null;
+}
+
 function exchangeRowsForDate(dateKey = app.cashDate) {
-  const store = exchangeStore();
-  const saved = store[dateKey] || {};
   return ROUTE_TIMES.map((time) => ({
     time,
-    sent: Math.max(0, Number.parseInt(saved[time]?.sent || 0, 10)),
-    returned: Math.max(0, Number.parseInt(saved[time]?.returned || 0, 10)),
-    checked: Boolean(saved[time]?.checked || (Number(saved[time]?.sent || 0) > 0 && Number(saved[time]?.returned || 0) >= Number(saved[time]?.sent || 0))),
+    ...exchangeRowFromSaved(dateKey, time),
+    saving: app.exchangeSaving[exchangeRowKey(dateKey, time)] || null,
   }));
+}
+
+function exchangeRowFromSaved(dateKey, time) {
+  const saved = exchangeSavedRow(dateKey, time);
+  const local = saved ? null : exchangeLocalFallback(dateKey, time);
+  const sent = Math.max(0, Number.parseInt(saved?.quantidade_trocas ?? local?.sent ?? 0, 10));
+  const returned = Math.max(0, Number.parseInt(saved?.trocas_retornadas ?? local?.returned ?? 0, 10));
+  const checked = Boolean(saved?.conferido ?? local?.checked ?? (sent > 0 && returned >= sent));
+  return { id: saved?.id || null, sent, returned, checked };
 }
 
 function exchangeRowsFromInputs() {
@@ -4181,16 +4211,45 @@ function exchangeRowsFromInputs() {
   }));
 }
 
-function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
-  const store = exchangeStore();
-  store[dateKey] = rows.reduce((acc, row) => {
-    const sent = toNumber(row.sent);
-    const checked = Boolean(row.checked);
-    acc[row.time] = { sent, returned: checked ? sent : 0, checked };
-    return acc;
-  }, {});
-  store[dateKey].__updatedAt = new Date().toISOString();
-  localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
+function exchangePayload(row, dateKey = app.cashDate) {
+  const sent = Math.max(0, Number.parseInt(row.sent || 0, 10));
+  const checked = Boolean(row.checked);
+  return {
+    data_caixa: dateKey,
+    horario_rota: row.time,
+    quantidade_trocas: sent,
+    trocas_retornadas: checked ? sent : 0,
+    conferido: checked,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function applyExchangeSavedRow(saved) {
+  if (!saved) return;
+  app.exchangeChecks = [
+    saved,
+    ...app.exchangeChecks.filter((row) => !(row.data_caixa === saved.data_caixa && row.horario_rota === saved.horario_rota)),
+  ];
+}
+
+async function persistExchangeRow(row, dateKey = app.cashDate) {
+  const payload = exchangePayload(row, dateKey);
+  const { data, error } = await supabaseClient
+    .from(TABLES.exchangeChecks)
+    .upsert(payload, { onConflict: "data_caixa,horario_rota" })
+    .select("*")
+    .single();
+  if (error) throw error;
+  applyExchangeSavedRow(data);
+  return data;
+}
+
+async function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
+  const savedRows = [];
+  for (const row of rows) {
+    savedRows.push(await persistExchangeRow(row, dateKey));
+  }
+  return savedRows;
 }
 
 function exchangeSummary(rows = exchangeRowsFromInputs()) {
@@ -4204,8 +4263,54 @@ function exchangeSummary(rows = exchangeRowsFromInputs()) {
 }
 
 function exchangeLastUpdated(dateKey = app.cashDate) {
-  const updatedAt = exchangeStore()[dateKey]?.__updatedAt;
+  const updatedAt = app.exchangeChecks
+    .filter((row) => row.data_caixa === dateKey)
+    .map((row) => row.updated_at || row.created_at)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
   return updatedAt ? new Date(updatedAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "--:--";
+}
+
+function setExchangeSaveState(key, state = "", message = "") {
+  if (state) app.exchangeSaving[key] = { state, message };
+  else delete app.exchangeSaving[key];
+}
+
+function exchangeRowsWithOverride(time, patch = {}, dateKey = app.cashDate) {
+  return exchangeRowsFromInputs().map((row) => (row.time === time ? { ...row, ...patch } : row));
+}
+
+function scheduleExchangeRowSave(time, patch = {}, previous = {}, dateKey = app.cashDate) {
+  const key = exchangeRowKey(dateKey, time);
+  window.clearTimeout(app.exchangeSaveTimers[key]);
+  const version = (app.exchangeSaveVersions[key] || 0) + 1;
+  app.exchangeSaveVersions[key] = version;
+  const currentRow = exchangeRowsWithOverride(time, patch, dateKey).find((row) => row.time === time);
+  setExchangeSaveState(key, "saving", "Salvando...");
+  renderExchangeCheck(exchangeRowsWithOverride(time, currentRow, dateKey));
+  app.exchangeSaveTimers[key] = window.setTimeout(async () => {
+    try {
+      const saved = await persistExchangeRow(currentRow, dateKey);
+      if (app.exchangeSaveVersions[key] !== version) return;
+      setExchangeSaveState(key, "saved", "Salvo");
+      renderExchangeCheck(exchangeRowsForDate(dateKey));
+      window.setTimeout(() => {
+        if (app.exchangeSaveVersions[key] === version) {
+          setExchangeSaveState(key);
+          renderExchangeCheck(exchangeRowsForDate(dateKey));
+        }
+      }, 1500);
+      return saved;
+    } catch (error) {
+      if (app.exchangeSaveVersions[key] !== version) return;
+      console.error("Erro ao salvar conferencia de troca:", { time, dateKey, currentRow, error });
+      const rollbackRows = exchangeRowsWithOverride(time, previous, dateKey);
+      setExchangeSaveState(key);
+      renderExchangeCheck(rollbackRows);
+      showToast("Não foi possível salvar. Tente novamente.", "error");
+    }
+  }, 320);
 }
 
 function exchangeRouteState(row) {
@@ -4250,6 +4355,8 @@ function renderExchangeCheck(rows = exchangeRowsForDate()) {
   root.innerHTML = rows.map((row) => {
       const checked = Boolean(row.checked);
       const state = exchangeRouteState(row);
+      const saving = app.exchangeSaving[exchangeRowKey(app.cashDate, row.time)] || null;
+      const disabled = saving?.state === "saving";
       return `
         <article class="exchange-route-row ${state.key}">
           <header>
@@ -4260,15 +4367,15 @@ function renderExchangeCheck(rows = exchangeRowsForDate()) {
             <div class="exchange-stepper">
               <span>Trocas</span>
               <div>
-                <button type="button" data-exchange-step="${row.time}" data-step="-1">-</button>
-                <input aria-label="Trocas da rota ${row.time}" type="number" min="0" step="1" value="${row.sent}" data-exchange-count="${row.time}" />
-                <button type="button" data-exchange-step="${row.time}" data-step="1">+</button>
+                <button type="button" data-exchange-step="${row.time}" data-step="-1" ${disabled ? "disabled" : ""}>-</button>
+                <input aria-label="Trocas da rota ${row.time}" type="number" min="0" step="1" value="${row.sent}" data-exchange-count="${row.time}" ${disabled ? "disabled" : ""} />
+                <button type="button" data-exchange-step="${row.time}" data-step="1" ${disabled ? "disabled" : ""}>+</button>
               </div>
             </div>
             <label class="exchange-switch" aria-label="Conferir rota ${row.time}">
-              <input type="checkbox" ${checked ? "checked" : ""} data-exchange-checked="${row.time}" />
+              <input type="checkbox" ${checked ? "checked" : ""} data-exchange-checked="${row.time}" ${disabled ? "disabled" : ""} />
               <span></span>
-              <b>${checked ? "Conferido" : "Pendente"}</b>
+              <b>${saving?.message || (checked ? "Conferido" : "Pendente")}</b>
             </label>
           </div>
         </article>
@@ -4277,12 +4384,26 @@ function renderExchangeCheck(rows = exchangeRowsForDate()) {
   renderExchangeSummary(rows);
 }
 
-function saveExchangeCheck() {
+async function saveExchangeCheck() {
   const rows = exchangeRowsFromInputs();
-  saveExchangeRows(rows);
-  renderExchangeCheck();
   const summary = exchangeSummary(rows);
-  setStatus(summary.ok ? "Trocas conferidas." : "Trocas salvas com pendencias.", summary.ok ? "success" : "error");
+  ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time), "saving", "Salvando..."));
+  renderExchangeCheck(rows);
+  try {
+    await saveExchangeRows(rows);
+    ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time), "saved", "Salvo"));
+    renderExchangeCheck(exchangeRowsForDate());
+    showToast(summary.ok ? "Trocas conferidas." : "Trocas salvas com pendências.", summary.ok ? "success" : "error");
+    window.setTimeout(() => {
+      ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time)));
+      renderExchangeCheck(exchangeRowsForDate());
+    }, 1500);
+  } catch (error) {
+    console.error("Erro ao salvar trocas:", error);
+    ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time)));
+    renderExchangeCheck(exchangeRowsForDate());
+    showToast("Não foi possível salvar. Tente novamente.", "error");
+  }
 }
 
 function conferencePasswordOk() {
@@ -4522,7 +4643,7 @@ async function closeCash(event) {
   setStatus("Finalizando conferencia...", "loading");
   try {
     await requireUserId();
-    saveExchangeRows(exchangeRows);
+    await saveExchangeRows(exchangeRows);
     const payload = cashPayload("fechado");
     const { data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(payload, { onConflict: "data_caixa" }).select("*").single();
     if (error) throw error;
@@ -4965,9 +5086,14 @@ document.addEventListener("click", async (event) => {
   if (exchangeStep) {
     const input = $(`[data-exchange-count="${exchangeStep.dataset.exchangeStep}"]`);
     if (input) {
-      const nextValue = Math.max(0, Number.parseInt(input.value || "0", 10) + Number.parseInt(exchangeStep.dataset.step || "0", 10));
+      const time = exchangeStep.dataset.exchangeStep;
+      const previous = {
+        sent: Math.max(0, Number.parseInt(input.value || "0", 10)),
+        checked: Boolean($(`[data-exchange-checked="${time}"]`)?.checked),
+      };
+      const nextValue = Math.max(0, previous.sent + Number.parseInt(exchangeStep.dataset.step || "0", 10));
       input.value = String(nextValue);
-      renderExchangeCheck(exchangeRowsFromInputs());
+      scheduleExchangeRowSave(time, { sent: nextValue }, previous);
     }
   }
   if (event.target.closest("[data-view-catalog]")) {
@@ -5083,8 +5209,18 @@ document.addEventListener("change", (event) => {
   if (event.target.name === "teve_troco") updateSaleTotal();
   if (event.target.name === "pagamento_conferido") setPaymentCheckMessage("");
   if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
-  if (event.target.matches("[data-exchange-count]")) renderExchangeCheck(exchangeRowsFromInputs());
-  if (event.target.matches("[data-exchange-checked]")) renderExchangeCheck(exchangeRowsFromInputs());
+  if (event.target.matches("[data-exchange-count]")) {
+    const time = event.target.dataset.exchangeCount;
+    const saved = exchangeRowFromSaved(app.cashDate, time);
+    const nextValue = Math.max(0, Number.parseInt(event.target.value || "0", 10));
+    event.target.value = String(nextValue);
+    scheduleExchangeRowSave(time, { sent: nextValue }, { sent: saved.sent, checked: saved.checked });
+  }
+  if (event.target.matches("[data-exchange-checked]")) {
+    const time = event.target.dataset.exchangeChecked;
+    const saved = exchangeRowFromSaved(app.cashDate, time);
+    scheduleExchangeRowSave(time, { checked: Boolean(event.target.checked) }, { sent: saved.sent, checked: saved.checked });
+  }
   if (["valor_recebido", "taxa_entrega", "troco", "pagamento_1_valor", "pagamento_2_valor"].includes(event.target.name)) {
     formatMoneyInput(event.target);
     updateSaleTotal();
