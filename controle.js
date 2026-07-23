@@ -1737,6 +1737,19 @@ function renderSaleProductState() {
     if (button.closest("[data-sale-empty]")) return;
     button.classList.toggle("hidden", rows.length === 0);
   });
+  bindSalePickerOpenButtons();
+}
+
+function bindSalePickerOpenButtons() {
+  $$("[data-add-sale-item]").forEach((button) => {
+    if (button.dataset.salePickerBound === "true") return;
+    button.dataset.salePickerBound = "true";
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openSaleProductPicker();
+    });
+  });
 }
 
 function renderSaleProductPicker() {
