@@ -11,6 +11,436 @@
   --shadow: 0 18px 50px rgba(17, 17, 17, 0.12);
 }
 
+@media (max-width: 680px) {
+  .control-header {
+    min-height: 92px;
+    margin: -14px -14px 12px;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .menu-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    font-size: 1.25rem;
+  }
+
+  .control-header .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.11em;
+  }
+
+  .control-header h1 {
+    font-size: 1.5rem;
+    line-height: 1.05;
+  }
+
+  .control-header .ghost-action {
+    min-height: 44px;
+    padding: 0 15px;
+    border-radius: 14px;
+    font-size: 0.86rem;
+  }
+
+  [data-panel="sales"] .section-head {
+    margin-bottom: 8px;
+  }
+
+  [data-panel="sales"] .section-head h2 {
+    margin-bottom: 0;
+    font-size: 1.22rem;
+    line-height: 1.1;
+  }
+
+  [data-sale-form] {
+    gap: 10px;
+    padding: 10px;
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+    border-radius: 18px;
+  }
+
+  .sale-product-tools {
+    grid-template-columns: minmax(0, 1fr) 116px;
+    gap: 8px;
+  }
+
+  .sale-product-tools input,
+  .sale-product-tools select {
+    min-height: 42px;
+    border-radius: 12px;
+    font-size: 0.82rem;
+  }
+
+  .sale-products-panel {
+    gap: 9px;
+    padding: 10px;
+    border-radius: 16px;
+  }
+
+  .sale-products-head strong {
+    font-size: 0.92rem;
+  }
+
+  .sale-products-head span {
+    padding: 4px 8px;
+    font-size: 0.68rem;
+  }
+
+  .sale-item {
+    grid-template-columns: 62px minmax(0, 1fr) 38px;
+    grid-template-areas:
+      "image info remove"
+      "image controls subtotal";
+    min-height: 126px;
+    padding: 10px;
+    column-gap: 10px;
+    row-gap: 8px;
+    border-radius: 14px;
+  }
+
+  .sale-product-preview img {
+    grid-area: image;
+    width: 62px;
+    height: 62px;
+    border-radius: 12px;
+  }
+
+  .sale-product-preview div {
+    grid-area: info;
+    padding-right: 4px;
+  }
+
+  .sale-product-preview strong {
+    max-width: 100%;
+    font-size: 0.88rem;
+    line-height: 1.16;
+  }
+
+  .sale-product-preview span {
+    font-size: 0.68rem;
+    line-height: 1.15;
+  }
+
+  .sale-remove-icon {
+    grid-area: remove;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    border-radius: 10px;
+    color: transparent;
+    background: #f8fafc;
+    font-size: 0;
+  }
+
+  .sale-remove-icon::before {
+    content: "🗑";
+    color: #475569;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  .sale-item label:first-of-type,
+  .sale-unit-field,
+  .sale-quantity-field > span:first-child,
+  .sale-auto-person {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+  }
+
+  .sale-quantity-field {
+    grid-area: controls;
+    align-self: end;
+  }
+
+  .sale-quantity-control {
+    gap: 6px;
+  }
+
+  .sale-quantity-control button {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 1rem;
+  }
+
+  .sale-quantity-control input {
+    width: 40px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  .sale-line-total {
+    grid-area: subtotal;
+    display: grid;
+    justify-items: end;
+    align-self: end;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .sale-line-total::before {
+    content: attr(data-unit-label);
+  }
+
+  .sale-line-total span {
+    order: 2;
+    color: var(--muted);
+    font-size: 0.62rem;
+    font-weight: 850;
+  }
+
+  .sale-line-total strong {
+    order: 1;
+    color: var(--green);
+    font-size: 0.92rem;
+    font-weight: 950;
+    white-space: nowrap;
+  }
+
+  .sale-add-product-button {
+    min-height: 42px;
+    border-radius: 13px;
+    font-size: 0.86rem;
+  }
+
+  .sale-products-subtotal {
+    min-height: 32px;
+    padding-top: 6px;
+  }
+
+  .sale-products-subtotal span,
+  .sale-products-subtotal strong {
+    font-size: 0.86rem;
+  }
+
+  .sale-summary-panel {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .sale-summary-panel h3 {
+    margin-bottom: 8px;
+    font-size: 1rem;
+  }
+
+  .sale-summary-list div {
+    min-height: 32px;
+  }
+
+  .sale-summary-list span {
+    font-size: 0.82rem;
+  }
+
+  .sale-summary-list strong {
+    max-width: 150px;
+    overflow: hidden;
+    font-size: 0.88rem;
+    text-overflow: ellipsis;
+  }
+
+  .sale-summary-total {
+    margin-top: 6px;
+    padding-top: 9px;
+  }
+
+  .sale-summary-total span {
+    color: var(--black);
+    font-size: 0.9rem;
+  }
+
+  .sale-summary-total strong {
+    color: var(--green);
+    font-size: 1.25rem;
+  }
+
+  .sale-payment-panel .sale-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(select[name="forma_pagamento"]) {
+    order: 1;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(input[name="desconto"]) {
+    order: 2;
+  }
+
+  .sale-payment-panel .split-payment-panel {
+    order: 3;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(input[name="valor_recebido"]) {
+    order: 4;
+    grid-column: 1 / -1;
+  }
+
+  .sale-payment-panel .sale-form-grid > label[data-sale-cash-only],
+  .sale-payment-panel .sale-form-grid > label[data-sale-change-field] {
+    order: 5;
+    grid-column: 1 / -1;
+  }
+
+  .sale-payment-panel label {
+    gap: 5px;
+    font-size: 0.74rem;
+  }
+
+  .sale-payment-panel input,
+  .sale-payment-panel select {
+    min-height: 42px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+  }
+
+  .split-payment-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 48px;
+    padding: 8px 10px;
+    border-radius: 13px;
+    background: #f8fafc;
+  }
+
+  .split-payment-panel strong {
+    font-size: 0.82rem;
+  }
+
+  .split-payment-panel span {
+    margin-top: 2px;
+    font-size: 0.66rem;
+    line-height: 1.15;
+  }
+
+  .split-payment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .route-chip-panel {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .route-chip-panel > strong::before {
+    content: "Entrega";
+    display: block;
+    margin-bottom: 8px;
+    color: var(--black);
+    font-size: 0.98rem;
+    font-weight: 950;
+  }
+
+  .route-chip-panel > label:not(.route-select-label) {
+    gap: 5px;
+    font-size: 0.74rem;
+  }
+
+  .route-chip-panel input,
+  .route-chip-panel select {
+    min-height: 42px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+  }
+
+  .route-chip-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .route-chip-grid button {
+    min-height: 38px;
+    border-radius: 12px;
+    font-size: 0.82rem;
+  }
+
+  .sale-client-panel {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .sale-client-panel summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 0 12px;
+  }
+
+  .sale-client-panel summary::after {
+    content: ">";
+    color: var(--muted);
+  }
+
+  .sale-client-panel[open] summary::after {
+    transform: rotate(90deg);
+  }
+
+  .sale-client-grid {
+    padding: 0 12px 12px;
+  }
+
+  .payment-check-field {
+    grid-template-columns: minmax(0, 1fr) 104px;
+    min-height: 54px;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 0.84rem;
+  }
+
+  .payment-check-field select {
+    min-height: 38px;
+    border-radius: 11px;
+    font-size: 0.8rem;
+  }
+
+  [data-sale-form] .form-footer {
+    gap: 8px;
+  }
+
+  [data-sale-form] .form-footer small {
+    color: var(--muted);
+    font-size: 0.68rem;
+    line-height: 1.25;
+  }
+
+  [data-sale-form] .form-actions {
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    min-height: 76px;
+    padding: 9px;
+    border-radius: 20px;
+  }
+
+  .sale-footer-total span {
+    font-size: 0.68rem;
+  }
+
+  .sale-footer-total strong {
+    font-size: 1.04rem;
+  }
+
+  [data-sale-form] .form-actions .primary-action,
+  [data-sale-form] .form-actions .confirm-order-action {
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 0.9rem;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
@@ -5673,5 +6103,493 @@ body.modal-open {
 
   .exchange-switch b {
     font-size: 0.78rem;
+  }
+}
+
+@media (max-width: 680px) {
+  .control-header {
+    min-height: 92px;
+    margin: -14px -14px 12px;
+    padding: 10px 14px;
+    gap: 10px;
+  }
+
+  .menu-toggle {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    font-size: 1.25rem;
+  }
+
+  .control-header .eyebrow {
+    font-size: 0.72rem;
+    letter-spacing: 0.11em;
+  }
+
+  .control-header h1 {
+    font-size: 1.5rem;
+    line-height: 1.05;
+  }
+
+  .control-header .ghost-action {
+    min-height: 44px;
+    padding: 0 15px;
+    border-radius: 14px;
+    font-size: 0.86rem;
+  }
+
+  [data-panel="sales"] .section-head {
+    margin-bottom: 8px;
+  }
+
+  [data-panel="sales"] .section-head h2 {
+    margin-bottom: 0;
+    font-size: 1.22rem;
+    line-height: 1.1;
+  }
+
+  [data-sale-form] {
+    gap: 10px;
+    padding: 10px;
+    padding-bottom: calc(112px + env(safe-area-inset-bottom));
+    border-radius: 18px;
+  }
+
+  .sale-product-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 116px;
+    gap: 8px;
+  }
+
+  .sale-product-tools label {
+    gap: 5px;
+    font-size: 0;
+  }
+
+  .sale-product-tools input,
+  .sale-product-tools select {
+    min-height: 42px;
+    padding: 0 12px;
+    border-radius: 12px;
+    font-size: 0.82rem;
+  }
+
+  .sale-product-filter-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: -2px 0 0;
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 850;
+  }
+
+  .sale-product-filter-status.success::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  .sale-products-panel {
+    gap: 9px;
+    padding: 10px;
+    border-radius: 16px;
+    box-shadow: 0 8px 26px rgba(15, 23, 42, 0.06);
+  }
+
+  .sale-products-head strong {
+    font-size: 0.92rem;
+  }
+
+  .sale-products-head span {
+    padding: 4px 8px;
+    font-size: 0.68rem;
+  }
+
+  .sale-items {
+    gap: 8px;
+  }
+
+  .sale-item {
+    position: relative;
+    display: grid;
+    grid-template-columns: 62px minmax(0, 1fr) 38px;
+    grid-template-areas:
+      "image info remove"
+      "image controls subtotal";
+    min-height: 126px;
+    padding: 10px;
+    column-gap: 10px;
+    row-gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: none;
+  }
+
+  .sale-product-preview {
+    display: contents;
+  }
+
+  .sale-product-preview img {
+    grid-area: image;
+    grid-row: auto;
+    width: 62px;
+    height: 62px;
+    border-radius: 12px;
+    align-self: start;
+  }
+
+  .sale-product-preview div {
+    grid-area: info;
+    min-width: 0;
+    padding-right: 4px;
+  }
+
+  .sale-product-preview strong {
+    display: -webkit-box;
+    max-width: 100%;
+    margin: 0 0 3px;
+    overflow: hidden;
+    color: var(--black);
+    font-size: 0.88rem;
+    font-weight: 950;
+    line-height: 1.16;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .sale-product-preview span {
+    display: block;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.68rem;
+    font-weight: 900;
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .sale-remove-icon {
+    grid-area: remove;
+    width: 34px;
+    height: 34px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 10px;
+    color: transparent;
+    background: #f8fafc;
+    font-size: 0;
+  }
+
+  .sale-remove-icon::before {
+    content: "🗑";
+    color: #475569;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
+  .sale-item label:first-of-type,
+  .sale-unit-field,
+  .sale-quantity-field > span:first-child,
+  .sale-auto-person {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+  }
+
+  .sale-quantity-field {
+    grid-area: controls;
+    align-self: end;
+  }
+
+  .sale-quantity-control {
+    gap: 6px;
+  }
+
+  .sale-quantity-control button {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 1rem;
+  }
+
+  .sale-quantity-control input {
+    width: 40px;
+    min-height: 34px;
+    padding: 0;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    text-align: center;
+  }
+
+  .sale-line-total {
+    grid-area: subtotal;
+    display: grid;
+    justify-items: end;
+    align-self: end;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .sale-line-total span {
+    order: 2;
+    color: var(--muted);
+    font-size: 0.62rem;
+    font-weight: 850;
+  }
+
+  .sale-line-total strong {
+    order: 1;
+    color: var(--green);
+    font-size: 0.92rem;
+    font-weight: 950;
+    white-space: nowrap;
+  }
+
+  .sale-add-product-button {
+    min-height: 42px;
+    border-color: rgba(25, 135, 84, 0.3);
+    border-radius: 13px;
+    color: var(--green);
+    background: rgba(25, 135, 84, 0.04);
+    font-size: 0.86rem;
+  }
+
+  .sale-products-subtotal {
+    min-height: 32px;
+    padding-top: 6px;
+    border-top: 1px solid var(--line);
+  }
+
+  .sale-products-subtotal span,
+  .sale-products-subtotal strong {
+    font-size: 0.86rem;
+  }
+
+  .sale-summary-panel {
+    padding: 14px;
+    border-radius: 16px;
+    box-shadow: 0 8px 26px rgba(15, 23, 42, 0.06);
+  }
+
+  .sale-summary-panel h3 {
+    margin-bottom: 8px;
+    font-size: 1rem;
+  }
+
+  .sale-summary-list div {
+    min-height: 32px;
+  }
+
+  .sale-summary-list span {
+    font-size: 0.82rem;
+  }
+
+  .sale-summary-list strong {
+    max-width: 150px;
+    overflow: hidden;
+    font-size: 0.88rem;
+    text-overflow: ellipsis;
+  }
+
+  .sale-summary-total {
+    margin-top: 6px;
+    padding-top: 9px;
+  }
+
+  .sale-summary-total span {
+    color: var(--black);
+    font-size: 0.9rem;
+  }
+
+  .sale-summary-total strong {
+    color: var(--green);
+    font-size: 1.25rem;
+  }
+
+  .sale-payment-panel .sale-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(select[name="forma_pagamento"]) {
+    order: 1;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(input[name="desconto"]) {
+    order: 2;
+  }
+
+  .sale-payment-panel .split-payment-panel {
+    order: 3;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(input[name="valor_recebido"]) {
+    order: 4;
+    grid-column: 1 / -1;
+  }
+
+  .sale-payment-panel .sale-form-grid > label[data-sale-cash-only],
+  .sale-payment-panel .sale-form-grid > label[data-sale-change-field] {
+    order: 5;
+    grid-column: 1 / -1;
+  }
+
+  .sale-payment-panel label {
+    gap: 5px;
+    font-size: 0.74rem;
+  }
+
+  .sale-payment-panel input,
+  .sale-payment-panel select {
+    min-height: 42px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+  }
+
+  .split-payment-panel {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: 48px;
+    padding: 8px 10px;
+    border-radius: 13px;
+    background: #f8fafc;
+  }
+
+  .split-payment-panel strong {
+    font-size: 0.82rem;
+  }
+
+  .split-payment-panel span {
+    margin-top: 2px;
+    font-size: 0.66rem;
+    line-height: 1.15;
+  }
+
+  .split-payment-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .route-chip-panel {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .route-chip-panel > strong::before {
+    content: "Entrega";
+    display: block;
+    margin-bottom: 8px;
+    color: var(--black);
+    font-size: 0.98rem;
+    font-weight: 950;
+  }
+
+  .route-chip-panel > label:not(.route-select-label) {
+    gap: 5px;
+    font-size: 0.74rem;
+  }
+
+  .route-chip-panel input,
+  .route-chip-panel select {
+    min-height: 42px;
+    border-radius: 12px;
+    font-size: 0.88rem;
+  }
+
+  .route-chip-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .route-chip-grid button {
+    min-height: 38px;
+    border-radius: 12px;
+    font-size: 0.82rem;
+  }
+
+  .sale-client-panel {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .sale-client-panel summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 0 12px;
+  }
+
+  .sale-client-panel summary::after {
+    content: ">";
+    color: var(--muted);
+  }
+
+  .sale-client-panel[open] summary::after {
+    transform: rotate(90deg);
+  }
+
+  .sale-client-grid {
+    padding: 0 12px 12px;
+  }
+
+  .payment-check-field {
+    grid-template-columns: minmax(0, 1fr) 104px;
+    min-height: 54px;
+    padding: 8px 12px;
+    border-radius: 14px;
+    font-size: 0.84rem;
+  }
+
+  .payment-check-field select {
+    min-height: 38px;
+    border-radius: 11px;
+    font-size: 0.8rem;
+  }
+
+  [data-sale-form] .form-footer {
+    gap: 8px;
+  }
+
+  [data-sale-form] .form-footer small {
+    color: var(--muted);
+    font-size: 0.68rem;
+    line-height: 1.25;
+  }
+
+  [data-sale-form] .form-actions {
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr);
+    min-height: 76px;
+    padding: 9px;
+    border-radius: 20px;
+  }
+
+  .sale-footer-total span {
+    font-size: 0.68rem;
+  }
+
+  .sale-footer-total strong {
+    font-size: 1.04rem;
+  }
+
+  [data-sale-form] .form-actions .primary-action,
+  [data-sale-form] .form-actions .confirm-order-action {
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 0.9rem;
   }
 }

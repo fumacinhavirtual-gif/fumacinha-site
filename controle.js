@@ -1262,18 +1262,22 @@ function renderPeopleOptions() {
   if (sellerSelect) {
     const activeSellers = app.sellers.filter((seller) => seller.ativo !== false);
     const stored = localStorage.getItem(LAST_SELLER_KEY) || "";
+    const defaultSeller = activeSellers.find((seller) => normalizeText(seller.nome) === "telma") || activeSellers[0];
     sellerSelect.innerHTML = `<option value="">Selecione a vendedora</option>${activeSellers
       .map((seller) => `<option value="${seller.id}">${escapeHtml(seller.nome)}</option>`)
       .join("")}`;
     if (activeSellers.some((seller) => String(seller.id) === String(stored))) sellerSelect.value = stored;
+    else if (defaultSeller) sellerSelect.value = defaultSeller.id;
   }
   if (delivererSelect) {
     const activeDeliverers = app.deliverers.filter((deliverer) => deliverer.ativo !== false);
     const stored = localStorage.getItem(LAST_DELIVERER_KEY) || "";
+    const defaultDeliverer = activeDeliverers.find((deliverer) => normalizeText(deliverer.nome) === "jota") || activeDeliverers[0];
     delivererSelect.innerHTML = `<option value="">Sem entregador</option>${activeDeliverers
       .map((deliverer) => `<option value="${deliverer.id}">${escapeHtml(deliverer.nome)}</option>`)
       .join("")}`;
     if (activeDeliverers.some((deliverer) => String(deliverer.id) === String(stored))) delivererSelect.value = stored;
+    else if (defaultDeliverer) delivererSelect.value = defaultDeliverer.id;
   }
   renderTeamLists();
 }
