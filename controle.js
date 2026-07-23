@@ -76,8 +76,12 @@ const app = {
   orderSort: "recent",
   saleProductSearch: "",
   saleProductCategory: "all",
+  productsLoading: false,
+  productsError: "",
   salePickerSearch: "",
   salePickerCategory: "all",
+  salePickerLoading: false,
+  salePickerError: "",
   salePickerSelected: new Set(),
   seenOrderIds: new Set(),
   notifiedOrderIds: new Set(),
@@ -880,7 +884,7 @@ function saleCardServiceFee(sale) {
 }
 
 function productImage(product) {
-  return product?.imagem || "./assets/fumacinha-logo.png";
+  return product?.imagem || product?.image_url || product?.imagem_url || product?.produto_imagem || "./assets/fumacinha-logo.png";
 }
 
 function personNameById(rows, id) {
@@ -988,6 +992,44 @@ async function ensureDukeAvailability(products) {
   return products.map((product) => updatedProducts.get(String(product.id)) || product);
 }
 
+async function loadProductsFromSupabase({ silent = false } = {}) {
+  if (!supabaseClient) throw new Error("Configure o Supabase da Fumacinha antes de acessar.");
+  app.productsLoading = true;
+  app.productsError = "";
+  if (!silent) renderProductDependentViews();
+  const { data, error } = await supabaseClient
+    .from(TABLES.products)
+    .select("*")
+    .order("nome", { ascending: true });
+  app.productsLoading = false;
+  if (error) {
+    app.productsError = error.message || "Erro ao carregar produtos.";
+    console.error("Erro ao carregar produtos da Fumacinha:", {
+      table: TABLES.products,
+      filters: "select * order nome asc",
+      error,
+    });
+    if (!silent) renderProductDependentViews();
+    throw error;
+  }
+  const loadedProducts = data || [];
+  try {
+    app.products = await ensureDukeAvailability(loadedProducts);
+  } catch (error) {
+    app.products = loadedProducts;
+    console.error("Erro ao corrigir disponibilidade do Duke:", error);
+  }
+  if (!silent) renderProductDependentViews();
+  return app.products;
+}
+
+function renderProductDependentViews() {
+  renderSaleProductFilters();
+  renderSaleProductPicker();
+  renderStock();
+  updateSaleProductFilterStatus();
+}
+
 function splitPaymentPanelMarkup() {
   return `
     <div>
@@ -1071,56 +1113,69 @@ async function loadAll() {
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
-  const results = [productsResult, salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, siteConfigResult];
-  const rejected = results.find((result) => result.status === "rejected");
-  if (rejected) {
-    setStatus(isConnectionError(rejected.reason) ? connectionMessage() : `Erro ao carregar: ${rejected.reason?.message || rejected.reason}`, "error");
-    return;
-  }
+  const loadErrors = [];
+  const readData = (result, label, fallback = []) => {
+    if (result.status === "rejected") {
+      loadErrors.push(`${label}: ${result.reason?.message || result.reason}`);
+      console.error(`Erro ao carregar ${label}:`, result.reason);
+      return fallback;
+    }
+    if (result.value.error) {
+      loadErrors.push(`${label}: ${result.value.error.message}`);
+      console.error(`Erro ao carregar ${label}:`, result.value.error);
+      return fallback;
+    }
+    return result.value.data ?? fallback;
+  };
 
-  const errors = results
-    .filter((result) => result.status === "fulfilled" && result.value.error)
-    .map((result) => result.value.error.message);
-
-  if (errors.length) {
-    setStatus(isConnectionError(errors[0]) ? connectionMessage() : `Erro ao carregar: ${errors[0]}`, "error");
-    return;
+  const loadedProducts = readData(productsResult, "produtos", []);
+  if (productsResult.status === "fulfilled" && !productsResult.value.error) {
+    app.productsLoading = false;
+    app.productsError = "";
+    try {
+      app.products = await ensureDukeAvailability(loadedProducts);
+    } catch (error) {
+      app.products = loadedProducts;
+      console.error("Erro ao corrigir disponibilidade do Duke:", error);
+    }
+  } else {
+    app.productsLoading = false;
+    app.productsError = loadErrors.find((message) => message.startsWith("produtos:")) || "Erro ao carregar produtos.";
+    app.products = [];
   }
-
-  const loadedProducts = productsResult.value.data || [];
-  try {
-    app.products = await ensureDukeAvailability(loadedProducts);
-  } catch (error) {
-    app.products = loadedProducts;
-    console.error("Erro ao corrigir disponibilidade do Duke:", error);
-  }
-  app.sales = salesResult.value.data || [];
-  app.saleItems = itemsResult.value.data || [];
-  app.orders = ordersResult.value.data || [];
-  app.orderItems = orderItemsResult.value.data || [];
-  app.stockMoves = movesResult.value.data || [];
-  app.expenses = expensesResult.value.data || [];
-  app.deliverers = deliverersResult.value.data || [];
-  app.sellers = sellersResult.value.data || [];
-  app.deliveryPayouts = payoutsResult.value.data || [];
-  app.cashClosings = closingsResult.value.data || [];
-  app.cashMovements = cashMovesResult.value.data || [];
-  app.changeBox = changeBoxResult.value.data?.[0] || null;
-  app.changeMoves = changeMovesResult.value.data || [];
+  app.sales = readData(salesResult, "vendas", app.sales);
+  app.saleItems = readData(itemsResult, "itens de venda", app.saleItems);
+  app.orders = readData(ordersResult, "pedidos", app.orders);
+  app.orderItems = readData(orderItemsResult, "itens de pedido", app.orderItems);
+  app.stockMoves = readData(movesResult, "movimentacoes de estoque", app.stockMoves);
+  app.expenses = readData(expensesResult, "despesas", app.expenses);
+  app.deliverers = readData(deliverersResult, "entregadores", app.deliverers);
+  app.sellers = readData(sellersResult, "vendedoras", app.sellers);
+  app.deliveryPayouts = readData(payoutsResult, "repasses de entregadores", app.deliveryPayouts);
+  app.cashClosings = readData(closingsResult, "fechamentos de caixa", app.cashClosings);
+  app.cashMovements = readData(cashMovesResult, "movimentacoes de caixa", app.cashMovements);
+  app.changeBox = readData(changeBoxResult, "caixa de troco", app.changeBox ? [app.changeBox] : [])[0] || null;
+  app.changeMoves = readData(changeMovesResult, "movimentacoes de troco", app.changeMoves);
   app.exchangeChecks = exchangeChecksResult.status === "fulfilled" && !exchangeChecksResult.value.error
     ? exchangeChecksResult.value.data || []
     : [];
   if (exchangeChecksResult.status === "rejected" || exchangeChecksResult.value?.error) {
     console.error("Erro ao carregar conferencias de trocas:", exchangeChecksResult.reason || exchangeChecksResult.value?.error);
   }
+  const siteConfigData = readData(siteConfigResult, "configuracao do site", app.siteConfig);
   app.siteConfig = {
-    loja_online: siteConfigResult.value.data?.loja_online !== false,
-    mensagem_loja_fechada: siteConfigResult.value.data?.mensagem_loja_fechada || "Loja temporariamente fechada. Voltaremos em breve.",
+    loja_online: siteConfigData?.loja_online !== false,
+    mensagem_loja_fechada: siteConfigData?.mensagem_loja_fechada || "Loja temporariamente fechada. Voltaremos em breve.",
   };
   markOrdersSeen();
   setupOrdersRealtime();
-  showToast("Controle atualizado.", "success");
-  setStatus("", "");
+  if (loadErrors.length) {
+    showToast("Alguns dados nao carregaram. Produtos foram mantidos separados.", "error");
+    setStatus(`Erro ao carregar: ${loadErrors[0]}`, "error");
+  } else {
+    showToast("Controle atualizado.", "success");
+    setStatus("", "");
+  }
   renderAll();
 }
 
@@ -1649,7 +1704,10 @@ function productMatchesSaleFilters(product) {
 }
 
 function productMatchesPickerFilters(product) {
-  if (!isProductAvailable(product)) return false;
+  if (!product) return false;
+  const preco = Number(product.preco);
+  const id = String(product.id ?? "").trim();
+  if (product.ativo === false || product.deleted_at || !Number.isFinite(preco) || preco <= 0 || id === "") return false;
   const search = saleFilterText(app.salePickerSearch);
   if (app.salePickerCategory !== "all" && String(product.categoria || "") !== app.salePickerCategory) return false;
   if (!search) return true;
@@ -1712,6 +1770,16 @@ function syncSaleItemSelectionsWithFilters() {
 function updateSaleProductFilterStatus() {
   const status = $("[data-sale-product-filter-status]");
   if (!status) return;
+  if (app.productsLoading) {
+    status.textContent = "Carregando produtos...";
+    status.className = "sale-product-filter-status";
+    return;
+  }
+  if (app.productsError) {
+    status.textContent = "Nao foi possivel carregar os produtos.";
+    status.className = "sale-product-filter-status error";
+    return;
+  }
   const total = saleProducts().length;
   if (!hasActiveSaleProductFilter()) {
     status.textContent = `${total} produto${total === 1 ? "" : "s"} disponivel${total === 1 ? "" : "s"} para venda.`;
@@ -1777,6 +1845,21 @@ function renderSaleProductPicker() {
       </button>
     `).join("");
   }
+  if (salePickerListRoot && app.salePickerLoading) {
+    salePickerListRoot.innerHTML = '<p class="sale-picker-empty">Carregando produtos...</p>';
+    if (salePickerConfirmButton) salePickerConfirmButton.disabled = true;
+    return;
+  }
+  if (salePickerListRoot && app.salePickerError) {
+    salePickerListRoot.innerHTML = `
+      <div class="sale-picker-empty">
+        <p>Nao foi possivel carregar os produtos.</p>
+        <button type="button" class="ghost-action" data-retry-sale-products>Tentar novamente</button>
+      </div>
+    `;
+    if (salePickerConfirmButton) salePickerConfirmButton.disabled = true;
+    return;
+  }
   const selectedIds = selectedSaleProductIds();
   const rows = salePickerProducts();
   if (salePickerListRoot) {
@@ -1788,7 +1871,7 @@ function renderSaleProductPicker() {
       const disabled = toNumber(product.estoque) <= 0;
       return `
         <button class="sale-picker-product ${checked ? "selected" : ""}" type="button" data-sale-picker-product="${escapeHtml(id)}" ${disabled ? "disabled" : ""}>
-          <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.nome || "Produto")}" loading="lazy" decoding="async" />
+          <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.nome || "Produto")}" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
           <span>
             <strong>${escapeHtml(product.nome || "Produto")}</strong>
             <small>${escapeHtml(product.categoria || "Produto")} • Estoque: ${toNumber(product.estoque)}</small>
@@ -1811,14 +1894,27 @@ function renderSaleProductPicker() {
   if (salePickerConfirmButton) salePickerConfirmButton.disabled = app.salePickerSelected.size === 0;
 }
 
-function openSaleProductPicker() {
+async function openSaleProductPicker() {
   app.salePickerSearch = app.saleProductSearch || "";
   app.salePickerCategory = app.saleProductCategory || "all";
   app.salePickerSelected = new Set();
-  renderSaleProductPicker();
   saleProductSheet?.classList.add("open");
   saleProductSheet?.setAttribute("aria-hidden", "false");
   document.body.classList.add("sheet-open");
+  if (!app.products.length || app.productsError) {
+    app.salePickerLoading = true;
+    app.salePickerError = "";
+    renderSaleProductPicker();
+    try {
+      await loadProductsFromSupabase({ silent: true });
+    } catch (error) {
+      app.salePickerError = error.message || "Erro ao carregar produtos.";
+      showToast("Nao foi possivel carregar os produtos.", "error");
+    } finally {
+      app.salePickerLoading = false;
+    }
+  }
+  renderSaleProductPicker();
   window.setTimeout(() => salePickerSearchInput?.focus(), 60);
 }
 
@@ -1861,7 +1957,7 @@ function saleItemTemplate(item = {}) {
   return `
     <article class="sale-item">
       <div class="sale-product-preview" data-sale-product-preview>
-        <img src="${escapeHtml(productImage(firstProduct))}" alt="${escapeHtml(firstProduct?.nome || "Produto")}" loading="lazy" decoding="async" />
+        <img src="${escapeHtml(productImage(firstProduct))}" alt="${escapeHtml(firstProduct?.nome || "Produto")}" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
         <div>
           <strong>${escapeHtml(firstProduct?.nome || "Selecionar produto")}</strong>
           <span>${escapeHtml(firstProduct?.categoria || "Produto")}</span>
@@ -1919,7 +2015,7 @@ function updateSaleItemPreview(row, product) {
   if (unit) unit.textContent = currency.format(unitValue);
   if (!preview) return;
   preview.innerHTML = `
-    <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product?.nome || "Produto")}" loading="lazy" decoding="async" />
+    <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product?.nome || "Produto")}" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
     <div>
       <strong>${escapeHtml(product?.nome || "Selecionar produto")}</strong>
       <span>${escapeHtml(product?.categoria || "Produto")} | Estoque: ${toNumber(product?.estoque || 0)}</span>
@@ -3608,19 +3704,19 @@ function renderStockFilters() {
     categorySelect.value = app.stockCategory;
   }
   if (categoryChips) {
-    categoryChips.innerHTML = `
+    categoryChips.innerHTML = categories.length ? `
       <button type="button" class="${app.stockCategories.length ? "" : "active"}" data-stock-category-chip="all">Todas</button>
       ${categories.map((category) => `
         <button type="button" class="${app.stockCategories.includes(category) ? "active" : ""}" data-stock-category-chip="${escapeHtml(category)}">${escapeHtml(category)}</button>
       `).join("")}
-    `;
+    ` : '<p class="empty-state">Nenhuma categoria encontrada.</p>';
   }
 }
 
 function stockProducts() {
-  const search = app.stockSearch.trim().toLowerCase();
+  const search = saleFilterText(app.stockSearch);
   return app.products
-    .filter((product) => !search || product.nome.toLowerCase().includes(search))
+    .filter((product) => !search || saleFilterText([product.nome, product.categoria, product.descricao, product.marca, product.sabor].filter(Boolean).join(" ")).includes(search))
     .filter((product) => !app.stockCategories.length || app.stockCategories.includes(product.categoria || "Produtos"))
     .filter((product) => app.stockFilter !== "low" || toNumber(product.estoque) <= 5)
     .sort((a, b) => {
@@ -3666,13 +3762,30 @@ function stockLevelClass(stock) {
 function renderStock() {
   renderStockFilters();
   if (!stockList) return;
+  if (app.productsLoading) {
+    renderStockTotalSummary([]);
+    stockList.innerHTML = '<p class="empty-state">Carregando estoque...</p>';
+    renderStockHistory();
+    return;
+  }
+  if (app.productsError) {
+    renderStockTotalSummary([]);
+    stockList.innerHTML = `
+      <div class="empty-state">
+        <p>Nao foi possivel carregar o estoque.</p>
+        <button type="button" class="ghost-action" data-retry-products>Tentar novamente</button>
+      </div>
+    `;
+    renderStockHistory();
+    return;
+  }
   const products = stockProducts();
   renderStockTotalSummary(products);
-  stockList.innerHTML = products.map((product) => `
+  stockList.innerHTML = products.length ? products.map((product) => `
     <article class="stock-row" data-stock-row="${product.id}">
-      <img src="${escapeHtml(product.imagem || "./assets/fumacinha-logo.png")}" alt="${escapeHtml(product.nome)}" />
+      <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.nome || "Produto")}" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
       <div>
-        <h3>${escapeHtml(product.nome)}</h3>
+        <h3>${escapeHtml(product.nome || "Produto sem nome")}</h3>
         <small>${escapeHtml(product.categoria || "Produtos")}</small>
         <p>Estoque atual: <strong class="${stockLevelClass(product.estoque)}">${toNumber(product.estoque)}</strong></p>
         <p>Custo: ${currency.format(productCost(product))} | Venda: ${currency.format(product.preco)}</p>
@@ -3687,7 +3800,7 @@ function renderStock() {
         <span class="stock-save-status" data-stock-save-status="${product.id}">Estoque atualizado</span>
       </div>
     </article>
-  `).join("");
+  `).join("") : '<p class="empty-state">Nenhum produto encontrado.</p>';
   renderStockHistory();
 }
 
@@ -5169,6 +5282,29 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
   if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
   if (event.target.closest("[data-stock-product-remove-image]")) clearStockProductImage();
+  if (event.target.closest("[data-retry-products]")) {
+    try {
+      await loadProductsFromSupabase();
+    } catch (error) {
+      showToast("Nao foi possivel carregar o estoque.", "error");
+    }
+    return;
+  }
+  if (event.target.closest("[data-retry-sale-products]")) {
+    app.salePickerLoading = true;
+    app.salePickerError = "";
+    renderSaleProductPicker();
+    try {
+      await loadProductsFromSupabase({ silent: true });
+    } catch (error) {
+      app.salePickerError = error.message || "Erro ao carregar produtos.";
+      showToast("Nao foi possivel carregar os produtos.", "error");
+    } finally {
+      app.salePickerLoading = false;
+      renderSaleProductPicker();
+    }
+    return;
+  }
   if (event.target.closest("[data-open-orders]")) {
     app.orderStatusFilter = "pending";
     switchTab("orders");
