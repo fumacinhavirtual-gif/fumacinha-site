@@ -93,6 +93,8 @@ const app = {
   ordersPollTimer: null,
   cashDate: "",
   cashEditing: false,
+  cashHistoryOpen: false,
+  cashHistoryDate: "",
   routesDate: "",
   routesFilter: "todas",
   sellerSearch: "",
@@ -227,6 +229,10 @@ const saleEditMotive = $("[data-sale-edit-motive]");
 const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
 const cashHistory = $("[data-cash-history]");
+const cashHistoryBody = $("[data-cash-history-body]");
+const cashHistoryDateSelect = $("[data-cash-history-date]");
+const cashHistoryTitle = $("[data-cash-history-title]");
+const cashHistoryTotal = $("[data-cash-history-total]");
 const cashStatus = $("[data-cash-status]");
 const conferenceAlert = $("[data-conference-alert]");
 const changeHistory = $("[data-change-history]");
@@ -1522,7 +1528,7 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance", "cash"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
@@ -5630,16 +5636,74 @@ function updateCashPreview() {
 
 function renderCashHistory() {
   if (!cashHistory) return;
-  cashHistory.innerHTML = app.cashClosings.length
-    ? app.cashClosings.slice(0, 30).map((closing) => `
-      <article class="history-row">
-        <strong>${new Date(`${closing.data_caixa}T12:00:00`).toLocaleDateString("pt-BR")} - ${escapeHtml(closing.status || "Aberto")}</strong>
-        <span>Total vendido ${currency.format(closing.total_vendas || 0)} | Esperado ${currency.format(closing.dinheiro_esperado || 0)}</span>
-        <span>Contado ${currency.format(closing.dinheiro_contado || 0)} | Diferenca ${currency.format(closing.diferenca || 0)}</span>
-        <button type="button" data-open-cash-date="${closing.data_caixa}">Abrir fechamento</button>
-      </article>
-    `).join("")
-    : "<p>Nenhum fechamento registrado.</p>";
+  const dateKeys = [...new Set([
+    ...app.cashClosings.map((closing) => closing.data_caixa).filter(Boolean),
+    ...app.sales.map((sale) => saleDateKey(sale)).filter(Boolean),
+  ])].sort((a, b) => b.localeCompare(a));
+  const yesterday = localDateValue(new Date(Date.now() - 86400000));
+  if (!app.cashHistoryDate || !dateKeys.includes(app.cashHistoryDate)) {
+    app.cashHistoryDate = dateKeys.includes(yesterday) ? yesterday : (dateKeys[0] || yesterday);
+  }
+  const selectedDate = app.cashHistoryDate;
+  const selectedLabel = new Date(`${selectedDate}T12:00:00`).toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+  if (cashHistoryDateSelect) {
+    cashHistoryDateSelect.innerHTML = dateKeys.length
+      ? dateKeys.map((dateKey) => `<option value="${dateKey}">${new Date(`${dateKey}T12:00:00`).toLocaleDateString("pt-BR")}</option>`).join("")
+      : `<option value="${selectedDate}">${selectedLabel}</option>`;
+    cashHistoryDateSelect.value = selectedDate;
+  }
+  cashHistoryBody?.classList.toggle("hidden", !app.cashHistoryOpen);
+  const toggle = $("[data-cash-history-toggle]");
+  if (toggle) toggle.setAttribute("aria-expanded", app.cashHistoryOpen ? "true" : "false");
+  const closing = app.cashClosings.find((row) => row.data_caixa === selectedDate);
+  const payments = cashPaymentTotals(selectedDate);
+  const values = {
+    pix: toNumber(closing?.vendas_pix ?? payments.pix),
+    dinheiro: toNumber(closing?.vendas_dinheiro ?? payments.dinheiro),
+    debito: toNumber(closing?.vendas_debito ?? payments.debito),
+    credito: toNumber(closing?.vendas_credito ?? payments.credito),
+    outros: toNumber(closing?.vendas_outros ?? payments.outros),
+    total: toNumber(closing?.total_vendas ?? (payments.pix + payments.dinheiro + payments.debito + payments.credito + payments.outros)),
+    esperado: toNumber(closing?.dinheiro_esperado ?? 0),
+    contado: toNumber(closing?.dinheiro_contado ?? 0),
+    diferenca: toNumber(closing?.diferenca ?? 0),
+    quantidade: toNumber(closing?.quantidade_vendas ?? cashSalesForDate(selectedDate).length),
+  };
+  if (cashHistoryTitle) cashHistoryTitle.textContent = `Caixa de ${selectedLabel}`;
+  if (cashHistoryTotal) cashHistoryTotal.textContent = currency.format(values.total);
+  cashHistory.innerHTML = `
+    <div class="cash-history-day-card">
+      <div class="cash-history-day-head">
+        <div>
+          <span>Dia selecionado</span>
+          <strong>${selectedLabel}</strong>
+        </div>
+        <small>${closing ? escapeHtml(closing.status || "Fechado") : "Sem fechamento"}</small>
+      </div>
+      <div class="cash-history-payments">
+        <article><span>Pix</span><strong>${currency.format(values.pix)}</strong></article>
+        <article><span>Dinheiro</span><strong>${currency.format(values.dinheiro)}</strong></article>
+        <article><span>Credito</span><strong>${currency.format(values.credito)}</strong></article>
+        <article><span>Debito</span><strong>${currency.format(values.debito)}</strong></article>
+        <article><span>Outros</span><strong>${currency.format(values.outros)}</strong></article>
+        <article><span>Vendas</span><strong>${values.quantidade}</strong></article>
+      </div>
+      <div class="cash-history-total-row">
+        <span>Total vendido</span>
+        <strong>${currency.format(values.total)}</strong>
+      </div>
+      <div class="cash-history-close-grid">
+        <span>Esperado <strong>${currency.format(values.esperado)}</strong></span>
+        <span>Contado <strong>${currency.format(values.contado)}</strong></span>
+        <span>Diferenca <strong>${currency.format(values.diferenca)}</strong></span>
+      </div>
+      <button type="button" data-open-cash-date="${selectedDate}">Abrir este dia</button>
+    </div>
+  `;
 }
 
 function renderCashClosing() {
@@ -6310,6 +6374,10 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-add-change]")) changeCashBalance("adicao");
   if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
+  if (event.target.closest("[data-cash-history-toggle]")) {
+    app.cashHistoryOpen = !app.cashHistoryOpen;
+    renderCashHistory();
+  }
   if (event.target.closest("[data-reopen-cash]")) reopenCash();
   if (event.target.closest("[data-save-exchange-check]")) saveExchangeCheck();
   const exchangeStep = event.target.closest("[data-exchange-step]");
@@ -6523,6 +6591,10 @@ document.addEventListener("change", (event) => {
     formatMoneyInput(event.target);
   }
   if (event.target.matches("[data-date-start], [data-date-end]")) renderAll();
+  if (event.target.matches("[data-cash-history-date]")) {
+    app.cashHistoryDate = event.target.value;
+    renderCashHistory();
+  }
   if (event.target.matches("[data-cash-date]")) {
     app.cashDate = event.target.value || localDateValue();
     app.cashEditing = false;

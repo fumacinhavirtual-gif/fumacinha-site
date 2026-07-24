@@ -1811,6 +1811,192 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.cash-history-panel {
+  margin: 14px 0;
+}
+
+.cash-history-toggle {
+  width: 100%;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(17, 17, 17, 0.06);
+  color: var(--black);
+  text-align: left;
+  cursor: pointer;
+}
+
+.cash-history-toggle small {
+  display: block;
+  color: var(--green);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.cash-history-toggle strong {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-history-toggle-value {
+  color: var(--green);
+  font-size: 0.95rem;
+  font-weight: 900;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-history-chevron {
+  font-size: 1.2rem;
+  font-weight: 900;
+  transition: transform 180ms ease;
+}
+
+.cash-history-toggle[aria-expanded="true"] .cash-history-chevron {
+  transform: rotate(180deg);
+}
+
+.cash-history-body {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(17, 17, 17, 0.06);
+}
+
+.cash-history-date-field {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.cash-history-date-field select {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid rgba(17, 17, 17, 0.1);
+  border-radius: 14px;
+  background: #f8faf9;
+  color: var(--black);
+  font: inherit;
+  font-weight: 900;
+}
+
+.cash-history-day-card {
+  display: grid;
+  gap: 10px;
+}
+
+.cash-history-day-head,
+.cash-history-total-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.cash-history-day-head span,
+.cash-history-payments span,
+.cash-history-total-row span,
+.cash-history-close-grid span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.cash-history-day-head strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 1.05rem;
+}
+
+.cash-history-day-head small {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(34, 139, 82, 0.12);
+  color: var(--green);
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.cash-history-payments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cash-history-payments article {
+  min-width: 0;
+  padding: 11px;
+  border-radius: 14px;
+  background: #f6f7f8;
+}
+
+.cash-history-payments strong,
+.cash-history-total-row strong,
+.cash-history-close-grid strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--black);
+  font-size: 1rem;
+  font-weight: 900;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.cash-history-total-row {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(34, 139, 82, 0.1);
+}
+
+.cash-history-total-row strong {
+  margin-top: 0;
+  color: var(--green);
+  font-size: 1.25rem;
+}
+
+.cash-history-close-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.cash-history-close-grid span {
+  min-width: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(17, 17, 17, 0.07);
+}
+
+.cash-history-day-card button {
+  min-height: 42px;
+  border: 1px solid rgba(34, 139, 82, 0.22);
+  border-radius: 14px;
+  background: rgba(34, 139, 82, 0.08);
+  color: var(--green);
+  font-weight: 900;
+  cursor: pointer;
+}
+
 .kpi-grid small {
   display: block;
   margin-top: 8px;

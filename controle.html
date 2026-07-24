@@ -754,6 +754,24 @@
               <article><span>Vendas canceladas</span><strong data-cash-cancelled>0</strong></article>
             </div>
 
+            <section class="cash-history-panel" data-cash-history-panel>
+              <button class="cash-history-toggle" type="button" data-cash-history-toggle aria-expanded="false">
+                <span>
+                  <small>Historico do caixa</small>
+                  <strong data-cash-history-title>Consultar dia anterior</strong>
+                </span>
+                <span class="cash-history-toggle-value" data-cash-history-total>R$ 0,00</span>
+                <span class="cash-history-chevron" aria-hidden="true">⌄</span>
+              </button>
+              <div class="cash-history-body hidden" data-cash-history-body>
+                <label class="cash-history-date-field">
+                  Dia do caixa
+                  <select data-cash-history-date></select>
+                </label>
+                <div data-cash-history></div>
+              </div>
+            </section>
+
             <section class="exchange-check-panel">
               <div class="section-head exchange-head">
                 <div>
@@ -800,11 +818,6 @@
             <section>
               <h2>Historico do troco</h2>
               <div data-change-history></div>
-            </section>
-
-            <section>
-              <h2>Historico de fechamentos</h2>
-              <div data-cash-history></div>
             </section>
           </section>
 
