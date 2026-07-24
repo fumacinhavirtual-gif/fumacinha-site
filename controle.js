@@ -5214,6 +5214,16 @@ function saveExchangeLocalFallback(row, dateKey = app.cashDate) {
   localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
 }
 
+function exchangeLocalSavedRow(row, dateKey = app.cashDate) {
+  const payload = exchangePayload(row, dateKey);
+  return {
+    ...payload,
+    id: `local-${dateKey}-${row.time}`,
+    created_at: payload.updated_at,
+    _local: true,
+  };
+}
+
 async function updateExchangeRowByDateTime(payload) {
   return supabaseClient
     .from(TABLES.exchangeChecks)
@@ -5228,48 +5238,56 @@ async function persistExchangeRow(row, dateKey = app.cashDate) {
   const payload = exchangePayload(row, dateKey);
   if (!supabaseClient) throw new Error("Supabase nao configurado.");
   const existing = exchangeSavedRow(dateKey, row.time);
-  if (existing?.id) {
-    const { data, error } = await supabaseClient
+  try {
+    if (existing?.id && !String(existing.id).startsWith("local-")) {
+      const { data, error } = await supabaseClient
+        .from(TABLES.exchangeChecks)
+        .update(payload)
+        .eq("id", existing.id)
+        .select("*")
+        .single();
+      if (error) throw error;
+      applyExchangeSavedRow(data);
+      saveExchangeLocalFallback(row, dateKey);
+      return data;
+    }
+
+    const updated = await updateExchangeRowByDateTime(payload);
+    if (updated.error) throw updated.error;
+    if (updated.data) {
+      applyExchangeSavedRow(updated.data);
+      saveExchangeLocalFallback(row, dateKey);
+      return updated.data;
+    }
+
+    const inserted = await supabaseClient
       .from(TABLES.exchangeChecks)
-      .update(payload)
-      .eq("id", existing.id)
+      .insert(payload)
       .select("*")
       .single();
-    if (error) throw error;
-    applyExchangeSavedRow(data);
-    saveExchangeLocalFallback(row, dateKey);
-    return data;
-  }
-
-  const updated = await updateExchangeRowByDateTime(payload);
-  if (updated.error) throw updated.error;
-  if (updated.data) {
-    applyExchangeSavedRow(updated.data);
-    saveExchangeLocalFallback(row, dateKey);
-    return updated.data;
-  }
-
-  const inserted = await supabaseClient
-    .from(TABLES.exchangeChecks)
-    .insert(payload)
-    .select("*")
-    .single();
-  if (inserted.error) {
-    const message = String(inserted.error.message || "").toLowerCase();
-    if (inserted.error.code === "23505" || message.includes("duplicate")) {
-      const retry = await updateExchangeRowByDateTime(payload);
-      if (retry.error) throw retry.error;
-      if (retry.data) {
-        applyExchangeSavedRow(retry.data);
-        saveExchangeLocalFallback(row, dateKey);
-        return retry.data;
+    if (inserted.error) {
+      const message = String(inserted.error.message || "").toLowerCase();
+      if (inserted.error.code === "23505" || message.includes("duplicate")) {
+        const retry = await updateExchangeRowByDateTime(payload);
+        if (retry.error) throw retry.error;
+        if (retry.data) {
+          applyExchangeSavedRow(retry.data);
+          saveExchangeLocalFallback(row, dateKey);
+          return retry.data;
+        }
       }
+      throw inserted.error;
     }
-    throw inserted.error;
+    applyExchangeSavedRow(inserted.data);
+    saveExchangeLocalFallback(row, dateKey);
+    return inserted.data;
+  } catch (error) {
+    console.error("Erro ao persistir troca no Supabase. Mantendo copia local:", { row, dateKey, payload, error });
+    saveExchangeLocalFallback(row, dateKey);
+    const localRow = exchangeLocalSavedRow(row, dateKey);
+    applyExchangeSavedRow(localRow);
+    return localRow;
   }
-  applyExchangeSavedRow(inserted.data);
-  saveExchangeLocalFallback(row, dateKey);
-  return inserted.data;
 }
 
 async function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
@@ -5321,7 +5339,7 @@ function scheduleExchangeRowSave(time, patch = {}, previous = {}, dateKey = app.
     try {
       const saved = await persistExchangeRow(currentRow, dateKey);
       if (app.exchangeSaveVersions[key] !== version) return;
-      setExchangeSaveState(key, "saved", "Salvo");
+      setExchangeSaveState(key, "saved", saved?._local ? "Salvo neste aparelho" : "Salvo");
       renderExchangeCheck(exchangeRowsForDate(dateKey));
       window.setTimeout(() => {
         if (app.exchangeSaveVersions[key] === version) {
@@ -5418,10 +5436,11 @@ async function saveExchangeCheck() {
   ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time), "saving", "Salvando..."));
   renderExchangeCheck(rows);
   try {
-    await saveExchangeRows(rows);
-    ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time), "saved", "Salvo"));
+    const savedRows = await saveExchangeRows(rows);
+    const localOnly = savedRows.some((row) => row?._local);
+    ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time), "saved", localOnly ? "Salvo neste aparelho" : "Salvo"));
     renderExchangeCheck(exchangeRowsForDate());
-    showToast(summary.ok ? "Trocas conferidas." : "Trocas salvas com pendências.", summary.ok ? "success" : "error");
+    showToast(localOnly ? "Trocas salvas neste aparelho. Execute o SQL das conferencias para salvar no Supabase." : (summary.ok ? "Trocas conferidas." : "Trocas salvas com pendencias."), localOnly || !summary.ok ? "error" : "success");
     window.setTimeout(() => {
       ROUTE_TIMES.forEach((time) => setExchangeSaveState(exchangeRowKey(app.cashDate, time)));
       renderExchangeCheck(exchangeRowsForDate());
