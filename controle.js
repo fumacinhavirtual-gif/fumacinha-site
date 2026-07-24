@@ -5202,16 +5202,74 @@ function applyExchangeSavedRow(saved) {
   ];
 }
 
+function saveExchangeLocalFallback(row, dateKey = app.cashDate) {
+  const store = exchangeStore();
+  store[dateKey] = store[dateKey] || {};
+  store[dateKey][row.time] = {
+    sent: Math.max(0, Number.parseInt(row.sent || 0, 10)),
+    returned: row.checked ? Math.max(0, Number.parseInt(row.sent || 0, 10)) : 0,
+    checked: Boolean(row.checked),
+    updated_at: new Date().toISOString(),
+  };
+  localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
+}
+
+async function updateExchangeRowByDateTime(payload) {
+  return supabaseClient
+    .from(TABLES.exchangeChecks)
+    .update(payload)
+    .eq("data_caixa", payload.data_caixa)
+    .eq("horario_rota", payload.horario_rota)
+    .select("*")
+    .maybeSingle();
+}
+
 async function persistExchangeRow(row, dateKey = app.cashDate) {
   const payload = exchangePayload(row, dateKey);
-  const { data, error } = await supabaseClient
+  if (!supabaseClient) throw new Error("Supabase nao configurado.");
+  const existing = exchangeSavedRow(dateKey, row.time);
+  if (existing?.id) {
+    const { data, error } = await supabaseClient
+      .from(TABLES.exchangeChecks)
+      .update(payload)
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    applyExchangeSavedRow(data);
+    saveExchangeLocalFallback(row, dateKey);
+    return data;
+  }
+
+  const updated = await updateExchangeRowByDateTime(payload);
+  if (updated.error) throw updated.error;
+  if (updated.data) {
+    applyExchangeSavedRow(updated.data);
+    saveExchangeLocalFallback(row, dateKey);
+    return updated.data;
+  }
+
+  const inserted = await supabaseClient
     .from(TABLES.exchangeChecks)
-    .upsert(payload, { onConflict: "data_caixa,horario_rota" })
+    .insert(payload)
     .select("*")
     .single();
-  if (error) throw error;
-  applyExchangeSavedRow(data);
-  return data;
+  if (inserted.error) {
+    const message = String(inserted.error.message || "").toLowerCase();
+    if (inserted.error.code === "23505" || message.includes("duplicate")) {
+      const retry = await updateExchangeRowByDateTime(payload);
+      if (retry.error) throw retry.error;
+      if (retry.data) {
+        applyExchangeSavedRow(retry.data);
+        saveExchangeLocalFallback(row, dateKey);
+        return retry.data;
+      }
+    }
+    throw inserted.error;
+  }
+  applyExchangeSavedRow(inserted.data);
+  saveExchangeLocalFallback(row, dateKey);
+  return inserted.data;
 }
 
 async function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
