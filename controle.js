@@ -1377,7 +1377,10 @@ async function loadAll() {
   if (localExchangeSync.synced > 0) {
     showToast(`${localExchangeSync.synced} troca(s) sincronizada(s) com o Supabase.`, "success");
   } else if (localExchangeSync.failed > 0) {
-    showToast("Trocas ainda nao sincronizaram com o Supabase. Execute o SQL das conferencias.", "error");
+    console.warn("Trocas locais ainda nao sincronizaram com o Supabase.", localExchangeSync);
+    if (app.activeTab === "cash") {
+      showToast("Trocas ainda nao sincronizaram com o Supabase. Execute o SQL das conferencias.", "error");
+    }
   } else if (loadErrors.length) {
     showToast("Alguns dados nao carregaram. Produtos foram mantidos separados.", "error");
     setStatus(`Erro ao carregar: ${loadErrors[0]}`, "error");
