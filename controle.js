@@ -18,6 +18,7 @@ const TABLES = {
   changeBox: "CAIXA_TROCO",
   changeMoves: "MOVIMENTACOES_TROCO",
   exchangeChecks: "CONFERENCIAS_TROCAS",
+  clients: "clientes",
   costGroups: "GRUPOS_CUSTO",
   costGroupAudit: "ALTERACOES_GRUPOS_CUSTO",
   siteConfig: "SITE_CONFIG",
@@ -61,6 +62,15 @@ const app = {
   changeBox: null,
   changeMoves: [],
   exchangeChecks: [],
+  clients: [],
+  clientsLoading: false,
+  clientsError: "",
+  clientStatusFilter: "active",
+  clientSort: "name-asc",
+  clientModalMode: "",
+  editingClientId: null,
+  viewingClientId: null,
+  clientSaving: false,
   exchangeSaving: {},
   exchangeSaveTimers: {},
   exchangeSaveVersions: {},
@@ -240,9 +250,16 @@ const routesDateInput = $("[data-routes-date]");
 const routesFilterSelect = $("[data-routes-filter]");
 const routesList = $("[data-routes-list]");
 const topClientsRoot = $("[data-top-clients]");
+const clientsListRoot = $("[data-clients-list]");
 const clientsCount = $("[data-clients-count]");
+const clientStatusMessage = $("[data-client-status-message]");
+const clientModalShell = $("[data-client-modal-shell]");
+const clientModalContent = $("[data-client-modal-content]");
+const clientModalTitle = $("[data-client-modal-title]");
+const clientModalEyebrow = $("[data-client-modal-eyebrow]");
 let toastTimer = null;
 let saleConfirmationTimer = null;
+let clientSearchTimer = null;
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -1314,7 +1331,7 @@ async function loadAll() {
   }
   await loadCostGroupsFromSupabase({ silent: true });
 
-  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
+  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, clientsResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
@@ -1329,6 +1346,7 @@ async function loadAll() {
     supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.exchangeChecks).select("*").order("data_caixa", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.clients).select("*").order("nome", { ascending: true }).limit(500),
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
@@ -1365,6 +1383,13 @@ async function loadAll() {
     : [];
   if (exchangeChecksResult.status === "rejected" || exchangeChecksResult.value?.error) {
     console.error("Erro ao carregar conferencias de trocas:", exchangeChecksResult.reason || exchangeChecksResult.value?.error);
+  }
+  app.clients = clientsResult.status === "fulfilled" && !clientsResult.value.error ? clientsResult.value.data || [] : app.clients;
+  app.clientsError = "";
+  if (clientsResult.status === "rejected" || clientsResult.value?.error) {
+    const error = clientsResult.reason || clientsResult.value?.error;
+    app.clientsError = error?.message || "Nao foi possivel carregar os clientes.";
+    console.error("Erro ao carregar clientes:", error);
   }
   const localExchangeSync = await syncLocalExchangeChecks();
   const siteConfigData = readData(siteConfigResult, "configuracao do site", app.siteConfig);
@@ -1531,7 +1556,7 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance", "cash"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance", "cash", "clients"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
@@ -4704,35 +4729,7 @@ function renderFinance() {
 }
 
 function renderTopClients() {
-  if (!topClientsRoot) return;
-  const rows = clientRows();
-  const allClientsCount = clientRowsUnfilteredCount();
-  if (clientsCount) clientsCount.textContent = `${allClientsCount} ${allClientsCount === 1 ? "cliente" : "clientes"}`;
-  topClientsRoot.innerHTML = rows.length
-    ? rows.slice(0, 20).map((client, index) => {
-      const whatsappUrl = clientWhatsappUrl(client.phone, client.name);
-      const lastDate = client.lastDate ? client.lastDate.toLocaleDateString("pt-BR") : "Sem data";
-      return `
-        <article class="client-row">
-          <div class="client-rank">${index + 1}</div>
-          <div class="client-main">
-            <strong>${escapeHtml(client.name)}</strong>
-            <span>${escapeHtml(phoneDisplay(client.phone))}</span>
-            <small>Ultima compra: ${lastDate}</small>
-          </div>
-          <div class="client-stats">
-            <strong>${client.purchases}</strong>
-            <span>${client.purchases === 1 ? "compra" : "compras"}</span>
-          </div>
-          <div class="client-total">
-            <strong>${currency.format(client.total)}</strong>
-            <span>em produtos</span>
-          </div>
-          ${whatsappUrl ? `<a class="client-whatsapp" href="${whatsappUrl}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
-        </article>
-      `;
-    }).join("")
-    : `<p class="empty-state">Nenhum cliente encontrado neste periodo.</p>`;
+  renderClients();
 }
 
 function ensureClientsTab() {
@@ -4753,6 +4750,258 @@ function clientRowsUnfilteredCount() {
   const count = clientRows(analyticsSales("clients")).length;
   app.clientSearch = previousSearch;
   return count;
+}
+
+function normalizeClientWhatsapp(value = "") {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("55") && [12, 13].includes(digits.length)) digits = digits.slice(2);
+  return digits;
+}
+
+function isValidClientWhatsapp(value = "") {
+  const digits = normalizeClientWhatsapp(value);
+  return digits.length === 10 || digits.length === 11;
+}
+
+function cleanClientName(value = "") {
+  return String(value || "").trim().replace(/\s+/g, " ");
+}
+
+function clientDateLabel(value) {
+  if (!value) return "Nao informado";
+  return new Date(value).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function clientById(id) {
+  return app.clients.find((client) => String(client.id) === String(id));
+}
+
+function clientByWhatsapp(normalized, exceptId = "") {
+  return app.clients.find((client) => (
+    normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp) === normalized
+    && String(client.id) !== String(exceptId || "")
+  ));
+}
+
+function filteredRegisteredClients() {
+  const searchText = normalizeText(app.clientSearch);
+  const searchPhone = normalizeClientWhatsapp(app.clientSearch);
+  const rows = app.clients.filter((client) => {
+    if (app.clientStatusFilter === "active" && client.ativo === false) return false;
+    if (app.clientStatusFilter === "inactive" && client.ativo !== false) return false;
+    if (!searchText && !searchPhone) return true;
+    const name = normalizeText(client.nome);
+    const observation = normalizeText(client.observacao || "");
+    const phone = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+    return name.includes(searchText) || observation.includes(searchText) || (searchPhone && phone.includes(searchPhone));
+  });
+  rows.sort((a, b) => {
+    if (app.clientSort === "name-desc") return String(b.nome || "").localeCompare(String(a.nome || ""), "pt-BR");
+    if (app.clientSort === "recent") return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+    if (app.clientSort === "oldest") return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
+  });
+  return rows;
+}
+
+function setClientStatus(message = "", type = "") {
+  if (!clientStatusMessage) return;
+  clientStatusMessage.textContent = message;
+  clientStatusMessage.className = `client-status-message ${type || ""}`.trim();
+}
+
+function renderClients() {
+  if (!clientsListRoot) return;
+  if (app.clientsError) {
+    if (clientsCount) clientsCount.textContent = "Clientes indisponiveis";
+    setClientStatus("Nao foi possivel carregar os clientes.", "error");
+    clientsListRoot.innerHTML = `<div class="empty-state"><p>Não foi possível carregar os clientes.</p><button type="button" class="ghost-action" data-clients-retry>Tentar novamente</button></div>`;
+    return;
+  }
+  setClientStatus("", "");
+  const rows = filteredRegisteredClients();
+  if (clientsCount) clientsCount.textContent = `${rows.length} ${rows.length === 1 ? "cliente encontrado" : "clientes encontrados"}`;
+  const hasSearch = app.clientSearch.trim();
+  clientsListRoot.innerHTML = rows.length ? rows.map((client) => {
+    const normalized = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+    const whatsapp = clientWhatsappUrl(normalized, client.nome);
+    return `
+      <article class="client-row" data-client-row="${escapeHtml(client.id)}">
+        <div class="client-avatar">${escapeHtml((client.nome || "?").trim().charAt(0).toUpperCase() || "?")}</div>
+        <div class="client-main">
+          <strong>${escapeHtml(client.nome || "Cliente sem nome")}</strong>
+          <span>${escapeHtml(phoneDisplay(normalized))}</span>
+          <small>${escapeHtml(client.observacao ? `${client.observacao.slice(0, 90)}${client.observacao.length > 90 ? "..." : ""}` : "Sem observacao")}</small>
+        </div>
+        <span class="client-status-pill ${client.ativo === false ? "inactive" : "active"}">${client.ativo === false ? "Inativo" : "Ativo"}</span>
+        <span class="client-created">${clientDateLabel(client.created_at)}</span>
+        <div class="client-actions">
+          <button type="button" data-client-view="${escapeHtml(client.id)}">Visualizar</button>
+          <button type="button" data-client-edit="${escapeHtml(client.id)}">Editar</button>
+          ${whatsapp ? `<a href="${whatsapp}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+          <button type="button" data-client-toggle="${escapeHtml(client.id)}">${client.ativo === false ? "Reativar" : "Inativar"}</button>
+        </div>
+      </article>
+    `;
+  }).join("") : `<p class="empty-state">${hasSearch ? "Nenhum cliente encontrado para esta pesquisa." : "Nenhum cliente cadastrado."}</p>`;
+}
+
+function openClientModal(mode = "form", id = "") {
+  app.clientModalMode = mode;
+  app.editingClientId = mode === "form" ? id : null;
+  app.viewingClientId = mode === "view" ? id : null;
+  renderClientModal();
+  clientModalShell?.classList.remove("hidden");
+  clientModalShell?.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeClientModal() {
+  app.clientModalMode = "";
+  app.editingClientId = null;
+  app.viewingClientId = null;
+  clientModalShell?.classList.add("hidden");
+  clientModalShell?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+function duplicateClientWarning(client) {
+  return `
+    <div class="client-duplicate-warning">
+      <strong>Já existe um cliente cadastrado com este WhatsApp.</strong>
+      <span>${escapeHtml(client.nome || "Cliente")} • ${escapeHtml(phoneDisplay(client.whatsapp_normalizado || client.whatsapp))} • ${client.ativo === false ? "Inativo" : "Ativo"}</span>
+      <button type="button" data-client-view="${escapeHtml(client.id)}">Abrir cadastro existente</button>
+    </div>
+  `;
+}
+
+function renderClientModal(duplicate = null, errorMessage = "") {
+  if (!clientModalContent) return;
+  const isView = app.clientModalMode === "view";
+  const client = isView ? clientById(app.viewingClientId) : clientById(app.editingClientId);
+  if (clientModalTitle) clientModalTitle.textContent = isView ? "Detalhes do cliente" : (client ? "Editar cliente" : "Adicionar cliente");
+  if (clientModalEyebrow) clientModalEyebrow.textContent = "Clientes";
+  if (isView) {
+    if (!client) {
+      clientModalContent.innerHTML = `<p class="empty-state">Cliente nao encontrado.</p>`;
+      return;
+    }
+    const normalized = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+    const whatsapp = clientWhatsappUrl(normalized, client.nome);
+    clientModalContent.innerHTML = `
+      <div class="client-view-card">
+        <div><span>Nome completo</span><strong>${escapeHtml(client.nome || "Nao informado")}</strong></div>
+        <div><span>WhatsApp</span><strong>${escapeHtml(phoneDisplay(normalized))}</strong></div>
+        <div><span>Status</span><strong>${client.ativo === false ? "Inativo" : "Ativo"}</strong></div>
+        <div><span>Data de cadastro</span><strong>${clientDateLabel(client.created_at)}</strong></div>
+        <div><span>Ultima atualizacao</span><strong>${clientDateLabel(client.updated_at)}</strong></div>
+        <div class="wide"><span>Observacao</span><p>${escapeHtml(client.observacao || "Nao informado")}</p></div>
+        <div class="wide client-future-history">O histórico de compras será exibido aqui quando a integração com vendas estiver disponível.</div>
+      </div>
+      <div class="client-modal-actions">
+        <button type="button" class="ghost-action" data-client-edit="${escapeHtml(client.id)}">Editar</button>
+        ${whatsapp ? `<a class="primary-action" href="${whatsapp}" target="_blank" rel="noreferrer">Abrir WhatsApp</a>` : ""}
+        <button type="button" class="danger-action" data-client-toggle="${escapeHtml(client.id)}">${client.ativo === false ? "Reativar cliente" : "Inativar cliente"}</button>
+      </div>
+    `;
+    return;
+  }
+  clientModalContent.innerHTML = `
+    <form class="client-form" data-client-form>
+      ${errorMessage ? `<p class="client-form-error">${escapeHtml(errorMessage)}</p>` : ""}
+      ${duplicate ? duplicateClientWarning(duplicate) : ""}
+      <label>Nome <input type="text" name="nome" required value="${escapeHtml(client?.nome || "")}" placeholder="Paulo Vitor Gonzaga" /></label>
+      <label>WhatsApp <input type="tel" name="whatsapp" required value="${escapeHtml(phoneDisplay(client?.whatsapp_normalizado || client?.whatsapp || ""))}" placeholder="(62) 99187-7597" /></label>
+      <label>Observacao <textarea name="observacao" rows="4" placeholder="Preferencias, bairro ou informacoes importantes">${escapeHtml(client?.observacao || "")}</textarea></label>
+      <label>Status
+        <select name="ativo">
+          <option value="true" ${client?.ativo === false ? "" : "selected"}>Ativo</option>
+          <option value="false" ${client?.ativo === false ? "selected" : ""}>Inativo</option>
+        </select>
+      </label>
+      <div class="client-modal-actions">
+        <button type="button" class="ghost-action" data-client-modal-close>Cancelar</button>
+        <button type="submit" class="primary-action" ${app.clientSaving ? "disabled" : ""}>${app.clientSaving ? "Salvando..." : "Salvar cliente"}</button>
+      </div>
+    </form>
+  `;
+}
+
+async function saveClient(event) {
+  event.preventDefault();
+  const form = event.target;
+  const id = app.editingClientId;
+  const nome = cleanClientName(form.elements.nome.value);
+  const whatsappRaw = form.elements.whatsapp.value;
+  const whatsappNormalizado = normalizeClientWhatsapp(whatsappRaw);
+  if (!nome) return renderClientModal(null, "Informe o nome do cliente.");
+  if (!String(whatsappRaw || "").trim()) return renderClientModal(null, "Informe o WhatsApp do cliente.");
+  if (!isValidClientWhatsapp(whatsappRaw)) return renderClientModal(null, "Informe um número de WhatsApp válido.");
+  const duplicate = clientByWhatsapp(whatsappNormalizado, id);
+  if (duplicate) return renderClientModal(duplicate, id ? "Este WhatsApp já está cadastrado para outro cliente." : "");
+  app.clientSaving = true;
+  renderClientModal();
+  try {
+    await requireUserId();
+    const payload = {
+      nome,
+      whatsapp: phoneDisplay(whatsappNormalizado),
+      whatsapp_normalizado: whatsappNormalizado,
+      observacao: form.elements.observacao.value.trim(),
+      ativo: form.elements.ativo.value !== "false",
+      updated_at: new Date().toISOString(),
+    };
+    const query = id
+      ? supabaseClient.from(TABLES.clients).update(payload).eq("id", id)
+      : supabaseClient.from(TABLES.clients).insert(payload);
+    const { data, error } = await query.select("*").single();
+    if (error) throw error;
+    app.clients = id
+      ? app.clients.map((client) => String(client.id) === String(id) ? data : client)
+      : [data, ...app.clients];
+    showToast(id ? "Cliente atualizado com sucesso." : "Cliente cadastrado com sucesso.", "success");
+    closeClientModal();
+    renderClients();
+  } catch (error) {
+    console.error("Erro ao salvar cliente:", error);
+    const duplicateMessage = String(error.message || "").toLowerCase().includes("duplicate") || String(error.code || "") === "23505"
+      ? "Já existe um cliente cadastrado com este WhatsApp."
+      : (error.message || "Nao foi possivel salvar o cliente.");
+    app.clientSaving = false;
+    renderClientModal(null, duplicateMessage);
+  } finally {
+    app.clientSaving = false;
+  }
+}
+
+async function toggleClientStatus(id) {
+  const client = clientById(id);
+  if (!client) return;
+  const activate = client.ativo === false;
+  if (!window.confirm(activate ? "Deseja reativar este cliente?" : "Deseja inativar este cliente?")) return;
+  try {
+    await requireUserId();
+    const { data, error } = await supabaseClient
+      .from(TABLES.clients)
+      .update({ ativo: activate, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    app.clients = app.clients.map((row) => String(row.id) === String(id) ? data : row);
+    showToast(activate ? "Cliente reativado com sucesso." : "Cliente inativado com sucesso.", "success");
+    if (app.clientModalMode === "view" && String(app.viewingClientId) === String(id)) renderClientModal();
+    renderClients();
+  } catch (error) {
+    console.error("Erro ao alterar status do cliente:", error);
+    showToast(error.message || "Nao foi possivel alterar o cliente.", "error");
+  }
 }
 
 async function saveExpense(event) {
@@ -5987,6 +6236,10 @@ saleForm?.addEventListener("keydown", (event) => {
 });
 expenseForm?.addEventListener("submit", saveExpense);
 cashForm?.addEventListener("submit", closeCash);
+document.addEventListener("submit", (event) => {
+  if (!event.target.matches("[data-client-form]")) return;
+  saveClient(event);
+});
 sellerForm?.addEventListener("submit", (event) => {
   event.preventDefault();
   addTeamMember("seller", event.currentTarget);
@@ -6404,6 +6657,15 @@ document.addEventListener("click", async (event) => {
     sessionStorage.setItem("fumacinha_open_editor", "1");
     window.location.href = "/?admin=fumacinha";
   }
+  if (event.target.closest("[data-client-add]")) openClientModal("form");
+  const clientView = event.target.closest("[data-client-view]");
+  if (clientView) openClientModal("view", clientView.dataset.clientView);
+  const clientEdit = event.target.closest("[data-client-edit]");
+  if (clientEdit) openClientModal("form", clientEdit.dataset.clientEdit);
+  const clientToggle = event.target.closest("[data-client-toggle]");
+  if (clientToggle) toggleClientStatus(clientToggle.dataset.clientToggle);
+  if (event.target.closest("[data-client-modal-close]")) closeClientModal();
+  if (event.target.closest("[data-clients-retry]")) loadAll();
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();
     renderAuth(false);
@@ -6444,8 +6706,11 @@ document.addEventListener("input", (event) => {
     renderPendingOrders();
   }
   if (event.target.matches("[data-client-search]")) {
-    app.clientSearch = event.target.value;
-    renderTopClients();
+    clearTimeout(clientSearchTimer);
+    clientSearchTimer = setTimeout(() => {
+      app.clientSearch = event.target.value;
+      renderClients();
+    }, 250);
   }
   if (event.target.matches("[data-sale-product-search]")) {
     app.saleProductSearch = event.target.value;
@@ -6495,6 +6760,14 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("change", (event) => {
+  if (event.target.matches("[data-client-status-filter]")) {
+    app.clientStatusFilter = event.target.value || "active";
+    renderClients();
+  }
+  if (event.target.matches("[data-client-sort]")) {
+    app.clientSort = event.target.value || "name-asc";
+    renderClients();
+  }
   if (event.target.matches("[data-stock-product-image-file]")) {
     selectStockProductImage(event.target.files?.[0] || null);
   }
@@ -6643,6 +6916,10 @@ document.addEventListener("keydown", (event) => {
   }
   if (costGroupModal && !costGroupModal.classList.contains("hidden")) {
     closeCostGroupModal();
+    return;
+  }
+  if (clientModalShell && !clientModalShell.classList.contains("hidden")) {
+    closeClientModal();
     return;
   }
   if ($$("[data-history-menu]").some((menu) => !menu.classList.contains("hidden"))) {
