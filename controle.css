@@ -954,6 +954,32 @@ button.sale-section-header {
     padding: 18px 14px;
   }
 
+  .stock-edit-modal {
+    align-items: end;
+    padding: 0;
+  }
+
+  .stock-edit-dialog {
+    width: 100%;
+    max-height: 94vh;
+    border-radius: 24px 24px 0 0;
+    padding: 20px 14px calc(18px + env(safe-area-inset-bottom));
+  }
+
+  .stock-edit-image {
+    min-height: 150px;
+  }
+
+  .stock-edit-image img {
+    max-height: 176px;
+  }
+
+  .stock-edit-actions button,
+  .stock-edit-actions .primary-action,
+  .stock-edit-actions .ghost-action {
+    min-height: 52px;
+  }
+
   .sale-empty-state {
     display: grid;
     min-height: 188px;
@@ -4930,6 +4956,112 @@ body.modal-open {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
   gap: 10px;
+}
+
+.stock-edit-button {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0 16px;
+  color: var(--green);
+  background: #ffffff;
+  font-weight: 900;
+}
+
+.stock-edit-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 82;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.stock-edit-modal.hidden {
+  display: none;
+}
+
+.stock-edit-overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.stock-edit-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(720px, 100%);
+  max-height: min(90vh, 820px);
+  overflow: auto;
+  border-radius: 24px;
+  padding: 22px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.stock-edit-dialog form {
+  display: grid;
+  gap: 13px;
+}
+
+.stock-edit-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--black);
+  background: #f8fafc;
+  font-weight: 950;
+}
+
+.stock-edit-image {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed rgba(25, 135, 84, 0.28);
+  border-radius: 18px;
+  background: #f8fafc;
+}
+
+.stock-edit-image img {
+  max-width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.stock-edit-image span {
+  color: var(--muted);
+  font-weight: 850;
+}
+
+.stock-edit-image-actions,
+.stock-edit-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.stock-edit-image-actions label {
+  display: grid;
+  place-items: center;
+  min-height: 48px;
+  margin: 0;
+  text-align: center;
+  cursor: pointer;
+}
+
+.stock-edit-image-actions input[type="file"] {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 .stock-actions {

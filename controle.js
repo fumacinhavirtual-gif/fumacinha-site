@@ -29,7 +29,7 @@ const COMMISSION_CARD_EXTRA = 1;
 const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
-const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 const PRODUCT_SELECT_FIELDS = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home,custo,grupo_custo_id,custo_manual";
 const PRODUCT_SELECT_FALLBACK_FIELDS = "id,nome,preco,imagem,categoria,estoque,ativo,custo";
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
@@ -121,6 +121,11 @@ const app = {
   stockProductSaving: false,
   selectedStockProductImageFile: null,
   stockProductPreviewUrl: "",
+  stockEditSaving: false,
+  editingStockProductId: null,
+  selectedStockEditImageFile: null,
+  stockEditPreviewUrl: "",
+  stockEditRemoveImage: false,
   costGroups: [],
   costGroupsLoading: false,
   costGroupsError: "",
@@ -177,6 +182,14 @@ const stockProductImageFile = $("[data-stock-product-image-file]");
 const stockProductImagePreview = $("[data-stock-product-image-preview]");
 const stockProductImagePreviewImg = $("[data-stock-product-image-preview-img]");
 const stockProductImageEmpty = $("[data-stock-product-image-empty]");
+const stockEditModal = $("[data-stock-edit-modal]");
+const stockEditForm = $("[data-stock-edit-form]");
+const stockEditStatus = $("[data-stock-edit-status]");
+const stockEditImageFile = $("[data-stock-edit-image-file]");
+const stockEditImagePreview = $("[data-stock-edit-image-preview]");
+const stockEditImagePreviewImg = $("[data-stock-edit-image-preview-img]");
+const stockEditImageEmpty = $("[data-stock-edit-image-empty]");
+const stockEditSubmit = $("[data-stock-edit-submit]");
 const costGroupsRoot = $("[data-cost-groups]");
 const costGroupModal = $("[data-cost-group-modal]");
 const costGroupForm = $("[data-cost-group-form]");
@@ -4004,6 +4017,7 @@ function renderStock() {
           <button class="stock-plus" type="button" data-stock-plus="${product.id}">+</button>
         </div>
         <button class="stock-save-button" type="button" data-stock-save="${product.id}" disabled>Salvar estoque</button>
+        <button class="stock-edit-button" type="button" data-stock-edit="${product.id}">Editar</button>
         <span class="stock-save-status" data-stock-save-status="${product.id}">Estoque atualizado</span>
       </div>
     </article>
@@ -4032,7 +4046,7 @@ function setStockProductStatus(message = "", type = "") {
 
 function validateStockProductImageFile(file) {
   if (!file) return "";
-  if (!PRODUCT_IMAGE_TYPES.includes(file.type)) return "Use imagens JPG, JPEG, PNG ou WEBP.";
+  if (!PRODUCT_IMAGE_TYPES.includes(file.type)) return "Use imagens JPG, JPEG, PNG, WEBP, HEIC ou HEIF.";
   if (file.size > MAX_PRODUCT_IMAGE_SIZE) return "A imagem deve ter no maximo 5 MB.";
   return "";
 }
@@ -4076,9 +4090,69 @@ function selectStockProductImage(file) {
   updateStockProductImagePreview(app.stockProductPreviewUrl);
 }
 
+function setStockEditStatus(message = "", type = "") {
+  if (!stockEditStatus) return;
+  stockEditStatus.textContent = message;
+  stockEditStatus.className = `form-status ${type}`.trim();
+}
+
+function updateStockEditImagePreview(source = "") {
+  const value = source || "";
+  const hasImage = Boolean(value);
+  stockEditImagePreview?.classList.toggle("has-image", hasImage);
+  stockEditImageEmpty?.classList.toggle("hidden", hasImage);
+  stockEditImagePreviewImg?.classList.toggle("hidden", !hasImage);
+  if (stockEditImagePreviewImg) stockEditImagePreviewImg.src = hasImage ? value : "";
+}
+
+function clearStockEditObjectUrl() {
+  if (app.stockEditPreviewUrl) URL.revokeObjectURL(app.stockEditPreviewUrl);
+  app.stockEditPreviewUrl = "";
+}
+
+function selectStockEditImage(file) {
+  const validation = validateStockProductImageFile(file);
+  if (validation) {
+    if (stockEditImageFile) stockEditImageFile.value = "";
+    setStockEditStatus(validation, "error");
+    return;
+  }
+  clearStockEditObjectUrl();
+  app.selectedStockEditImageFile = file || null;
+  app.stockEditRemoveImage = false;
+  app.stockEditPreviewUrl = file ? URL.createObjectURL(file) : "";
+  setStockEditStatus("");
+  if (file) updateStockEditImagePreview(app.stockEditPreviewUrl);
+}
+
+function removeStockEditImage() {
+  clearStockEditObjectUrl();
+  app.selectedStockEditImageFile = null;
+  app.stockEditRemoveImage = true;
+  if (stockEditImageFile) stockEditImageFile.value = "";
+  updateStockEditImagePreview("");
+  setStockEditStatus("Foto sera removida ao salvar.", "loading");
+}
+
 async function uploadStockProductImage() {
   const file = app.selectedStockProductImageFile;
   if (!file) return stockProductForm?.elements.imagem?.value.trim() || "";
+  const validation = validateStockProductImageFile(file);
+  if (validation) throw new Error(validation);
+  const path = stockProductImagePath(file);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
+    cacheControl: "3600",
+    upsert: false,
+    contentType: file.type,
+  });
+  if (error) throw error;
+  const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
+  return data.publicUrl || "";
+}
+
+async function uploadStockEditImage() {
+  const file = app.selectedStockEditImageFile;
+  if (!file) return "";
   const validation = validateStockProductImageFile(file);
   if (validation) throw new Error(validation);
   const path = stockProductImagePath(file);
@@ -4197,6 +4271,115 @@ async function saveStock(productId) {
     if (button) {
       button.disabled = false;
       button.textContent = "Salvar estoque";
+    }
+  }
+}
+
+function stockCategoryOptions(currentCategory = "") {
+  const categories = [...new Set(app.products.map((product) => product.categoria || "Produtos"))].sort();
+  if (currentCategory && !categories.includes(currentCategory)) categories.unshift(currentCategory);
+  return categories.map((category) => `<option value="${escapeHtml(category)}">${escapeHtml(category)}</option>`).join("");
+}
+
+function openStockEditModal(productId) {
+  const product = app.products.find((item) => String(item.id) === String(productId));
+  if (!product || !stockEditModal || !stockEditForm) return;
+  app.editingStockProductId = String(product.id);
+  app.selectedStockEditImageFile = null;
+  app.stockEditRemoveImage = false;
+  clearStockEditObjectUrl();
+  if (stockEditImageFile) stockEditImageFile.value = "";
+
+  stockEditForm.elements.nome.value = product.nome || "";
+  stockEditForm.elements.categoria.innerHTML = stockCategoryOptions(product.categoria || "Produtos");
+  stockEditForm.elements.categoria.value = product.categoria || "Produtos";
+  stockEditForm.elements.preco.value = currencyInputValue(product.preco);
+  stockEditForm.elements.custo.value = currencyInputValue(productCost(product));
+  stockEditForm.elements.estoque.value = String(Math.max(0, toNumber(product.estoque)));
+  stockEditForm.elements.ativo.value = product.ativo === false ? "false" : "true";
+  updateStockEditImagePreview(product.imagem || "");
+  setStockEditStatus("");
+  stockEditModal.classList.remove("hidden");
+  stockEditModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  stockEditForm.elements.nome.focus();
+}
+
+function closeStockEditModal(force = false) {
+  if (!stockEditModal || (app.stockEditSaving && !force)) return;
+  stockEditModal.classList.add("hidden");
+  stockEditModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+  app.editingStockProductId = null;
+  app.selectedStockEditImageFile = null;
+  app.stockEditRemoveImage = false;
+  clearStockEditObjectUrl();
+  if (stockEditImageFile) stockEditImageFile.value = "";
+  setStockEditStatus("");
+}
+
+function stockEditPayload(form) {
+  const price = parseMoney(form.elements.preco.value);
+  const cost = parseMoney(form.elements.custo.value);
+  const stock = Math.max(0, Number.parseInt(form.elements.estoque.value || "0", 10));
+  return {
+    nome: form.elements.nome.value.trim(),
+    categoria: form.elements.categoria.value,
+    preco: price,
+    pix: price,
+    custo: cost,
+    custo_manual: true,
+    estoque: stock,
+    ativo: form.elements.ativo.value === "true",
+  };
+}
+
+async function saveStockEdit(event) {
+  event.preventDefault();
+  if (app.stockEditSaving || !stockEditForm || !app.editingStockProductId) return;
+  if (!(await requireAuth())) return;
+  const product = app.products.find((item) => String(item.id) === String(app.editingStockProductId));
+  if (!product) return setStockEditStatus("Produto nao encontrado.", "error");
+
+  const payload = stockEditPayload(stockEditForm);
+  const validation = validateStockProduct(payload);
+  if (validation) return setStockEditStatus(validation, "error");
+
+  app.stockEditSaving = true;
+  if (stockEditSubmit) {
+    stockEditSubmit.disabled = true;
+    stockEditSubmit.textContent = "Salvando...";
+  }
+  setStockEditStatus("Salvando alteracoes...", "loading");
+  try {
+    if (app.selectedStockEditImageFile) {
+      setStockEditStatus("Enviando nova foto...", "loading");
+      payload.imagem = await uploadStockEditImage();
+    } else if (app.stockEditRemoveImage) {
+      payload.imagem = "";
+    }
+    setStockEditStatus("Atualizando produto...", "loading");
+    let { error } = await supabaseClient.from(TABLES.products).update(payload).eq("id", product.id);
+    if (error) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.custo_manual;
+      const fallback = await supabaseClient.from(TABLES.products).update(fallbackPayload).eq("id", product.id);
+      error = fallback.error;
+    }
+    if (error) throw error;
+    showToast("Produto atualizado com sucesso.", "success");
+    setStockEditStatus("Produto atualizado com sucesso.", "success");
+    closeStockEditModal(true);
+    await loadAll();
+    switchTab("stock");
+  } catch (error) {
+    console.error("Erro ao editar produto no estoque:", error);
+    setStockEditStatus(error.message || "Nao foi possivel atualizar o produto.", "error");
+  } finally {
+    app.stockEditSaving = false;
+    if (stockEditSubmit) {
+      stockEditSubmit.disabled = false;
+      stockEditSubmit.textContent = "Salvar Alteracoes";
     }
   }
 }
@@ -5491,6 +5674,7 @@ loginForm?.addEventListener("submit", async (event) => {
 
 saleForm?.addEventListener("submit", saveSale);
 stockProductForm?.addEventListener("submit", saveStockProduct);
+stockEditForm?.addEventListener("submit", saveStockEdit);
 costGroupForm?.addEventListener("submit", saveCostGroup);
 saleForm?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
@@ -5662,6 +5846,19 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
   if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
   if (event.target.closest("[data-stock-product-remove-image]")) clearStockProductImage();
+  const stockEditButton = event.target.closest("[data-stock-edit]");
+  if (stockEditButton) {
+    openStockEditModal(stockEditButton.dataset.stockEdit);
+    return;
+  }
+  if (event.target.closest("[data-stock-edit-close]")) {
+    closeStockEditModal();
+    return;
+  }
+  if (event.target.closest("[data-stock-edit-remove-image]")) {
+    removeStockEditImage();
+    return;
+  }
   if (event.target.closest("[data-open-cost-group-modal]")) {
     openCostGroupModal();
     return;
@@ -5997,6 +6194,9 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-stock-product-image-file]")) {
     selectStockProductImage(event.target.files?.[0] || null);
   }
+  if (event.target.matches("[data-stock-edit-image-file]")) {
+    selectStockEditImage(event.target.files?.[0] || null);
+  }
   if (event.target.matches("[data-cost-group-select], [data-cost-auto-toggle]")) {
     syncCostGroupForm();
   }
@@ -6086,6 +6286,9 @@ document.addEventListener("change", (event) => {
     app.stockSort = event.target.value;
     renderStock();
   }
+  if (event.target.closest("[data-stock-edit-form]") && ["preco", "custo"].includes(event.target.name)) {
+    formatMoneyInput(event.target);
+  }
   if (event.target.matches("[data-date-start], [data-date-end]")) renderAll();
   if (event.target.matches("[data-cash-date]")) {
     app.cashDate = event.target.value || localDateValue();
@@ -6124,6 +6327,14 @@ document.addEventListener("keydown", (event) => {
   }
   if (saleDetailShell?.classList.contains("open")) {
     closeSaleDetailPanel();
+    return;
+  }
+  if (stockEditModal && !stockEditModal.classList.contains("hidden")) {
+    closeStockEditModal();
+    return;
+  }
+  if (costGroupModal && !costGroupModal.classList.contains("hidden")) {
+    closeCostGroupModal();
     return;
   }
   if ($$("[data-history-menu]").some((menu) => !menu.classList.contains("hidden"))) {

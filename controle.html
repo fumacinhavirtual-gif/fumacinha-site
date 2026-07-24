@@ -952,6 +952,47 @@
       </section>
     </div>
 
+    <div class="stock-edit-modal hidden" data-stock-edit-modal aria-hidden="true">
+      <button class="stock-edit-overlay" type="button" data-stock-edit-close aria-label="Fechar edicao do produto"></button>
+      <section class="stock-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="stock-edit-title">
+        <button type="button" class="stock-edit-close" data-stock-edit-close aria-label="Fechar">x</button>
+        <form data-stock-edit-form>
+          <p class="eyebrow">Estoque</p>
+          <h2 id="stock-edit-title">Editar produto</h2>
+          <div class="stock-edit-image" data-stock-edit-image-preview>
+            <span data-stock-edit-image-empty>Sem foto</span>
+            <img class="hidden" src="" alt="Foto atual do produto" data-stock-edit-image-preview-img />
+          </div>
+          <div class="stock-edit-image-actions">
+            <label class="ghost-action">Trocar foto
+              <input type="file" name="imagem_arquivo" accept="image/jpeg,image/png,image/webp,image/*" data-stock-edit-image-file />
+            </label>
+            <button type="button" class="ghost-action" data-stock-edit-remove-image>Remover foto</button>
+          </div>
+          <label>Nome do produto <input type="text" name="nome" required /></label>
+          <label>Categoria
+            <select name="categoria" required data-stock-edit-category></select>
+          </label>
+          <div class="form-grid">
+            <label>Preco de venda <input type="text" name="preco" inputmode="decimal" required placeholder="0,00" /></label>
+            <label>Custo Unitario <input type="text" name="custo" inputmode="decimal" required placeholder="0,00" /></label>
+            <label>Quantidade em estoque <input type="number" name="estoque" min="0" step="1" required /></label>
+            <label>Status
+              <select name="ativo">
+                <option value="true">Ativo</option>
+                <option value="false">Inativo</option>
+              </select>
+            </label>
+          </div>
+          <p class="form-status" data-stock-edit-status></p>
+          <div class="stock-edit-actions">
+            <button type="button" class="ghost-action" data-stock-edit-close>Cancelar</button>
+            <button type="submit" class="primary-action" data-stock-edit-submit>Salvar Alteracoes</button>
+          </div>
+        </form>
+      </section>
+    </div>
+
     <div class="side-menu-shell hidden" data-side-shell aria-hidden="true">
       <button class="side-overlay" type="button" data-side-close aria-label="Fechar menu"></button>
       <aside class="side-menu" data-side-menu aria-label="Menu do controle">
