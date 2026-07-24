@@ -1081,7 +1081,7 @@ async function loadCostGroupsFromSupabase({ silent = false } = {}) {
     .order("nome_modelo", { ascending: true });
   app.costGroupsLoading = false;
   if (error) {
-    app.costGroupsError = error.message || "Erro ao carregar grupos de custo.";
+    app.costGroupsError = isMissingCostGroupSchema(error) ? costGroupSchemaMessage() : (error.message || "Erro ao carregar grupos de custo.");
     app.costGroups = [];
     console.error("Erro ao carregar grupos de custo:", error);
     if (!silent) renderCostGroups();
@@ -1102,6 +1102,15 @@ function costGroupById(id) {
 
 function costGroupProductCount(groupId) {
   return app.products.filter((product) => String(product.grupo_custo_id || "") === String(groupId)).length;
+}
+
+function isMissingCostGroupSchema(error) {
+  const message = String(error?.message || error || "").toLowerCase();
+  return message.includes("grupos_custo") || message.includes("grupo_custo_id") || message.includes("alteracoes_grupos_custo");
+}
+
+function costGroupSchemaMessage() {
+  return "Banco ainda nao atualizado. Execute SUPABASE_GRUPOS_CUSTO.sql no SQL Editor do Supabase e depois toque em Atualizar.";
 }
 
 function normalizeModelText(value = "") {
@@ -3917,8 +3926,7 @@ function renderCostGroups() {
   if (app.costGroupsError) {
     costGroupsRoot.innerHTML = `
       <div class="empty-state">
-        <p>Custos por modelo ainda nao estao configurados.</p>
-        <small>Execute o SQL SUPABASE_GRUPOS_CUSTO.sql no Supabase para ativar.</small>
+        <p>${escapeHtml(app.costGroupsError)}</p>
       </div>
     `;
     return;
@@ -4325,7 +4333,7 @@ async function saveCostGroup(event) {
     closeCostGroupModal();
   } catch (error) {
     console.error("Erro ao salvar grupo de custo:", error);
-    setCostGroupStatus(error.message || "Nao foi possivel salvar o grupo.", "error");
+    setCostGroupStatus(isMissingCostGroupSchema(error) ? costGroupSchemaMessage() : (error.message || "Nao foi possivel salvar o grupo."), "error");
   }
 }
 
