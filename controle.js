@@ -5678,7 +5678,7 @@ function renderCashClosing() {
   });
   renderConferenceAlert();
   renderExchangeCheck();
-  $$("[data-exchange-count], [data-exchange-checked], [data-exchange-step], [data-save-exchange-check]").forEach((field) => {
+  $$("[data-exchange-count], [data-exchange-checked], [data-exchange-step]").forEach((field) => {
     field.disabled = isClosed;
   });
   updateCashPreview();
