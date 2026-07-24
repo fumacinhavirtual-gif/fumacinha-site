@@ -18,6 +18,8 @@ const TABLES = {
   changeBox: "CAIXA_TROCO",
   changeMoves: "MOVIMENTACOES_TROCO",
   exchangeChecks: "CONFERENCIAS_TROCAS",
+  costGroups: "GRUPOS_CUSTO",
+  costGroupAudit: "ALTERACOES_GRUPOS_CUSTO",
   siteConfig: "SITE_CONFIG",
 };
 
@@ -28,8 +30,8 @@ const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const PRODUCT_SELECT_FIELDS = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home";
-const PRODUCT_SELECT_FALLBACK_FIELDS = "id,nome,preco,imagem,categoria,estoque,ativo";
+const PRODUCT_SELECT_FIELDS = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home,custo,grupo_custo_id,custo_manual";
+const PRODUCT_SELECT_FALLBACK_FIELDS = "id,nome,preco,imagem,categoria,estoque,ativo,custo";
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
 const LAST_DELIVERER_KEY = "fumacinha:lastDelivererId";
 const EXCHANGE_CHECK_KEY = "fumacinha:exchangeChecks";
@@ -119,6 +121,12 @@ const app = {
   stockProductSaving: false,
   selectedStockProductImageFile: null,
   stockProductPreviewUrl: "",
+  costGroups: [],
+  costGroupsLoading: false,
+  costGroupsError: "",
+  costGroupEditingId: null,
+  costGroupSelectedProducts: new Set(),
+  stockSelectedProducts: new Set(),
   user: null,
 };
 
@@ -169,6 +177,13 @@ const stockProductImageFile = $("[data-stock-product-image-file]");
 const stockProductImagePreview = $("[data-stock-product-image-preview]");
 const stockProductImagePreviewImg = $("[data-stock-product-image-preview-img]");
 const stockProductImageEmpty = $("[data-stock-product-image-empty]");
+const costGroupsRoot = $("[data-cost-groups]");
+const costGroupModal = $("[data-cost-group-modal]");
+const costGroupForm = $("[data-cost-group-form]");
+const costGroupProductsRoot = $("[data-cost-group-products]");
+const costGroupStatus = $("[data-cost-group-status]");
+const bulkCostGroupSelect = $("[data-bulk-cost-group]");
+const bulkCostGroupCount = $("[data-bulk-cost-group-count]");
 const salesHistory = $("[data-sales-history]");
 const historyPeriodSelect = $("[data-history-period]");
 const pendingOrdersRoot = $("[data-pending-orders]");
@@ -1008,7 +1023,10 @@ async function loadProductsFromSupabase({ silent = false } = {}) {
     const missingOptionalColumns =
       error.message?.includes("PRODUTOS.descricao") ||
       error.message?.includes("PRODUTOS.destaque_home") ||
-      error.message?.includes("PRODUTOS.ocultar_home");
+      error.message?.includes("PRODUTOS.ocultar_home") ||
+      error.message?.includes("PRODUTOS.custo") ||
+      error.message?.includes("PRODUTOS.grupo_custo_id") ||
+      error.message?.includes("PRODUTOS.custo_manual");
     if (missingOptionalColumns) {
       console.warn("Consulta completa de produtos falhou, usando consulta minima:", error.message);
       const fallback = await supabaseClient
@@ -1050,6 +1068,99 @@ async function loadProductsFromSupabase({ silent = false } = {}) {
   }
   if (!silent) renderProductDependentViews();
   return app.products;
+}
+
+async function loadCostGroupsFromSupabase({ silent = false } = {}) {
+  if (!supabaseClient) return [];
+  app.costGroupsLoading = true;
+  app.costGroupsError = "";
+  if (!silent) renderCostGroups();
+  const { data, error } = await supabaseClient
+    .from(TABLES.costGroups)
+    .select("id,nome_modelo,custo_padrao,ativo,created_at,updated_at")
+    .order("nome_modelo", { ascending: true });
+  app.costGroupsLoading = false;
+  if (error) {
+    app.costGroupsError = error.message || "Erro ao carregar grupos de custo.";
+    app.costGroups = [];
+    console.error("Erro ao carregar grupos de custo:", error);
+    if (!silent) renderCostGroups();
+    return [];
+  }
+  app.costGroups = data || [];
+  if (!silent) renderCostGroups();
+  return app.costGroups;
+}
+
+function activeCostGroups() {
+  return app.costGroups.filter((group) => group.ativo !== false);
+}
+
+function costGroupById(id) {
+  return app.costGroups.find((group) => String(group.id) === String(id));
+}
+
+function costGroupProductCount(groupId) {
+  return app.products.filter((product) => String(product.grupo_custo_id || "") === String(groupId)).length;
+}
+
+function normalizeModelText(value = "") {
+  return String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b8[.\s]?000\b/g, "8000")
+    .replace(/\b40[.\s]?000\b/g, "40000")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function suggestedProductsForCostGroup(name = "") {
+  const tokens = normalizeModelText(name).split(" ").filter((token) => token.length >= 2);
+  if (!tokens.length) return app.products.slice(0, 80);
+  return app.products.filter((product) => {
+    const haystack = normalizeModelText([product.nome, product.categoria].filter(Boolean).join(" "));
+    return tokens.every((token) => haystack.includes(token));
+  });
+}
+
+function renderCostGroupSelects(selectedId = "") {
+  const options = `<option value="">Nenhum grupo</option>${activeCostGroups().map((group) => (
+    `<option value="${escapeHtml(group.id)}">${escapeHtml(group.nome_modelo)} - ${currency.format(toNumber(group.custo_padrao))}</option>`
+  )).join("")}`;
+  $$("[data-cost-group-select]").forEach((select) => {
+    select.innerHTML = options;
+    select.value = selectedId || select.value || "";
+  });
+  if (bulkCostGroupSelect) {
+    bulkCostGroupSelect.innerHTML = `<option value="">Definir grupo de custo</option>${activeCostGroups().map((group) => (
+      `<option value="${escapeHtml(group.id)}">${escapeHtml(group.nome_modelo)} - ${currency.format(toNumber(group.custo_padrao))}</option>`
+    )).join("")}`;
+  }
+  syncCostGroupForm();
+}
+
+function syncCostGroupForm() {
+  if (!stockProductForm) return;
+  const select = stockProductForm.elements.grupo_custo_id;
+  const auto = stockProductForm.elements.custo_automatico;
+  const costInput = stockProductForm.elements.custo;
+  const hint = $("[data-cost-group-hint]");
+  const group = costGroupById(select?.value || "");
+  if (auto) {
+    auto.disabled = !group;
+    if (!group) auto.checked = false;
+  }
+  if (group && auto?.checked) {
+    costInput.value = currencyInputValue(group.custo_padrao);
+    if (hint) hint.textContent = `Custo automatico do grupo: ${currency.format(toNumber(group.custo_padrao))}.`;
+  } else if (hint) {
+    hint.textContent = group ? "Custo manual para este produto. Ele nao acompanha alteracoes do grupo." : "Custo manual deste produto.";
+  }
+}
+
+function currencyInputValue(value) {
+  return toNumber(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function renderProductDependentViews() {
@@ -1128,6 +1239,7 @@ async function loadAll() {
   } catch (error) {
     showToast("Nao foi possivel carregar os produtos.", "error");
   }
+  await loadCostGroupsFromSupabase({ silent: true });
 
   const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
@@ -3794,8 +3906,53 @@ function stockLevelClass(stock) {
   return "estoque-alto";
 }
 
+function renderCostGroups() {
+  renderCostGroupSelects();
+  renderStockBulkCost();
+  if (!costGroupsRoot) return;
+  if (app.costGroupsLoading) {
+    costGroupsRoot.innerHTML = '<p class="empty-state">Carregando grupos de custo...</p>';
+    return;
+  }
+  if (app.costGroupsError) {
+    costGroupsRoot.innerHTML = `
+      <div class="empty-state">
+        <p>Custos por modelo ainda nao estao configurados.</p>
+        <small>Execute o SQL SUPABASE_GRUPOS_CUSTO.sql no Supabase para ativar.</small>
+      </div>
+    `;
+    return;
+  }
+  costGroupsRoot.innerHTML = app.costGroups.length ? `
+    <div class="cost-group-list">
+      ${app.costGroups.map((group) => {
+        const count = costGroupProductCount(group.id);
+        return `
+          <article class="cost-group-row ${group.ativo === false ? "is-inactive" : ""}">
+            <div>
+              <strong>${escapeHtml(group.nome_modelo)}</strong>
+              <span>${currency.format(toNumber(group.custo_padrao))} | ${count} ${count === 1 ? "produto vinculado" : "produtos vinculados"}</span>
+            </div>
+            <div>
+              <button type="button" data-edit-cost-group="${escapeHtml(group.id)}">Editar custo</button>
+              <button type="button" data-cost-group-products-filter="${escapeHtml(group.id)}">Ver produtos</button>
+              <button type="button" data-toggle-cost-group="${escapeHtml(group.id)}">${group.ativo === false ? "Ativar" : "Desativar"}</button>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  ` : '<p class="empty-state">Nenhum grupo de custo cadastrado.</p>';
+}
+
+function renderStockBulkCost() {
+  if (bulkCostGroupCount) bulkCostGroupCount.textContent = String(app.stockSelectedProducts.size);
+  renderCostGroupSelects();
+}
+
 function renderStock() {
   renderStockFilters();
+  renderCostGroups();
   if (!stockList) return;
   if (app.productsLoading) {
     renderStockTotalSummary([]);
@@ -3815,15 +3972,22 @@ function renderStock() {
     return;
   }
   const products = stockProducts();
+  const visibleIds = new Set(products.map((product) => String(product.id)));
+  app.stockSelectedProducts = new Set([...app.stockSelectedProducts].filter((id) => visibleIds.has(String(id))));
+  renderStockBulkCost();
   renderStockTotalSummary(products);
   stockList.innerHTML = products.length ? products.map((product) => `
     <article class="stock-row" data-stock-row="${product.id}">
+      <label class="stock-select-product" aria-label="Selecionar produto para grupo de custo">
+        <input type="checkbox" data-stock-select-product="${product.id}" ${app.stockSelectedProducts.has(String(product.id)) ? "checked" : ""} />
+      </label>
       <img src="${escapeHtml(productImage(product))}" alt="${escapeHtml(product.nome || "Produto")}" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
       <div>
         <h3>${escapeHtml(product.nome || "Produto sem nome")}</h3>
         <small>${escapeHtml(product.categoria || "Produtos")}</small>
         <p>Estoque atual: <strong class="${stockLevelClass(product.estoque)}">${toNumber(product.estoque)}</strong></p>
         <p>Custo: ${currency.format(productCost(product))} | Venda: ${currency.format(product.preco)}</p>
+        ${product.grupo_custo_id ? `<p class="stock-cost-origin">Grupo: ${escapeHtml(costGroupById(product.grupo_custo_id)?.nome_modelo || "grupo removido")} ${product.custo_manual === false ? "(automatico)" : "(manual)"}</p>` : ""}
       </div>
       <div class="stock-actions">
         <div class="stock-quantity-control">
@@ -3922,7 +4086,10 @@ async function uploadStockProductImage() {
 
 function stockProductPayload(form) {
   const price = parseMoney(form.elements.preco.value);
-  const cost = parseMoney(form.elements.custo.value);
+  const groupId = form.elements.grupo_custo_id?.value || "";
+  const group = costGroupById(groupId);
+  const autoCost = Boolean(group && form.elements.custo_automatico?.checked);
+  const cost = autoCost ? toNumber(group.custo_padrao) : parseMoney(form.elements.custo.value);
   const stock = Math.max(0, Number.parseInt(form.elements.estoque.value || "0", 10));
   return {
     nome: form.elements.nome.value.trim(),
@@ -3930,6 +4097,8 @@ function stockProductPayload(form) {
     preco: price,
     pix: price,
     custo: cost,
+    grupo_custo_id: groupId || null,
+    custo_manual: groupId ? !autoCost : true,
     estoque: stock,
     imagem: form.elements.imagem.value.trim(),
     descricao: form.elements.descricao.value.trim(),
@@ -3971,6 +4140,8 @@ async function saveStockProduct(event) {
     if (error) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.descricao;
+      delete fallbackPayload.grupo_custo_id;
+      delete fallbackPayload.custo_manual;
       const fallback = await supabaseClient.from(TABLES.products).insert(fallbackPayload);
       if (fallback.error) throw fallback.error;
     }
@@ -4019,6 +4190,171 @@ async function saveStock(productId) {
       button.disabled = false;
       button.textContent = "Salvar estoque";
     }
+  }
+}
+
+function openCostGroupModal(groupId = "") {
+  if (!costGroupModal || !costGroupForm) return;
+  const group = costGroupById(groupId);
+  app.costGroupEditingId = group ? String(group.id) : null;
+  app.costGroupSelectedProducts = new Set(
+    group
+      ? app.products.filter((product) => String(product.grupo_custo_id || "") === String(group.id)).map((product) => String(product.id))
+      : [],
+  );
+  costGroupForm.reset();
+  costGroupForm.elements.nome_modelo.value = group?.nome_modelo || "";
+  costGroupForm.elements.custo_padrao.value = group ? currencyInputValue(group.custo_padrao) : "";
+  costGroupForm.elements.atualizar_vinculados.checked = true;
+  setCostGroupStatus("");
+  renderCostGroupProductOptions();
+  costGroupModal.classList.remove("hidden");
+  costGroupModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  costGroupForm.elements.nome_modelo.focus();
+}
+
+function closeCostGroupModal() {
+  if (!costGroupModal) return;
+  costGroupModal.classList.add("hidden");
+  costGroupModal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+  app.costGroupEditingId = null;
+  app.costGroupSelectedProducts.clear();
+}
+
+function setCostGroupStatus(message = "", type = "") {
+  if (!costGroupStatus) return;
+  costGroupStatus.textContent = message;
+  costGroupStatus.className = `form-status ${type}`.trim();
+}
+
+function renderCostGroupProductOptions() {
+  if (!costGroupProductsRoot || !costGroupForm) return;
+  const term = costGroupForm.elements.nome_modelo.value.trim();
+  const currentGroupId = app.costGroupEditingId;
+  const suggested = suggestedProductsForCostGroup(term);
+  const linked = currentGroupId
+    ? app.products.filter((product) => String(product.grupo_custo_id || "") === String(currentGroupId))
+    : [];
+  const products = [...new Map([...linked, ...suggested].map((product) => [String(product.id), product])).values()].slice(0, 120);
+  costGroupProductsRoot.innerHTML = products.length ? products.map((product) => `
+    <label class="cost-group-product-option">
+      <input type="checkbox" data-cost-group-product="${escapeHtml(product.id)}" ${app.costGroupSelectedProducts.has(String(product.id)) ? "checked" : ""} />
+      <span>
+        <strong>${escapeHtml(product.nome || "Produto sem nome")}</strong>
+        <small>${escapeHtml(product.categoria || "Produtos")} | estoque ${toNumber(product.estoque)} | custo atual ${currency.format(productCost(product))}</small>
+      </span>
+    </label>
+  `).join("") : '<p class="empty-state">Nenhum produto sugerido. Digite o modelo e selecione manualmente depois no estoque.</p>';
+}
+
+async function auditCostGroupChange(groupId, previousCost, nextCost, updatedCount, action) {
+  try {
+    await supabaseClient.from(TABLES.costGroupAudit).insert({
+      grupo_id: groupId,
+      custo_anterior: previousCost,
+      custo_novo: nextCost,
+      produtos_atualizados: updatedCount,
+      acao: action,
+      usuario_id: app.user?.id || null,
+    });
+  } catch (error) {
+    console.error("Erro ao registrar auditoria de custo por modelo:", error);
+  }
+}
+
+async function updateProductsCostGroup(productIds, group, { updateCost = true } = {}) {
+  const ids = [...new Set(productIds.map(String))];
+  if (!ids.length || !group) return 0;
+  const payload = {
+    grupo_custo_id: group.id,
+    custo_manual: !updateCost,
+  };
+  if (updateCost) payload.custo = toNumber(group.custo_padrao);
+  const { error } = await supabaseClient.from(TABLES.products).update(payload).in("id", ids);
+  if (error) throw error;
+  return ids.length;
+}
+
+async function saveCostGroup(event) {
+  event.preventDefault();
+  if (!(await requireAuth())) return;
+  const form = event.currentTarget;
+  const name = form.elements.nome_modelo.value.trim();
+  const cost = parseMoney(form.elements.custo_padrao.value);
+  const updateLinked = form.elements.atualizar_vinculados.checked;
+  if (!name) return setCostGroupStatus("Informe o nome do modelo.", "error");
+  if (!Number.isFinite(cost) || cost < 0) return setCostGroupStatus("Informe um custo padrao valido.", "error");
+
+  setCostGroupStatus("Salvando grupo...", "loading");
+  try {
+    let group = costGroupById(app.costGroupEditingId);
+    const wasEditing = Boolean(group);
+    const previousCost = group ? toNumber(group.custo_padrao) : null;
+    if (group) {
+      const { data, error } = await supabaseClient
+        .from(TABLES.costGroups)
+        .update({ nome_modelo: name, custo_padrao: cost, updated_at: new Date().toISOString() })
+        .eq("id", group.id)
+        .select("id,nome_modelo,custo_padrao,ativo,created_at,updated_at")
+        .single();
+      if (error) throw error;
+      group = data;
+    } else {
+      const { data, error } = await supabaseClient
+        .from(TABLES.costGroups)
+        .insert({ nome_modelo: name, custo_padrao: cost, ativo: true })
+        .select("id,nome_modelo,custo_padrao,ativo,created_at,updated_at")
+        .single();
+      if (error) throw error;
+      group = data;
+    }
+
+    const selectedIds = [...app.costGroupSelectedProducts];
+    const linkedIds = app.products
+      .filter((product) => String(product.grupo_custo_id || "") === String(group.id) && product.custo_manual === false)
+      .map((product) => String(product.id));
+    const productIds = updateLinked ? [...new Set([...selectedIds, ...linkedIds])] : selectedIds;
+    const updatedCount = await updateProductsCostGroup(productIds, group, { updateCost: updateLinked });
+    await auditCostGroupChange(group.id, previousCost, cost, updatedCount, wasEditing ? "salvar_grupo" : "criar_grupo");
+    showToast(`Grupo "${name}" salvo. ${updatedCount} produtos vinculados.`, "success");
+    await loadProductsFromSupabase({ silent: true });
+    await loadCostGroupsFromSupabase({ silent: true });
+    renderStock();
+    closeCostGroupModal();
+  } catch (error) {
+    console.error("Erro ao salvar grupo de custo:", error);
+    setCostGroupStatus(error.message || "Nao foi possivel salvar o grupo.", "error");
+  }
+}
+
+async function toggleCostGroup(groupId) {
+  const group = costGroupById(groupId);
+  if (!group) return;
+  const { error } = await supabaseClient
+    .from(TABLES.costGroups)
+    .update({ ativo: group.ativo === false, updated_at: new Date().toISOString() })
+    .eq("id", group.id);
+  if (error) return showToast(error.message || "Nao foi possivel alterar o grupo.", "error");
+  await loadCostGroupsFromSupabase({ silent: true });
+  renderStock();
+}
+
+async function applyBulkCostGroup() {
+  const group = costGroupById(bulkCostGroupSelect?.value || "");
+  const ids = [...app.stockSelectedProducts];
+  if (!group || !ids.length) return showToast("Selecione produtos e um grupo de custo.", "error");
+  try {
+    const updated = await updateProductsCostGroup(ids, group, { updateCost: true });
+    await auditCostGroupChange(group.id, null, toNumber(group.custo_padrao), updated, "vinculo_em_massa");
+    app.stockSelectedProducts.clear();
+    showToast(`${updated} produtos vinculados ao grupo ${group.nome_modelo}.`, "success");
+    await loadProductsFromSupabase({ silent: true });
+    renderStock();
+  } catch (error) {
+    console.error("Erro ao aplicar grupo em massa:", error);
+    showToast(error.message || "Nao foi possivel aplicar o grupo.", "error");
   }
 }
 
@@ -5147,6 +5483,7 @@ loginForm?.addEventListener("submit", async (event) => {
 
 saleForm?.addEventListener("submit", saveSale);
 stockProductForm?.addEventListener("submit", saveStockProduct);
+costGroupForm?.addEventListener("submit", saveCostGroup);
 saleForm?.addEventListener("keydown", (event) => {
   if (event.key !== "Enter" || event.target.tagName === "TEXTAREA") return;
   event.preventDefault();
@@ -5317,6 +5654,39 @@ document.addEventListener("click", async (event) => {
   if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
   if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
   if (event.target.closest("[data-stock-product-remove-image]")) clearStockProductImage();
+  if (event.target.closest("[data-open-cost-group-modal]")) {
+    openCostGroupModal();
+    return;
+  }
+  if (event.target.closest("[data-close-cost-group-modal]")) {
+    closeCostGroupModal();
+    return;
+  }
+  const editCostGroup = event.target.closest("[data-edit-cost-group]");
+  if (editCostGroup) {
+    openCostGroupModal(editCostGroup.dataset.editCostGroup);
+    return;
+  }
+  const toggleCostGroupButton = event.target.closest("[data-toggle-cost-group]");
+  if (toggleCostGroupButton) {
+    await toggleCostGroup(toggleCostGroupButton.dataset.toggleCostGroup);
+    return;
+  }
+  const filterCostGroupProducts = event.target.closest("[data-cost-group-products-filter]");
+  if (filterCostGroupProducts) {
+    app.stockSelectedProducts = new Set();
+    app.stockCategories = [];
+    app.stockCategory = "all";
+    app.stockSearch = costGroupById(filterCostGroupProducts.dataset.costGroupProductsFilter)?.nome_modelo || "";
+    const stockSearch = $("[data-stock-search]");
+    if (stockSearch) stockSearch.value = app.stockSearch;
+    renderStock();
+    return;
+  }
+  if (event.target.closest("[data-apply-bulk-cost-group]")) {
+    await applyBulkCostGroup();
+    return;
+  }
   if (event.target.closest("[data-retry-products]")) {
     try {
       await loadProductsFromSupabase();
@@ -5549,6 +5919,9 @@ document.addEventListener("input", (event) => {
     if (stockProductImageFile) stockProductImageFile.value = "";
     updateStockProductImagePreview(event.target.value.trim());
   }
+  if (event.target.closest("[data-cost-group-form]") && event.target.name === "nome_modelo") {
+    renderCostGroupProductOptions();
+  }
   if (event.target.matches("[data-seller-search]")) {
     app.sellerSearch = event.target.value;
     renderTeamLists();
@@ -5615,6 +5988,20 @@ document.addEventListener("change", (event) => {
 document.addEventListener("change", (event) => {
   if (event.target.matches("[data-stock-product-image-file]")) {
     selectStockProductImage(event.target.files?.[0] || null);
+  }
+  if (event.target.matches("[data-cost-group-select], [data-cost-auto-toggle]")) {
+    syncCostGroupForm();
+  }
+  if (event.target.matches("[data-cost-group-product]")) {
+    const id = String(event.target.dataset.costGroupProduct || "");
+    if (event.target.checked) app.costGroupSelectedProducts.add(id);
+    else app.costGroupSelectedProducts.delete(id);
+  }
+  if (event.target.matches("[data-stock-select-product]")) {
+    const id = String(event.target.dataset.stockSelectProduct || "");
+    if (event.target.checked) app.stockSelectedProducts.add(id);
+    else app.stockSelectedProducts.delete(id);
+    renderStockBulkCost();
   }
   if (event.target.closest(".sale-item")) {
     if (event.target.name === "produto_id") {

@@ -469,6 +469,16 @@
               <datalist id="stock-product-categories" data-stock-product-categories></datalist>
               <label>Preco de venda <input type="text" name="preco" inputmode="decimal" required placeholder="0,00" /></label>
               <label>Custo <input type="text" name="custo" inputmode="decimal" placeholder="0,00" /></label>
+              <label class="cost-group-field">Grupo de custo
+                <span class="cost-group-control">
+                  <select name="grupo_custo_id" data-cost-group-select>
+                    <option value="">Nenhum grupo</option>
+                  </select>
+                  <button type="button" class="ghost-action" data-open-cost-group-modal>+ Novo grupo</button>
+                </span>
+                <small data-cost-group-hint>Custo manual deste produto.</small>
+              </label>
+              <label class="inline-check cost-auto-check"><input type="checkbox" name="custo_automatico" checked data-cost-auto-toggle /> Custo automatico pelo grupo</label>
               <label>Estoque inicial <input type="number" name="estoque" min="0" step="1" required value="1" /></label>
               <label>Imagem (URL opcional) <input type="url" name="imagem" placeholder="https://..." data-stock-product-image-url /></label>
               <label>Foto da galeria/camera <input type="file" name="imagem_arquivo" accept="image/jpeg,image/png,image/webp" data-stock-product-image-file /></label>
@@ -495,6 +505,23 @@
               <option value="stock-desc">Maior quantidade</option>
             </select>
           </div>
+          <section class="stock-bulk-cost" data-stock-bulk-cost>
+            <strong><span data-bulk-cost-group-count>0</span> produtos selecionados</strong>
+            <select data-bulk-cost-group>
+              <option value="">Definir grupo de custo</option>
+            </select>
+            <button type="button" class="ghost-action" data-apply-bulk-cost-group>Aplicar grupo</button>
+          </section>
+          <section class="panel-card cost-groups-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Custos</p>
+                <h2>Custos por modelo</h2>
+              </div>
+              <button type="button" class="ghost-action" data-open-cost-group-modal>Novo grupo</button>
+            </div>
+            <div data-cost-groups></div>
+          </section>
           <h3 class="stock-category-title">Categorias</h3>
           <div class="stock-category-selector" data-stock-category-chips></div>
           <section class="stock-total-summary" data-stock-total-summary></section>
@@ -898,6 +925,30 @@
           <button type="button" class="confirm-secondary" data-confirm-cancel>Voltar</button>
           <button type="button" class="confirm-danger" data-confirm-ok>Confirmar</button>
         </div>
+      </section>
+    </div>
+
+    <div class="cost-group-modal hidden" data-cost-group-modal aria-hidden="true">
+      <button class="cost-group-overlay" type="button" data-close-cost-group-modal aria-label="Fechar custos por modelo"></button>
+      <section class="cost-group-dialog" role="dialog" aria-modal="true" aria-labelledby="cost-group-title">
+        <button type="button" class="cost-group-close" data-close-cost-group-modal aria-label="Fechar">x</button>
+        <form data-cost-group-form>
+          <p class="eyebrow">Modelo de produto</p>
+          <h2 id="cost-group-title">Custo por modelo</h2>
+          <label>Nome do modelo <input type="text" name="nome_modelo" required placeholder="Ex.: IGNITE 8000 PUFFS" /></label>
+          <label>Custo padrao <input type="text" name="custo_padrao" required inputmode="decimal" placeholder="0,00" /></label>
+          <label class="inline-check"><input type="checkbox" name="atualizar_vinculados" checked /> Atualizar produtos vinculados com este custo</label>
+          <div class="cost-group-products-head">
+            <strong>Produtos vinculados</strong>
+            <small>Selecione somente os sabores deste modelo.</small>
+          </div>
+          <div class="cost-group-products" data-cost-group-products></div>
+          <p class="form-status" data-cost-group-status></p>
+          <div class="cost-group-actions">
+            <button type="button" class="ghost-action" data-close-cost-group-modal>Cancelar</button>
+            <button type="submit" class="primary-action">Salvar grupo</button>
+          </div>
+        </form>
       </section>
     </div>
 

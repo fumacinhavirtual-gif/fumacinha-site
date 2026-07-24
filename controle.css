@@ -924,6 +924,36 @@ button.sale-section-header {
 }
 
 @media (max-width: 680px) {
+  .cost-group-control,
+  .stock-bulk-cost,
+  .cost-group-row {
+    grid-template-columns: 1fr;
+  }
+
+  .cost-group-row > div:last-child {
+    justify-content: stretch;
+  }
+
+  .cost-group-row button {
+    flex: 1 1 auto;
+  }
+
+  .stock-row {
+    grid-template-columns: auto 64px minmax(0, 1fr);
+  }
+
+  .stock-row img {
+    width: 64px;
+    height: 64px;
+  }
+
+  .cost-group-dialog {
+    width: 100%;
+    max-height: 90vh;
+    border-radius: 22px 22px 0 0;
+    padding: 18px 14px;
+  }
+
   .sale-empty-state {
     display: grid;
     min-height: 188px;
@@ -4608,6 +4638,81 @@ body.modal-open {
   grid-template-columns: 1fr;
 }
 
+.cost-group-field {
+  gap: 7px;
+}
+
+.cost-group-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.cost-group-control .ghost-action {
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.cost-auto-check {
+  align-self: end;
+}
+
+.stock-bulk-cost,
+.cost-group-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.5fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  margin: 10px 0;
+  padding: 12px;
+  background: var(--white);
+}
+
+.stock-bulk-cost strong,
+.cost-group-row strong {
+  color: var(--black);
+}
+
+.cost-group-list {
+  display: grid;
+  gap: 10px;
+}
+
+.cost-group-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin: 0;
+}
+
+.cost-group-row span,
+.stock-cost-origin {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.cost-group-row > div:last-child {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cost-group-row button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 9px 12px;
+  color: var(--black);
+  background: #fff;
+  font-weight: 850;
+}
+
+.cost-group-row.is-inactive {
+  opacity: 0.62;
+}
+
 .stock-category-title {
   margin: 14px 0 10px;
   color: var(--black);
@@ -4688,8 +4793,14 @@ body.modal-open {
 }
 
 .stock-row {
-  grid-template-columns: 74px minmax(0, 1fr);
+  grid-template-columns: auto 74px minmax(0, 1fr);
   align-items: start;
+}
+
+.stock-select-product {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
 }
 
 .stock-row img {
@@ -4724,6 +4835,101 @@ body.modal-open {
 
 .estoque-alto {
   color: #1f2937;
+}
+
+.cost-group-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: end center;
+}
+
+.cost-group-modal.hidden {
+  display: none;
+}
+
+.cost-group-overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.cost-group-dialog {
+  position: relative;
+  z-index: 1;
+  width: min(720px, calc(100vw - 24px));
+  max-height: min(88vh, 760px);
+  overflow: auto;
+  border-radius: 22px 22px 0 0;
+  padding: 20px;
+  background: #fff;
+  box-shadow: 0 -18px 50px rgba(15, 23, 42, 0.22);
+}
+
+.cost-group-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--black);
+  background: #f8fafc;
+  font-weight: 950;
+}
+
+.cost-group-dialog form {
+  display: grid;
+  gap: 12px;
+}
+
+.cost-group-products-head {
+  display: grid;
+  gap: 2px;
+}
+
+.cost-group-products-head small {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.cost-group-products {
+  display: grid;
+  max-height: 300px;
+  overflow: auto;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px;
+}
+
+.cost-group-product-option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  padding: 10px;
+}
+
+.cost-group-product-option span {
+  display: grid;
+  gap: 3px;
+}
+
+.cost-group-product-option small {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.cost-group-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 10px;
 }
 
 .stock-actions {
