@@ -548,17 +548,47 @@
             <button type="button" class="finance-custom-button" data-finance-filter-open>Personalizado</button>
             <button type="button" class="finance-current-button hidden" data-finance-current-month>Voltar para mes atual</button>
           </section>
-          <div class="finance-grid">
-            <article><span>Total de vendas</span><strong data-finance-sales-confirmed>0</strong></article>
-            <article><span>Faturamento produtos</span><strong data-finance-revenue>R$ 0,00</strong></article>
-            <article><span>Valor recebido</span><strong data-finance-received>R$ 0,00</strong></article>
-            <article><span>Taxas entregadores</span><strong data-finance-delivery>R$ 0,00</strong></article>
-            <article><span>Custo dos produtos</span><strong data-finance-cost>R$ 0,00</strong></article>
-            <article><span>Comissoes</span><strong data-finance-commission>R$ 0,00</strong></article>
-            <article><span>Lucro bruto</span><strong data-finance-gross>R$ 0,00</strong></article>
-            <article><span>Despesas</span><strong data-finance-expenses>R$ 0,00</strong></article>
-            <article><span>Lucro liquido</span><strong data-finance-net>R$ 0,00</strong></article>
-          </div>
+          <section class="finance-summary-section">
+            <div class="finance-summary-head">
+              <div>
+                <p class="eyebrow">Estoque atual</p>
+                <h2>Resumo financeiro do estoque</h2>
+              </div>
+            </div>
+            <div class="finance-grid finance-stock-grid">
+              <article>
+                <span>Total de custo do estoque</span>
+                <strong data-finance-stock-cost>R$ 0,00</strong>
+              </article>
+              <article>
+                <span>Valor total do estoque</span>
+                <strong data-finance-stock-sale>R$ 0,00</strong>
+              </article>
+              <article>
+                <span>Lucro potencial</span>
+                <strong data-finance-stock-profit>R$ 0,00</strong>
+                <small>Estimativa caso todo o estoque atual seja vendido pelo preco cadastrado.</small>
+              </article>
+            </div>
+          </section>
+
+          <section class="finance-summary-section">
+            <div class="finance-summary-head">
+              <div>
+                <p class="eyebrow">Periodo selecionado</p>
+                <h2>Resultado das vendas</h2>
+              </div>
+            </div>
+            <p class="finance-cost-warning hidden" data-finance-cost-warning>Algumas vendas antigas nao possuem custo registrado e podem deixar o lucro historico impreciso.</p>
+            <div class="finance-grid">
+              <article><span>Total vendido</span><strong data-finance-total-sold>R$ 0,00</strong></article>
+              <article><span>Custo dos produtos vendidos</span><strong data-finance-sold-cost>R$ 0,00</strong></article>
+              <article><span>Lucro realizado</span><strong data-finance-realized-profit>R$ 0,00</strong></article>
+              <article><span>Margem de lucro</span><strong data-finance-margin>0,00%</strong></article>
+              <article><span>Quantidade de vendas</span><strong data-finance-sales-quantity>0</strong></article>
+              <article><span>Ticket medio</span><strong data-finance-ticket>R$ 0,00</strong></article>
+            </div>
+          </section>
 
           <section class="panel-card">
             <div class="analytics-section-head">
@@ -660,10 +690,13 @@
             <div class="finance-quick-options">
               <button type="button" data-finance-quick="today">Hoje</button>
               <button type="button" data-finance-quick="yesterday">Ontem</button>
+              <button type="button" data-finance-quick="week">Esta semana</button>
+              <button type="button" data-finance-quick="lastWeek">Semana passada</button>
               <button type="button" data-finance-quick="last7">Ultimos 7 dias</button>
               <button type="button" data-finance-quick="month">Mes atual</button>
               <button type="button" data-finance-quick="lastMonth">Mes passado</button>
               <button type="button" data-finance-quick="year">Ano atual</button>
+              <button type="button" data-finance-quick="all">Todo o periodo</button>
             </div>
             <div class="finance-date-range">
               <label>Data inicial <input type="date" data-finance-date-start /></label>

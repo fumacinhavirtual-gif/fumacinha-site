@@ -399,6 +399,18 @@ function periodRange(period = app.period) {
     day.setDate(day.getDate() - 1);
     return { start: startOfDay(day), end: endOfDay(day) };
   }
+  if (period === "week") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay());
+    return { start: startOfDay(start), end: endOfDay(now) };
+  }
+  if (period === "lastWeek") {
+    const start = new Date(now);
+    start.setDate(now.getDate() - now.getDay() - 7);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    return { start: startOfDay(start), end: endOfDay(end) };
+  }
   if (period === "last7") {
     const start = new Date(now);
     start.setDate(start.getDate() - 6);
@@ -414,6 +426,9 @@ function periodRange(period = app.period) {
   }
   if (period === "year") {
     return { start: new Date(now.getFullYear(), 0, 1), end: endOfDay(now) };
+  }
+  if (period === "all") {
+    return { start: new Date(2000, 0, 1), end: endOfDay(now) };
   }
   if (period === "custom") {
     const startInput = $("[data-date-start]")?.value;
@@ -495,10 +510,13 @@ function financePeriodTitle() {
   const labels = {
     today: `Hoje, ${new Date().toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
     yesterday: "Ontem",
+    week: "Esta semana",
+    lastWeek: "Semana passada",
     last7: "Ultimos 7 dias",
     month: "Mes atual",
     lastMonth: "Mes passado",
     year: `Ano atual - ${new Date().getFullYear()}`,
+    all: "Todo o periodo",
     custom: "Periodo personalizado",
   };
   if (app.financeQuickPeriod === "custom") {
@@ -810,8 +828,35 @@ function productCost(product) {
   return toNumber(product.custo || product.custo_unitario || 0);
 }
 
+function hasStoredNumber(value) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+function saleItemCost(item) {
+  if (hasStoredNumber(item?.custo_total)) return toNumber(item.custo_total);
+  if (hasStoredNumber(item?.custo_unitario)) return toNumber(item.custo_unitario) * toNumber(item.quantidade);
+  return 0;
+}
+
 function saleCost(sale) {
-  return toNumber(sale.custo_total || 0);
+  if (hasStoredNumber(sale?.custo_total)) return toNumber(sale.custo_total);
+  return saleItemsForSale(sale?.id).reduce((sum, item) => sum + saleItemCost(item), 0);
+}
+
+function saleHasCostSnapshot(sale) {
+  if (hasStoredNumber(sale?.lucro_total)) return true;
+  if (toNumber(sale?.custo_total) > 0 || toNumber(sale?.custo_unitario) > 0) return true;
+  if (saleProductsValue(sale) <= 0) return true;
+  return saleItemsForSale(sale?.id).some((item) => (
+    hasStoredNumber(item.lucro_total) ||
+    toNumber(item.custo_total) > 0 ||
+    toNumber(item.custo_unitario) > 0
+  ));
+}
+
+function saleRealizedProfit(sale) {
+  if (hasStoredNumber(sale?.lucro_total)) return toNumber(sale.lucro_total);
+  return saleProductsValue(sale) - saleCost(sale);
 }
 
 function saleTotal(sale) {
@@ -923,7 +968,7 @@ function personNameById(rows, id) {
 }
 
 function summaryFor(sales = filteredSales(), expenses = filteredExpenses()) {
-  const revenue = sales.reduce((sum, sale) => sum + saleTotal(sale), 0);
+  const revenue = sales.reduce((sum, sale) => sum + saleProductsValue(sale), 0);
   const received = sales.reduce((sum, sale) => sum + saleReceived(sale), 0);
   const delivery = sales.reduce((sum, sale) => sum + saleDelivery(sale), 0);
   const commission = sales.reduce((sum, sale) => sum + saleCommission(sale), 0);
@@ -2366,7 +2411,34 @@ function saleItemPayload(items) {
     valor_total: item.quantity * item.unitValue,
     custo_unitario: productCost(item.product),
     custo_total: item.quantity * productCost(item.product),
+    lucro_total: item.quantity * item.unitValue - item.quantity * productCost(item.product),
   }));
+}
+
+function isMissingProfitColumnError(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("lucro_total") && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
+}
+
+function removeProfitSnapshot(payload) {
+  const { lucro_total, ...rest } = payload;
+  return rest;
+}
+
+function removeProfitSnapshotFromItems(items) {
+  return items.map((item) => removeProfitSnapshot(item));
+}
+
+async function callSaleRpc(functionName, payload) {
+  const result = await supabaseClient.rpc(functionName, payload);
+  if (!isMissingProfitColumnError(result.error)) return result;
+  console.error("Coluna lucro_total ausente no Supabase. Execute SUPABASE_FINANCEIRO_CUSTOS.sql para salvar o lucro no snapshot.", result.error);
+  const fallbackPayload = {
+    ...payload,
+    p_venda: removeProfitSnapshot(payload.p_venda || {}),
+    p_itens: removeProfitSnapshotFromItems(payload.p_itens || []),
+  };
+  return supabaseClient.rpc(functionName, fallbackPayload);
 }
 
 function buildSalePayload(items, seller, deliverer) {
@@ -2403,6 +2475,7 @@ function buildSalePayload(items, seller, deliverer) {
     draft.split ? `PAGAMENTOS_JSON:${JSON.stringify(draft.splitPayments)}` : "",
   ].filter(Boolean).join("\n");
   const cost = items.reduce((sum, item) => sum + item.quantity * productCost(item.product), 0);
+  const realizedProfit = productsValue - cost;
   const quantityTotal = items.reduce((sum, item) => sum + item.quantity, 0);
   const first = items[0];
   const routeDateTime = routeIso(draft.routeDate, draft.routeTime);
@@ -2446,6 +2519,7 @@ function buildSalePayload(items, seller, deliverer) {
       status: "concluida",
       custo_unitario: productCost(first.product),
       custo_total: cost,
+      lucro_total: realizedProfit,
       cancelada: false,
       usuario_id: app.user?.id || null,
     },
@@ -2571,7 +2645,7 @@ async function registerSale(event) {
       if (reserveError || !reservedOrder) throw new Error("Esse pedido ja foi confirmado ou cancelado.");
       reservedOrderId = reservedOrder.id;
     }
-    const { data: sale, error: saleError } = await supabaseClient.rpc("registrar_venda_troco", {
+    const { data: sale, error: saleError } = await callSaleRpc("registrar_venda_troco", {
       p_venda: salePayload,
       p_itens: saleItemPayload(items),
     });
@@ -2676,7 +2750,7 @@ async function updateEditedSale(event) {
     const { payload, totalSale, productsValue, deliveredValue, deliveryValue, paymentLabel, draft } = buildSalePayload(items, seller, deliverer);
     payload.usuario_id = usuarioId;
     if (!window.confirm(`Salvar alteracoes da venda #${app.editingSaleId}?`)) return;
-    const { error } = await supabaseClient.rpc("editar_venda_estoque", {
+    const { error } = await callSaleRpc("editar_venda_estoque", {
       p_venda_id: Number(app.editingSaleId),
       p_venda: payload,
       p_itens: saleItemPayload(items),
@@ -4563,17 +4637,54 @@ function updateStockSaveState(productId) {
   }
 }
 
+function stockFinancialSummary() {
+  return app.products.reduce((summary, product) => {
+    const stock = Math.max(0, toNumber(product.estoque));
+    const saleValue = toNumber(product.preco) * stock;
+    const costValue = productCost(product) * stock;
+    summary.cost += costValue;
+    summary.saleValue += saleValue;
+    return summary;
+  }, { cost: 0, saleValue: 0 });
+}
+
+function realizedSalesSummary(sales = filteredSales()) {
+  const totalSold = sales.reduce((sum, sale) => sum + saleProductsValue(sale), 0);
+  const soldCost = sales.reduce((sum, sale) => sum + saleCost(sale), 0);
+  const realizedProfit = totalSold - soldCost;
+  const quantity = sales.length;
+  const margin = totalSold > 0 ? (realizedProfit / totalSold) * 100 : 0;
+  const ticket = quantity ? totalSold / quantity : 0;
+  const hasMissingCost = sales.some((sale) => !saleHasCostSnapshot(sale));
+  return {
+    totalSold,
+    soldCost,
+    realizedProfit,
+    margin,
+    quantity,
+    ticket,
+    hasMissingCost,
+  };
+}
+
+function setTextIfExists(selector, value) {
+  const element = $(selector);
+  if (element) element.textContent = value;
+}
+
 function renderFinance() {
-  const summary = summaryFor();
-  $("[data-finance-sales-confirmed]").textContent = String(filteredSales().length);
-  $("[data-finance-revenue]").textContent = currency.format(summary.revenue);
-  $("[data-finance-received]").textContent = currency.format(summary.received);
-  $("[data-finance-delivery]").textContent = currency.format(summary.delivery);
-  $("[data-finance-cost]").textContent = currency.format(summary.cost);
-  $("[data-finance-commission]").textContent = currency.format(summary.commission);
-  $("[data-finance-gross]").textContent = currency.format(summary.gross);
-  $("[data-finance-expenses]").textContent = currency.format(summary.expenses);
-  $("[data-finance-net]").textContent = currency.format(summary.net);
+  const stockSummary = stockFinancialSummary();
+  const salesSummary = realizedSalesSummary();
+  setTextIfExists("[data-finance-stock-cost]", currency.format(stockSummary.cost));
+  setTextIfExists("[data-finance-stock-sale]", currency.format(stockSummary.saleValue));
+  setTextIfExists("[data-finance-stock-profit]", currency.format(stockSummary.saleValue - stockSummary.cost));
+  setTextIfExists("[data-finance-total-sold]", currency.format(salesSummary.totalSold));
+  setTextIfExists("[data-finance-sold-cost]", currency.format(salesSummary.soldCost));
+  setTextIfExists("[data-finance-realized-profit]", currency.format(salesSummary.realizedProfit));
+  setTextIfExists("[data-finance-margin]", `${salesSummary.margin.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`);
+  setTextIfExists("[data-finance-sales-quantity]", String(salesSummary.quantity));
+  setTextIfExists("[data-finance-ticket]", currency.format(salesSummary.ticket));
+  $("[data-finance-cost-warning]")?.classList.toggle("hidden", !salesSummary.hasMissingCost);
   renderTopClients();
   renderExpenses();
 }
