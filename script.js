@@ -1636,6 +1636,36 @@ function buildOrderWhatsAppUrl(customer = {}, order = {}) {
   return buildWhatsAppSendUrl(lines.join("\n"));
 }
 
+function normalizeCheckoutWhatsapp(value = "") {
+  let digits = String(value || "").replace(/\D/g, "");
+  if (digits.startsWith("55") && [12, 13].includes(digits.length)) digits = digits.slice(2);
+  return digits;
+}
+
+function isMissingClienteIdError(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("cliente_id") && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
+}
+
+async function identifyCheckoutClient(customer = {}) {
+  const nome = String(customer.nome || "").trim();
+  const whatsapp = normalizeCheckoutWhatsapp(customer.telefone || customer.whatsapp || "");
+  if (!supabaseClient || !nome || ![10, 11].includes(whatsapp.length)) return null;
+  try {
+    const { data, error } = await supabaseClient.rpc("identificar_cliente_checkout", {
+      p_nome: nome,
+      p_whatsapp: whatsapp,
+      p_observacao: customer.bairro && customer.bairro !== "Nao informado" ? `Bairro: ${customer.bairro}` : null,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    return row?.cliente_id || row || null;
+  } catch (error) {
+    console.error("Nao foi possivel identificar o cliente do checkout:", error);
+    return null;
+  }
+}
+
 async function savePendingSiteOrder(customer = {}) {
   if (!supabaseClient) throw new Error("Configure o Supabase para registrar pedidos.");
   if (!(await refreshStoreAvailability())) throw new Error(storeClosedText());
@@ -1645,7 +1675,9 @@ async function savePendingSiteOrder(customer = {}) {
   const invalidItem = items.find((item) => !item.product?.id || item.quantity <= 0 || item.quantity > Number(item.product.estoque || 0));
   if (invalidItem) throw new Error(`Revise a quantidade de ${invalidItem.product?.nome || "um produto"}.`);
 
+  const clienteId = await identifyCheckoutClient(customer);
   const pedido = {
+    cliente_id: clienteId,
     cliente_nome: customer.nome,
     cliente_bairro: customer.bairro || "Nao informado",
     cliente_telefone: customer.telefone || "",
@@ -1662,10 +1694,22 @@ async function savePendingSiteOrder(customer = {}) {
     subtotal: item.product.preco * item.quantity,
   }));
 
-  const { data, error } = await supabaseClient.rpc("registrar_pedido_site", {
+  let { data, error } = await supabaseClient.rpc("registrar_pedido_site", {
     p_pedido: pedido,
     p_itens: itens,
   });
+
+  if (isMissingClienteIdError(error)) {
+    console.error("Coluna cliente_id ausente em PEDIDOS. Execute SUPABASE_CLIENTES_INTEGRACAO.sql para vincular pedidos a clientes.", error);
+    const fallbackPedido = { ...pedido };
+    delete fallbackPedido.cliente_id;
+    const fallback = await supabaseClient.rpc("registrar_pedido_site", {
+      p_pedido: fallbackPedido,
+      p_itens: itens,
+    });
+    data = fallback.data;
+    error = fallback.error;
+  }
 
   if (error) throw error;
   return Array.isArray(data) ? data[0] : data;

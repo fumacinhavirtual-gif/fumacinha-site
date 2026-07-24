@@ -4566,6 +4566,246 @@ body.modal-open {
   gap: 10px;
 }
 
+.sale-client-smart {
+  display: grid;
+  gap: 10px;
+  padding: 0 12px 12px;
+}
+
+.sale-client-search-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sale-client-search-field input,
+.sale-client-hidden-fields input,
+.sale-client-quick-panel input {
+  width: 100%;
+  min-height: 46px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 0 12px;
+  font: inherit;
+  font-weight: 700;
+  background: var(--white);
+  box-sizing: border-box;
+}
+
+.sale-client-hidden-fields {
+  display: grid;
+  gap: 8px;
+}
+
+.sale-client-hidden-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.sale-client-results {
+  display: grid;
+  gap: 8px;
+}
+
+.sale-client-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: var(--white);
+  text-align: left;
+}
+
+.sale-client-result strong,
+.sale-client-selected-card strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--black);
+}
+
+.sale-client-result span,
+.sale-client-result small,
+.sale-client-selected-card small,
+.sale-client-selected-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.sale-client-result em {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  align-self: center;
+  border-radius: 999px;
+  padding: 5px 8px;
+  background: rgba(20, 148, 88, 0.12);
+  color: var(--green);
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.sale-client-empty {
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  padding: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.sale-client-empty p {
+  margin: 0;
+}
+
+.sale-client-empty button,
+.sale-client-create,
+.sale-client-selected-card button,
+.sale-client-selected-card a,
+.sale-client-duplicate button {
+  min-height: 38px;
+  border: 1px solid rgba(20, 148, 88, 0.32);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: rgba(20, 148, 88, 0.08);
+  color: var(--green);
+  font-weight: 900;
+  text-decoration: none;
+}
+
+.sale-client-create {
+  width: 100%;
+}
+
+.sale-client-selected-card {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(20, 148, 88, 0.22);
+  border-radius: 15px;
+  padding: 12px;
+  background: rgba(20, 148, 88, 0.06);
+}
+
+.sale-client-selected-card div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.sale-client-quick-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 125;
+}
+
+.sale-client-quick-overlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.sale-client-quick-panel {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-height: min(80dvh, 620px);
+  padding: 12px 16px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: var(--white);
+  box-shadow: 0 -18px 50px rgba(15, 23, 42, 0.18);
+  overflow: auto;
+}
+
+.sale-client-quick-handle {
+  width: 54px;
+  height: 5px;
+  margin: 0 auto 12px;
+  border-radius: 999px;
+  background: #d6dae2;
+}
+
+.sale-client-quick-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sale-client-quick-panel h3,
+.sale-client-quick-panel p {
+  margin: 0;
+}
+
+.sale-client-quick-panel header button {
+  width: 38px;
+  height: 38px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--soft);
+  font-weight: 900;
+}
+
+.sale-client-quick-panel form {
+  display: grid;
+  gap: 11px;
+  margin-top: 12px;
+}
+
+.sale-client-quick-panel label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.sale-client-quick-panel footer {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  position: sticky;
+  bottom: 0;
+  padding-top: 8px;
+  background: var(--white);
+}
+
+.sale-client-duplicate {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(220, 38, 38, 0.18);
+  border-radius: 14px;
+  padding: 10px;
+  background: rgba(220, 38, 38, 0.06);
+  color: var(--black);
+}
+
+.sale-client-duplicate span {
+  color: var(--muted);
+  font-weight: 750;
+}
+
+@media (min-width: 760px) {
+  .sale-client-quick-panel {
+    left: 50%;
+    right: auto;
+    width: min(520px, 92vw);
+    transform: translateX(-50%);
+    border-radius: 24px 24px 0 0;
+  }
+}
+
 .payment-check-field {
   display: grid;
   gap: 8px;

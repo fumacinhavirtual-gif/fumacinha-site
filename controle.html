@@ -309,10 +309,19 @@
                 </span>
                 <svg class="sale-section-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
               </summary>
-              <div class="sale-client-grid">
-                <label>Cliente <input type="text" name="cliente" placeholder="Opcional" /></label>
-                <label>Bairro <input type="text" name="bairro" placeholder="Bairro do cliente" /></label>
-                <label>Telefone <input type="tel" name="telefone" placeholder="62991877597" /></label>
+              <div class="sale-client-smart" data-sale-client-area>
+                <div data-sale-client-selected></div>
+                <label class="sale-client-search-field" data-sale-client-search-field>
+                  <span>Pesquisar cliente por nome ou WhatsApp</span>
+                  <input type="search" data-sale-client-search placeholder="Digite nome ou telefone" autocomplete="off" />
+                </label>
+                <div class="sale-client-results" data-sale-client-results></div>
+                <button type="button" class="sale-client-create" data-sale-client-quick-open>+ Cadastrar cliente</button>
+                <div class="sale-client-hidden-fields">
+                  <input type="hidden" name="cliente" />
+                  <input type="hidden" name="telefone" />
+                  <label>Bairro <input type="text" name="bairro" placeholder="Bairro do cliente" /></label>
+                </div>
               </div>
             </details>
             <section class="sale-summary-panel" aria-label="Resumo da venda">
@@ -386,6 +395,30 @@
                 <button type="button" data-close-sale-picker>Cancelar</button>
                 <button type="button" data-confirm-sale-picker disabled>Adicionar</button>
               </footer>
+            </section>
+          </div>
+          <div class="sale-client-quick-shell hidden" data-sale-client-quick-shell aria-hidden="true">
+            <button class="sale-client-quick-overlay" type="button" data-sale-client-quick-close aria-label="Fechar cadastro de cliente"></button>
+            <section class="sale-client-quick-panel" role="dialog" aria-modal="true" aria-label="Cadastrar cliente rapido">
+              <div class="sale-client-quick-handle" aria-hidden="true"></div>
+              <header>
+                <div>
+                  <p class="eyebrow">Cliente</p>
+                  <h3>Cadastrar cliente</h3>
+                </div>
+                <button type="button" data-sale-client-quick-close aria-label="Fechar">X</button>
+              </header>
+              <form data-sale-client-quick-form>
+                <p class="form-status" data-sale-client-quick-status></p>
+                <label>Nome <input type="text" name="nome" placeholder="Nome do cliente" required /></label>
+                <label>WhatsApp <input type="tel" name="whatsapp" placeholder="(62) 99187-7597" required /></label>
+                <label>Bairro <input type="text" name="bairro" placeholder="Opcional" /></label>
+                <div data-sale-client-quick-duplicate></div>
+                <footer>
+                  <button type="button" class="ghost-action" data-sale-client-quick-close>Cancelar</button>
+                  <button type="submit" class="primary-action" data-sale-client-quick-submit>Salvar cliente</button>
+                </footer>
+              </form>
             </section>
           </div>
 

@@ -97,6 +97,11 @@ const app = {
   salePickerLoading: false,
   salePickerError: "",
   salePickerSelected: new Set(),
+  selectedSaleClientId: null,
+  saleClientSnapshot: null,
+  saleClientSearch: "",
+  saleClientQuickSaving: false,
+  saleClientQuickDuplicateId: null,
   seenOrderIds: new Set(),
   notifiedOrderIds: new Set(),
   realtimeChannel: null,
@@ -185,6 +190,15 @@ const salePickerSearchInput = $("[data-sale-picker-search]");
 const salePickerCategoriesRoot = $("[data-sale-picker-categories]");
 const salePickerListRoot = $("[data-sale-picker-list]");
 const salePickerConfirmButton = $("[data-confirm-sale-picker]");
+const saleClientSelectedRoot = $("[data-sale-client-selected]");
+const saleClientResultsRoot = $("[data-sale-client-results]");
+const saleClientSearchInput = $("[data-sale-client-search]");
+const saleClientSearchField = $("[data-sale-client-search-field]");
+const saleClientQuickShell = $("[data-sale-client-quick-shell]");
+const saleClientQuickForm = $("[data-sale-client-quick-form]");
+const saleClientQuickStatus = $("[data-sale-client-quick-status]");
+const saleClientQuickDuplicate = $("[data-sale-client-quick-duplicate]");
+const saleClientQuickSubmit = $("[data-sale-client-quick-submit]");
 const stockList = $("[data-stock-list]");
 const stockHistory = $("[data-stock-history]");
 const stockProductForm = $("[data-stock-product-form]");
@@ -260,6 +274,7 @@ const clientModalEyebrow = $("[data-client-modal-eyebrow]");
 let toastTimer = null;
 let saleConfirmationTimer = null;
 let clientSearchTimer = null;
+let saleClientSearchTimer = null;
 
 function setStatus(message = "", type = "") {
   if (!appStatus) return;
@@ -1430,6 +1445,7 @@ function renderAll() {
   renderSafely("equipe", renderPeopleOptions);
   renderSafely("dashboard", renderDashboard);
   renderSafely("filtros de venda", renderSaleProductFilters);
+  renderSafely("cliente da venda", renderSaleClientPanel);
   renderSafely("itens da venda", renderSaleItems);
   renderSafely("precos da venda", updateSaleItemPrices);
   renderSafely("total da venda", updateSaleTotal);
@@ -2459,6 +2475,11 @@ function isMissingProfitColumnError(error) {
   return message.includes("lucro_total") && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
 }
 
+function isMissingClientIdColumnError(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return message.includes("cliente_id") && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
+}
+
 function removeProfitSnapshot(payload) {
   const { lucro_total, ...rest } = payload;
   return rest;
@@ -2468,16 +2489,39 @@ function removeProfitSnapshotFromItems(items) {
   return items.map((item) => removeProfitSnapshot(item));
 }
 
+function removeOptionalSaleColumns(payload) {
+  const next = { ...payload };
+  delete next.cliente_id;
+  return next;
+}
+
 async function callSaleRpc(functionName, payload) {
   const result = await supabaseClient.rpc(functionName, payload);
-  if (!isMissingProfitColumnError(result.error)) return result;
-  console.error("Coluna lucro_total ausente no Supabase. Execute SUPABASE_FINANCEIRO_CUSTOS.sql para salvar o lucro no snapshot.", result.error);
+  if (!isMissingProfitColumnError(result.error) && !isMissingClientIdColumnError(result.error)) return result;
+  if (isMissingProfitColumnError(result.error)) {
+    console.error("Coluna lucro_total ausente no Supabase. Execute SUPABASE_FINANCEIRO_CUSTOS.sql para salvar o lucro no snapshot.", result.error);
+  }
+  if (isMissingClientIdColumnError(result.error)) {
+    console.error("Coluna cliente_id ausente no Supabase. Execute SUPABASE_CLIENTES_INTEGRACAO.sql para vincular clientes as vendas.", result.error);
+  }
   const fallbackPayload = {
     ...payload,
-    p_venda: removeProfitSnapshot(payload.p_venda || {}),
+    p_venda: removeOptionalSaleColumns(removeProfitSnapshot(payload.p_venda || {})),
     p_itens: removeProfitSnapshotFromItems(payload.p_itens || []),
   };
   return supabaseClient.rpc(functionName, fallbackPayload);
+}
+
+async function updateOrderWithClientFallback(payload, orderId, status = "") {
+  let query = supabaseClient.from(TABLES.orders).update(payload).eq("id", orderId);
+  if (status) query = query.eq("status", status);
+  const result = await query;
+  if (!isMissingClientIdColumnError(result.error)) return result;
+  console.error("Coluna cliente_id ausente em PEDIDOS. Execute SUPABASE_CLIENTES_INTEGRACAO.sql para vincular clientes aos pedidos.", result.error);
+  const fallbackPayload = removeOptionalSaleColumns(payload);
+  query = supabaseClient.from(TABLES.orders).update(fallbackPayload).eq("id", orderId);
+  if (status) query = query.eq("status", status);
+  return query;
 }
 
 function buildSalePayload(items, seller, deliverer) {
@@ -2549,7 +2593,10 @@ function buildSalePayload(items, seller, deliverer) {
       comissao_base: commission.base,
       comissao_cartao: commission.card,
       comissao_total: commission.total,
+      cliente_id: app.selectedSaleClientId || null,
       cliente_nome: saleForm.elements.cliente.value.trim(),
+      cliente_bairro: saleForm.elements.bairro?.value.trim() || "",
+      cliente_telefone: String(saleForm.elements.telefone?.value || "").replace(/\D/g, ""),
       observacao: observation,
       data_entrega: draft.routeDate,
       horario_rota: draft.routeTime,
@@ -2584,6 +2631,9 @@ function resetSaleForm() {
   saleForm.elements.teve_troco.value = "nao";
   saleForm.elements.taxa_entrega.value = "";
   if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
+  clearSaleClientSelection(true);
+  app.saleClientSearch = "";
+  if (saleClientSearchInput) saleClientSearchInput.value = "";
   setSplitPaymentFields([]);
   saleForm.elements.motivo_alteracao.value = "";
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = "";
@@ -2625,9 +2675,8 @@ function loadSaleForEdit(saleId) {
   saleForm.elements.troco.value = saleChangeValue(sale).toFixed(2).replace(".", ",");
   saleForm.elements.data_entrega.value = saleRouteDate(sale);
   saleForm.elements.horario_rota.value = saleRouteTime(sale) || "11:00";
-  saleForm.elements.cliente.value = sale.cliente_nome || "";
+  applySaleClientFromRecord(sale);
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = sale.cliente_bairro || "";
-  if (saleForm.elements.telefone) saleForm.elements.telefone.value = sale.cliente_telefone || "";
   if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = sale.status_entrega || "Aguardando";
   saleForm.elements.observacao.value = stripPaymentBreakdownText(sale.observacao || "");
   saleForm.elements.motivo_alteracao.value = "";
@@ -3804,9 +3853,8 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   saleForm.elements.teve_troco.value = order.teve_troco || toNumber(order.troco) > 0 ? "sim" : "nao";
   saleForm.elements.troco.value = toNumber(order.troco || 0) ? toNumber(order.troco).toFixed(2).replace(".", ",") : "";
   saleForm.elements.taxa_entrega.value = toNumber(order.taxa_entrega || 0).toFixed(2).replace(".", ",");
-  saleForm.elements.cliente.value = order.cliente_nome || "";
+  applySaleClientFromRecord(order);
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = order.cliente_bairro || "";
-  if (saleForm.elements.telefone) saleForm.elements.telefone.value = order.cliente_telefone || "";
   if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = order.status_entrega || "Aguardando";
   saleForm.elements.observacao.value = stripPaymentBreakdownText(order.observacao_interna || "") || `Pedido ${order.codigo || order.id} recebido pelo site. Bairro: ${order.cliente_bairro || ""}`;
   saleForm.elements.motivo_alteracao.value = "";
@@ -3875,6 +3923,7 @@ async function saveOrderEdit(event) {
     };
     const motivo = saleForm.elements.motivo_alteracao.value.trim();
     const payload = {
+      cliente_id: app.selectedSaleClientId || null,
       cliente_nome: saleForm.elements.cliente.value.trim(),
       cliente_bairro: saleForm.elements.bairro?.value.trim() || "",
       cliente_telefone: String(saleForm.elements.telefone?.value || "").replace(/\D/g, ""),
@@ -3898,7 +3947,7 @@ async function saveOrderEdit(event) {
       updated_at: new Date().toISOString(),
     };
     if (!payload.cliente_nome) throw new Error("Informe o nome do cliente.");
-    const { error: orderError } = await supabaseClient.from(TABLES.orders).update(payload).eq("id", order.id).eq("status", "Aguardando confirmacao");
+    const { error: orderError } = await updateOrderWithClientFallback(payload, order.id, "Aguardando confirmacao");
     if (orderError) throw orderError;
     const { error: deleteError } = await supabaseClient.from(TABLES.orderItems).delete().eq("pedido_id", order.id);
     if (deleteError) throw deleteError;
@@ -4787,6 +4836,239 @@ function clientByWhatsapp(normalized, exceptId = "") {
     normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp) === normalized
     && String(client.id) !== String(exceptId || "")
   ));
+}
+
+function selectedSaleClient() {
+  return app.selectedSaleClientId ? clientById(app.selectedSaleClientId) : null;
+}
+
+function selectedSaleClientSnapshot() {
+  return selectedSaleClient() || app.saleClientSnapshot;
+}
+
+function saleClientMatchesSearch(client, query) {
+  const searchText = normalizeText(query);
+  const searchPhone = normalizeClientWhatsapp(query);
+  if (!searchText && !searchPhone) return true;
+  const name = normalizeText(client.nome);
+  const observation = normalizeText(client.observacao || "");
+  const phone = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+  return name.includes(searchText) || observation.includes(searchText) || (searchPhone && phone.includes(searchPhone));
+}
+
+function saleClientSearchResults() {
+  const query = app.saleClientSearch.trim();
+  return app.clients
+    .filter((client) => client.ativo !== false)
+    .filter((client) => saleClientMatchesSearch(client, query))
+    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
+    .slice(0, 8);
+}
+
+function fillSaleClientFields(client = null) {
+  if (!saleForm) return;
+  if (saleForm.elements.cliente) saleForm.elements.cliente.value = client?.nome || "";
+  if (saleForm.elements.telefone) saleForm.elements.telefone.value = normalizeClientWhatsapp(client?.whatsapp_normalizado || client?.whatsapp || "");
+}
+
+function selectSaleClient(id) {
+  const client = clientById(id);
+  if (!client) return;
+  app.selectedSaleClientId = client.id;
+  app.saleClientSnapshot = null;
+  app.saleClientSearch = "";
+  if (saleClientSearchInput) saleClientSearchInput.value = "";
+  fillSaleClientFields(client);
+  renderSaleClientPanel();
+}
+
+function clearSaleClientSelection(clearFields = true) {
+  app.selectedSaleClientId = null;
+  app.saleClientSnapshot = null;
+  if (clearFields) fillSaleClientFields(null);
+  renderSaleClientPanel();
+}
+
+function applySaleClientFromRecord(record = {}) {
+  const client = record.cliente_id ? clientById(record.cliente_id) : null;
+  app.selectedSaleClientId = client?.id || null;
+  if (client) {
+    app.saleClientSnapshot = null;
+    fillSaleClientFields(client);
+  } else {
+    app.saleClientSnapshot = record.cliente_nome ? {
+      id: "",
+      nome: record.cliente_nome,
+      whatsapp: record.cliente_telefone || "",
+      whatsapp_normalizado: record.cliente_telefone || "",
+      observacao: record.cliente_bairro ? `Bairro: ${record.cliente_bairro}` : "",
+      ativo: true,
+    } : null;
+    if (saleForm?.elements.cliente) saleForm.elements.cliente.value = record.cliente_nome || "";
+    if (saleForm?.elements.telefone) saleForm.elements.telefone.value = record.cliente_telefone || "";
+  }
+  renderSaleClientPanel();
+}
+
+function saleClientPrefillFromSearch() {
+  const query = app.saleClientSearch.trim();
+  const digits = normalizeClientWhatsapp(query);
+  return {
+    nome: digits.length >= 6 ? "" : query,
+    whatsapp: digits.length >= 6 ? query : "",
+  };
+}
+
+function renderSaleClientPanel() {
+  if (!saleClientSelectedRoot || !saleClientResultsRoot || !saleClientSearchField) return;
+  const selected = selectedSaleClientSnapshot();
+  saleClientSearchField.classList.toggle("hidden", Boolean(selected));
+  if (selected) {
+    const phone = normalizeClientWhatsapp(selected.whatsapp_normalizado || selected.whatsapp);
+    saleClientSelectedRoot.innerHTML = `
+      <div class="sale-client-selected-card">
+        <span>Cliente selecionado</span>
+        <strong>${escapeHtml(selected.nome || "Cliente")}</strong>
+        <small>${escapeHtml(phoneDisplay(phone))}</small>
+        <div>
+          <button type="button" data-sale-client-change>Trocar</button>
+          <button type="button" data-sale-client-clear>Limpar selecao</button>
+          ${phone && clientWhatsappUrl(phone, selected.nome) ? `<a href="${clientWhatsappUrl(phone, selected.nome)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+        </div>
+      </div>
+    `;
+    saleClientResultsRoot.innerHTML = "";
+    return;
+  }
+  saleClientSelectedRoot.innerHTML = "";
+  if (app.clientsError) {
+    saleClientResultsRoot.innerHTML = `<div class="sale-client-empty"><p>Nao foi possivel pesquisar clientes.</p><button type="button" data-clients-retry>Tentar novamente</button></div>`;
+    return;
+  }
+  const query = app.saleClientSearch.trim();
+  const rows = saleClientSearchResults();
+  if (!rows.length) {
+    saleClientResultsRoot.innerHTML = query
+      ? `<div class="sale-client-empty"><p>Nenhum cliente encontrado.</p></div>`
+      : `<div class="sale-client-empty"><p>Pesquise para selecionar um cliente cadastrado.</p></div>`;
+    return;
+  }
+  saleClientResultsRoot.innerHTML = rows.map((client) => {
+    const phone = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+    return `
+      <button type="button" class="sale-client-result" data-sale-client-select="${escapeHtml(client.id)}">
+        <strong>${escapeHtml(client.nome || "Cliente")}</strong>
+        <span>${escapeHtml(phoneDisplay(phone))}</span>
+        ${client.observacao ? `<small>${escapeHtml(String(client.observacao).slice(0, 80))}</small>` : ""}
+        <em>${client.ativo === false ? "Inativo" : "Ativo"}</em>
+      </button>
+    `;
+  }).join("");
+}
+
+function openSaleClientQuick() {
+  if (!saleClientQuickShell || !saleClientQuickForm) return;
+  app.saleClientQuickDuplicateId = null;
+  const prefill = saleClientPrefillFromSearch();
+  saleClientQuickForm.reset();
+  saleClientQuickForm.elements.nome.value = prefill.nome || saleForm?.elements.cliente?.value || "";
+  saleClientQuickForm.elements.whatsapp.value = prefill.whatsapp || saleForm?.elements.telefone?.value || "";
+  saleClientQuickForm.elements.bairro.value = saleForm?.elements.bairro?.value || "";
+  if (saleClientQuickStatus) saleClientQuickStatus.textContent = "";
+  if (saleClientQuickDuplicate) saleClientQuickDuplicate.innerHTML = "";
+  saleClientQuickShell.classList.remove("hidden");
+  saleClientQuickShell.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  window.setTimeout(() => saleClientQuickForm.elements.nome?.focus(), 50);
+}
+
+function closeSaleClientQuick() {
+  saleClientQuickShell?.classList.add("hidden");
+  saleClientQuickShell?.setAttribute("aria-hidden", "true");
+  app.saleClientQuickSaving = false;
+  app.saleClientQuickDuplicateId = null;
+  if (saleClientQuickSubmit) saleClientQuickSubmit.disabled = false;
+  document.body.classList.remove("modal-open");
+}
+
+function setSaleClientQuickStatus(message = "", type = "error") {
+  if (!saleClientQuickStatus) return;
+  saleClientQuickStatus.textContent = message;
+  saleClientQuickStatus.className = `form-status ${message ? type : ""}`.trim();
+}
+
+function renderSaleClientQuickDuplicate(client) {
+  if (!saleClientQuickDuplicate) return;
+  if (!client) {
+    saleClientQuickDuplicate.innerHTML = "";
+    return;
+  }
+  const phone = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+  saleClientQuickDuplicate.innerHTML = `
+    <div class="sale-client-duplicate">
+      <strong>Ja existe um cliente cadastrado com este WhatsApp.</strong>
+      <span>${escapeHtml(client.nome || "Cliente")} - ${escapeHtml(phoneDisplay(phone))} - ${client.ativo === false ? "Inativo" : "Ativo"}</span>
+      <button type="button" data-sale-client-use-existing="${escapeHtml(client.id)}">Selecionar cliente existente</button>
+    </div>
+  `;
+}
+
+async function saveSaleClientQuick(event) {
+  event.preventDefault();
+  if (app.saleClientQuickSaving || !saleClientQuickForm) return;
+  const nome = cleanClientName(saleClientQuickForm.elements.nome.value);
+  const whatsappRaw = saleClientQuickForm.elements.whatsapp.value;
+  const whatsappNormalizado = normalizeClientWhatsapp(whatsappRaw);
+  renderSaleClientQuickDuplicate(null);
+  if (!nome) return setSaleClientQuickStatus("Informe o nome do cliente.");
+  if (!String(whatsappRaw || "").trim()) return setSaleClientQuickStatus("Informe o WhatsApp do cliente.");
+  if (!isValidClientWhatsapp(whatsappRaw)) return setSaleClientQuickStatus("Informe um numero de WhatsApp valido.");
+  const duplicate = clientByWhatsapp(whatsappNormalizado);
+  if (duplicate) {
+    app.saleClientQuickDuplicateId = duplicate.id;
+    renderSaleClientQuickDuplicate(duplicate);
+    return setSaleClientQuickStatus("Ja existe um cliente cadastrado com este WhatsApp.");
+  }
+  app.saleClientQuickSaving = true;
+  if (saleClientQuickSubmit) {
+    saleClientQuickSubmit.disabled = true;
+    saleClientQuickSubmit.textContent = "Salvando...";
+  }
+  setSaleClientQuickStatus("Salvando cliente...", "loading");
+  try {
+    await requireUserId();
+    const bairro = saleClientQuickForm.elements.bairro.value.trim();
+    const payload = {
+      nome,
+      whatsapp: phoneDisplay(whatsappNormalizado),
+      whatsapp_normalizado: whatsappNormalizado,
+      observacao: bairro ? `Bairro: ${bairro}` : "",
+      ativo: true,
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = await supabaseClient.from(TABLES.clients).insert(payload).select("*").single();
+    if (error) throw error;
+    app.clients = [data, ...app.clients.filter((client) => String(client.id) !== String(data.id))];
+    selectSaleClient(data.id);
+    if (bairro && saleForm?.elements.bairro) saleForm.elements.bairro.value = bairro;
+    closeSaleClientQuick();
+    showToast("Cliente cadastrado e selecionado.", "success");
+  } catch (error) {
+    console.error("Erro ao cadastrar cliente na venda:", error);
+    if (String(error.code || "") === "23505" || String(error.message || "").toLowerCase().includes("duplicate")) {
+      const existing = clientByWhatsapp(whatsappNormalizado);
+      if (existing) renderSaleClientQuickDuplicate(existing);
+      setSaleClientQuickStatus("Ja existe um cliente cadastrado com este WhatsApp.");
+    } else {
+      setSaleClientQuickStatus(error.message || "Nao foi possivel salvar o cliente.");
+    }
+  } finally {
+    app.saleClientQuickSaving = false;
+    if (saleClientQuickSubmit) {
+      saleClientQuickSubmit.disabled = false;
+      saleClientQuickSubmit.textContent = "Salvar cliente";
+    }
+  }
 }
 
 function filteredRegisteredClients() {
@@ -6237,6 +6519,10 @@ saleForm?.addEventListener("keydown", (event) => {
 expenseForm?.addEventListener("submit", saveExpense);
 cashForm?.addEventListener("submit", closeCash);
 document.addEventListener("submit", (event) => {
+  if (event.target.matches("[data-sale-client-quick-form]")) {
+    saveSaleClientQuick(event);
+    return;
+  }
   if (!event.target.matches("[data-client-form]")) return;
   saveClient(event);
 });
@@ -6657,6 +6943,35 @@ document.addEventListener("click", async (event) => {
     sessionStorage.setItem("fumacinha_open_editor", "1");
     window.location.href = "/?admin=fumacinha";
   }
+  const saleClientSelect = event.target.closest("[data-sale-client-select]");
+  if (saleClientSelect) {
+    selectSaleClient(saleClientSelect.dataset.saleClientSelect);
+    return;
+  }
+  if (event.target.closest("[data-sale-client-change]")) {
+    clearSaleClientSelection(false);
+    saleClientSearchInput?.focus();
+    return;
+  }
+  if (event.target.closest("[data-sale-client-clear]")) {
+    clearSaleClientSelection(true);
+    return;
+  }
+  if (event.target.closest("[data-sale-client-quick-open]")) {
+    openSaleClientQuick();
+    return;
+  }
+  if (event.target.closest("[data-sale-client-quick-close]")) {
+    closeSaleClientQuick();
+    return;
+  }
+  const existingSaleClient = event.target.closest("[data-sale-client-use-existing]");
+  if (existingSaleClient) {
+    selectSaleClient(existingSaleClient.dataset.saleClientUseExisting);
+    closeSaleClientQuick();
+    showToast("Cliente existente selecionado.", "success");
+    return;
+  }
   if (event.target.closest("[data-client-add]")) openClientModal("form");
   const clientView = event.target.closest("[data-client-view]");
   if (clientView) openClientModal("view", clientView.dataset.clientView);
@@ -6682,6 +6997,14 @@ document.addEventListener("input", (event) => {
   if (event.target.matches("[data-stock-search]")) {
     app.stockSearch = event.target.value;
     renderStock();
+  }
+  if (event.target.matches("[data-sale-client-search]")) {
+    const value = event.target.value;
+    window.clearTimeout(saleClientSearchTimer);
+    saleClientSearchTimer = window.setTimeout(() => {
+      app.saleClientSearch = value;
+      renderSaleClientPanel();
+    }, 280);
   }
   if (event.target.matches("[data-stock-product-image-url]")) {
     if (app.stockProductPreviewUrl) URL.revokeObjectURL(app.stockProductPreviewUrl);
@@ -6918,6 +7241,10 @@ document.addEventListener("keydown", (event) => {
     closeCostGroupModal();
     return;
   }
+  if (saleClientQuickShell && !saleClientQuickShell.classList.contains("hidden")) {
+    closeSaleClientQuick();
+    return;
+  }
   if (clientModalShell && !clientModalShell.classList.contains("hidden")) {
     closeClientModal();
     return;
@@ -6944,6 +7271,7 @@ function initDefaults() {
   if (saleForm?.elements.troco) saleForm.elements.troco.value = "";
   const expenseDateInput = expenseForm?.elements.data_despesa;
   if (expenseDateInput) expenseDateInput.value = dateValue();
+  renderSaleClientPanel();
   updateSaleTotal();
 }
 
