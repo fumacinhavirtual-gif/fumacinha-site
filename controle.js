@@ -1360,6 +1360,7 @@ async function loadAll() {
   if (exchangeChecksResult.status === "rejected" || exchangeChecksResult.value?.error) {
     console.error("Erro ao carregar conferencias de trocas:", exchangeChecksResult.reason || exchangeChecksResult.value?.error);
   }
+  const localExchangeSync = await syncLocalExchangeChecks();
   const siteConfigData = readData(siteConfigResult, "configuracao do site", app.siteConfig);
   app.siteConfig = {
     loja_online: siteConfigData?.loja_online !== false,
@@ -1367,7 +1368,11 @@ async function loadAll() {
   };
   markOrdersSeen();
   setupOrdersRealtime();
-  if (loadErrors.length) {
+  if (localExchangeSync.synced > 0) {
+    showToast(`${localExchangeSync.synced} troca(s) sincronizada(s) com o Supabase.`, "success");
+  } else if (localExchangeSync.failed > 0) {
+    showToast("Trocas ainda nao sincronizaram com o Supabase. Execute o SQL das conferencias.", "error");
+  } else if (loadErrors.length) {
     showToast("Alguns dados nao carregaram. Produtos foram mantidos separados.", "error");
     setStatus(`Erro ao carregar: ${loadErrors[0]}`, "error");
   } else {
@@ -5214,6 +5219,14 @@ function saveExchangeLocalFallback(row, dateKey = app.cashDate) {
   localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
 }
 
+function removeExchangeLocalFallback(dateKey, time) {
+  const store = exchangeStore();
+  if (!store[dateKey]?.[time]) return;
+  delete store[dateKey][time];
+  if (!Object.keys(store[dateKey]).length) delete store[dateKey];
+  localStorage.setItem(EXCHANGE_CHECK_KEY, JSON.stringify(store));
+}
+
 function exchangeLocalSavedRow(row, dateKey = app.cashDate) {
   const payload = exchangePayload(row, dateKey);
   return {
@@ -5234,7 +5247,8 @@ async function updateExchangeRowByDateTime(payload) {
     .maybeSingle();
 }
 
-async function persistExchangeRow(row, dateKey = app.cashDate) {
+async function persistExchangeRow(row, dateKey = app.cashDate, options = {}) {
+  const allowLocalFallback = options.allowLocalFallback !== false;
   const payload = exchangePayload(row, dateKey);
   if (!supabaseClient) throw new Error("Supabase nao configurado.");
   const existing = exchangeSavedRow(dateKey, row.time);
@@ -5249,6 +5263,7 @@ async function persistExchangeRow(row, dateKey = app.cashDate) {
       if (error) throw error;
       applyExchangeSavedRow(data);
       saveExchangeLocalFallback(row, dateKey);
+      removeExchangeLocalFallback(dateKey, row.time);
       return data;
     }
 
@@ -5257,6 +5272,7 @@ async function persistExchangeRow(row, dateKey = app.cashDate) {
     if (updated.data) {
       applyExchangeSavedRow(updated.data);
       saveExchangeLocalFallback(row, dateKey);
+      removeExchangeLocalFallback(dateKey, row.time);
       return updated.data;
     }
 
@@ -5273,6 +5289,7 @@ async function persistExchangeRow(row, dateKey = app.cashDate) {
         if (retry.data) {
           applyExchangeSavedRow(retry.data);
           saveExchangeLocalFallback(row, dateKey);
+          removeExchangeLocalFallback(dateKey, row.time);
           return retry.data;
         }
       }
@@ -5280,14 +5297,42 @@ async function persistExchangeRow(row, dateKey = app.cashDate) {
     }
     applyExchangeSavedRow(inserted.data);
     saveExchangeLocalFallback(row, dateKey);
+    removeExchangeLocalFallback(dateKey, row.time);
     return inserted.data;
   } catch (error) {
+    if (!allowLocalFallback) throw error;
     console.error("Erro ao persistir troca no Supabase. Mantendo copia local:", { row, dateKey, payload, error });
     saveExchangeLocalFallback(row, dateKey);
     const localRow = exchangeLocalSavedRow(row, dateKey);
     applyExchangeSavedRow(localRow);
     return localRow;
   }
+}
+
+async function syncLocalExchangeChecks() {
+  if (!supabaseClient) return { synced: 0, failed: 0 };
+  const store = exchangeStore();
+  let synced = 0;
+  let failed = 0;
+  for (const [dateKey, rows] of Object.entries(store)) {
+    for (const [time, value] of Object.entries(rows || {})) {
+      try {
+        const saved = await persistExchangeRow({
+          time,
+          sent: Math.max(0, Number.parseInt(value?.sent || 0, 10)),
+          checked: Boolean(value?.checked),
+        }, dateKey, { allowLocalFallback: false });
+        if (saved && !saved._local) {
+          removeExchangeLocalFallback(dateKey, time);
+          synced += 1;
+        }
+      } catch (error) {
+        failed += 1;
+        console.error("Nao foi possivel sincronizar troca local com Supabase:", { dateKey, time, error });
+      }
+    }
+  }
+  return { synced, failed };
 }
 
 async function saveExchangeRows(rows = exchangeRowsFromInputs(), dateKey = app.cashDate) {
