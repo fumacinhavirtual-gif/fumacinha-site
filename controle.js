@@ -3406,7 +3406,7 @@ function renderSalesHistoryRow(row) {
           <span class="sale-history-meta">
             <b>🕒${escapeHtml(details.createdTime)}</b>
             <b>🚚${escapeHtml(details.routeTime)}</b>
-            <b>👤${escapeHtml(details.seller)}</b>
+            <b>👤${escapeHtml(details.customer)}</b>
             <b>📦${products.quantity} ${products.quantity === 1 ? "un" : "un"}</b>
           </span>
         </div>
@@ -3439,7 +3439,7 @@ function saleHistoryLineDetails(sale, products, linkedOrder) {
     image: firstItem.image || "./assets/fumacinha-logo.png",
     createdTime: createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     routeTime: saleRouteTime(sale) || "--:--",
-    seller: sale.vendedora_nome || "Vendedora nao informada",
+    customer: sale.cliente_nome || linkedOrder?.cliente_nome || "Cliente nao informado",
     payment: paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Pagamento",
   };
 }
