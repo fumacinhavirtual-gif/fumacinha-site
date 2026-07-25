@@ -5190,9 +5190,30 @@ function clientPhoneKey(client = {}) {
   return normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp || "");
 }
 
+function clientNameKey(client = {}) {
+  return normalizeText(client.nome || "");
+}
+
 function salePhoneKey(sale = {}) {
   const linkedOrder = saleLinkedOrder(sale);
   return normalizeClientWhatsapp(sale.cliente_telefone || sale.telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || "");
+}
+
+function saleClientNameKey(sale = {}) {
+  const linkedOrder = saleLinkedOrder(sale);
+  return normalizeText(sale.cliente_nome || linkedOrder?.cliente_nome || "");
+}
+
+function orderPhoneKey(order = {}) {
+  return normalizeClientWhatsapp(order.cliente_telefone || order.telefone || "");
+}
+
+function orderClientNameKey(order = {}) {
+  return normalizeText(order.cliente_nome || "");
+}
+
+function isUsableClientNameKey(nameKey = "") {
+  return Boolean(nameKey && !["cliente", "cliente sem nome", "cliente nao informado", "nao informado"].includes(nameKey));
 }
 
 function saleBelongsToClient(sale, client) {
@@ -5202,6 +5223,20 @@ function saleBelongsToClient(sale, client) {
   if (linkedOrder?.cliente_id && client.id && String(linkedOrder.cliente_id) === String(client.id)) return true;
   const clientPhone = clientPhoneKey(client);
   if (clientPhone && salePhoneKey(sale) === clientPhone) return true;
+  const saleName = saleClientNameKey(sale);
+  const clientName = clientNameKey(client);
+  if (isUsableClientNameKey(saleName) && saleName === clientName) return true;
+  return false;
+}
+
+function orderBelongsToClient(order, client) {
+  if (!order || !client) return false;
+  if (order.cliente_id && client.id && String(order.cliente_id) === String(client.id)) return true;
+  const clientPhone = clientPhoneKey(client);
+  if (clientPhone && orderPhoneKey(order) === clientPhone) return true;
+  const orderName = orderClientNameKey(order);
+  const clientName = clientNameKey(client);
+  if (isUsableClientNameKey(orderName) && orderName === clientName) return true;
   return false;
 }
 
@@ -5209,6 +5244,31 @@ function clientSales(client) {
   return app.sales
     .filter((sale) => validClientSale(sale) && saleBelongsToClient(sale, client))
     .sort((a, b) => saleDate(b) - saleDate(a));
+}
+
+function orderHasLinkedSale(order) {
+  if (!order) return false;
+  if (order.venda_id && app.sales.some((sale) => String(sale.id) === String(order.venda_id))) return true;
+  return app.sales.some((sale) => {
+    const linkedOrder = saleLinkedOrder(sale);
+    return linkedOrder && String(linkedOrder.id) === String(order.id);
+  });
+}
+
+function validClientOrder(order) {
+  return order && normalizeOrderStatus(order.status || "") !== "cancelado";
+}
+
+function clientOrders(client) {
+  return app.orders
+    .filter((order) => validClientOrder(order) && !orderHasLinkedSale(order) && orderBelongsToClient(order, client))
+    .sort((a, b) => orderHistoryDate(b) - orderHistoryDate(a));
+}
+
+function clientPurchases(client) {
+  const sales = clientSales(client).map((sale) => ({ type: "sale", sale }));
+  const orders = clientOrders(client).map((order) => ({ type: "order", order }));
+  return [...sales, ...orders].sort((a, b) => purchaseDate(b) - purchaseDate(a));
 }
 
 function daysSince(date) {
@@ -5225,13 +5285,48 @@ function mostCommonValue(values) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "Nao informado";
 }
 
-function clientFavoriteProducts(sales) {
+function purchaseDate(purchase) {
+  if (purchase?.type === "order") return orderHistoryDate(purchase.order);
+  return saleDate(purchase?.sale);
+}
+
+function purchaseItems(purchase) {
+  if (purchase?.type === "order") {
+    const items = orderItems(purchase.order.id);
+    if (items.length) {
+      return items.map((item) => ({
+        name: item.produto_nome || item.nome_produto || "Produto",
+        quantity: toNumber(item.quantidade || 1),
+      }));
+    }
+    const products = orderHistoryProducts(purchase.order);
+    return [{ name: products.title || "Pedido", quantity: products.quantity || 1 }];
+  }
+  return saleDetailItems(purchase?.sale || {});
+}
+
+function purchasePaymentMethods(purchase) {
+  if (purchase?.type === "order") return [purchase.order.forma_pagamento || "Site"];
+  return salePaymentMethods(purchase?.sale || {});
+}
+
+function purchaseTotal(purchase) {
+  if (purchase?.type === "order") return toNumber(purchase.order.valor_produtos || 0);
+  return saleGrandTotal(purchase?.sale || {});
+}
+
+function purchaseCode(purchase) {
+  if (purchase?.type === "order") return purchase.order.codigo || `Pedido #${purchase.order.id}`;
+  return saleDetailCode(purchase?.sale || {});
+}
+
+function clientFavoriteProducts(purchases) {
   const rows = new Map();
-  sales.forEach((sale) => {
-    saleDetailItems(sale).forEach((item) => {
+  purchases.forEach((purchase) => {
+    purchaseItems(purchase).forEach((item) => {
       const key = normalizeText(item.name || "produto");
       const current = rows.get(key) || { name: item.name || "Produto", quantity: 0, lastDate: null };
-      const date = saleDate(sale);
+      const date = purchaseDate(purchase);
       current.quantity += toNumber(item.quantity || 1);
       if (!current.lastDate || date > current.lastDate) current.lastDate = date;
       rows.set(key, current);
@@ -5241,16 +5336,18 @@ function clientFavoriteProducts(sales) {
 }
 
 function clientMetrics(client) {
-  const sales = clientSales(client);
-  const totalSpent = sales.reduce((sum, sale) => sum + saleProductsValue(sale), 0);
-  const purchaseCount = sales.length;
+  const purchases = clientPurchases(client);
+  const sales = purchases.filter((purchase) => purchase.type === "sale").map((purchase) => purchase.sale);
+  const totalSpent = purchases.reduce((sum, purchase) => sum + purchaseTotal(purchase), 0);
+  const purchaseCount = purchases.length;
   const ticketAverage = purchaseCount ? totalSpent / purchaseCount : 0;
-  const firstPurchaseDate = sales.length ? saleDate(sales[sales.length - 1]) : null;
-  const lastPurchaseDate = sales.length ? saleDate(sales[0]) : null;
-  const favoriteProducts = clientFavoriteProducts(sales);
-  const paymentMethods = sales.flatMap((sale) => salePaymentMethods(sale));
+  const firstPurchaseDate = purchases.length ? purchaseDate(purchases[purchases.length - 1]) : null;
+  const lastPurchaseDate = purchases.length ? purchaseDate(purchases[0]) : null;
+  const favoriteProducts = clientFavoriteProducts(purchases);
+  const paymentMethods = purchases.flatMap((purchase) => purchasePaymentMethods(purchase));
   const daysWithoutBuying = daysSince(lastPurchaseDate);
   return {
+    purchases,
     sales,
     totalSpent,
     purchaseCount,
@@ -5520,17 +5617,20 @@ function clientProfileMarkup(client) {
     <section class="client-profile-section">
       <h3>Historico de compras</h3>
       <div class="client-purchase-history">
-        ${metrics.sales.length ? metrics.sales.map((sale) => {
-          const items = saleDetailItems(sale);
+        ${metrics.purchases.length ? metrics.purchases.map((purchase) => {
+          const items = purchaseItems(purchase);
           const quantity = items.reduce((sum, item) => sum + toNumber(item.quantity || 1), 0);
+          const detailAttr = purchase.type === "order"
+            ? `data-order-detail-row="${escapeHtml(purchase.order.id)}"`
+            : `data-sale-detail-row="${escapeHtml(purchase.sale.id)}"`;
           return `
-            <article data-sale-detail-row="${escapeHtml(sale.id)}" tabindex="0" role="button" aria-label="Abrir detalhes da venda ${escapeHtml(saleDetailCode(sale))}">
+            <article ${detailAttr} tabindex="0" role="button" aria-label="Abrir detalhes da compra ${escapeHtml(purchaseCode(purchase))}">
               <div>
-                <strong>${escapeHtml(saleDetailCode(sale))}</strong>
-                <span>${escapeHtml(saleDate(sale).toLocaleDateString("pt-BR"))} - ${quantity} ${quantity === 1 ? "item" : "itens"} - ${escapeHtml(salePaymentMethods(sale).join(", "))}</span>
+                <strong>${escapeHtml(purchaseCode(purchase))}</strong>
+                <span>${escapeHtml(purchaseDate(purchase).toLocaleDateString("pt-BR"))} - ${quantity} ${quantity === 1 ? "item" : "itens"} - ${escapeHtml(purchasePaymentMethods(purchase).join(", "))}</span>
                 <small>${escapeHtml(items.map((item) => item.name).join(", "))}</small>
               </div>
-              <b>${escapeHtml(currency.format(saleProductsValue(sale)))}</b>
+              <b>${escapeHtml(currency.format(purchaseTotal(purchase)))}</b>
             </article>
           `;
         }).join("") : `<p class="empty-state">Nenhuma compra vinculada a este cliente.</p>`}
