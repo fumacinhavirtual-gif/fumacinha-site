@@ -268,6 +268,29 @@
               <label data-sale-change-field>Valor do troco entregue <input type="text" name="troco" inputmode="decimal" autocomplete="off" placeholder="0,00" /></label>
               </div>
             </details>
+            <details class="sale-section sale-client-panel">
+              <summary class="sale-section-header">
+                <span class="sale-section-title">
+                  <svg class="sale-section-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
+                  <span>Cliente <small>(opcional)</small></span>
+                </span>
+                <svg class="sale-section-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
+              </summary>
+              <div class="sale-client-smart" data-sale-client-area>
+                <div data-sale-client-selected></div>
+                <label class="sale-client-search-field" data-sale-client-search-field>
+                  <span>Pesquisar cliente por nome ou WhatsApp</span>
+                  <input type="search" data-sale-client-search placeholder="Digite nome ou telefone" autocomplete="off" />
+                </label>
+                <div class="sale-client-results" data-sale-client-results></div>
+                <button type="button" class="sale-client-create" data-sale-client-quick-open>+ Cadastrar cliente</button>
+                <div class="sale-client-hidden-fields">
+                  <input type="hidden" name="cliente" />
+                  <input type="hidden" name="telefone" />
+                  <input type="hidden" name="bairro" />
+                </div>
+              </div>
+            </details>
             <section class="sale-section route-chip-panel">
               <input type="hidden" name="data_entrega" />
               <label class="route-select-label">
@@ -301,29 +324,6 @@
               </div>
               <input type="hidden" name="status_entrega" value="Aguardando" />
             </section>
-            <details class="sale-section sale-client-panel">
-              <summary class="sale-section-header">
-                <span class="sale-section-title">
-                  <svg class="sale-section-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg>
-                  <span>Cliente <small>(opcional)</small></span>
-                </span>
-                <svg class="sale-section-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
-              </summary>
-              <div class="sale-client-smart" data-sale-client-area>
-                <div data-sale-client-selected></div>
-                <label class="sale-client-search-field" data-sale-client-search-field>
-                  <span>Pesquisar cliente por nome ou WhatsApp</span>
-                  <input type="search" data-sale-client-search placeholder="Digite nome ou telefone" autocomplete="off" />
-                </label>
-                <div class="sale-client-results" data-sale-client-results></div>
-                <button type="button" class="sale-client-create" data-sale-client-quick-open>+ Cadastrar cliente</button>
-                <div class="sale-client-hidden-fields">
-                  <input type="hidden" name="cliente" />
-                  <input type="hidden" name="telefone" />
-                  <input type="hidden" name="bairro" />
-                </div>
-              </div>
-            </details>
             <section class="sale-summary-panel" aria-label="Resumo da venda">
               <div class="sale-section-header sale-summary-header">
                 <span class="sale-section-title">
