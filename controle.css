@@ -4349,8 +4349,13 @@ body.modal-open {
 .client-modal-actions .primary-action,
 .client-modal-actions .ghost-action,
 .client-modal-actions .danger-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 46px;
   padding-inline: 16px;
+  text-align: center;
+  text-decoration: none;
 }
 
 .client-duplicate-warning {
@@ -7259,6 +7264,16 @@ body.modal-open {
   .client-modal-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .client-modal-actions .primary-action,
+  .client-modal-actions .ghost-action,
+  .client-modal-actions .danger-action {
+    width: 100%;
+    min-height: 54px;
+    border-radius: 14px;
+    font-size: 0.95rem;
+    line-height: 1;
   }
 
   .control-header {
