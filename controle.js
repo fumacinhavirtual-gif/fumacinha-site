@@ -158,7 +158,6 @@ const app = {
 
 let sideTouchStartX = null;
 let saleDetailTouchStartY = null;
-let salePickerTouchStartY = null;
 let lastSaleDetailTrigger = null;
 let pendingConfirmAction = null;
 
@@ -7050,26 +7049,6 @@ saleDetailShell?.addEventListener(
     const endY = event.changedTouches?.[0]?.clientY ?? saleDetailTouchStartY;
     if (endY - saleDetailTouchStartY > 70) closeSaleDetailPanel();
     saleDetailTouchStartY = null;
-  },
-  { passive: true },
-);
-
-saleProductSheet?.addEventListener(
-  "touchstart",
-  (event) => {
-    if (!event.target.closest(".sale-product-sheet-panel")) return;
-    salePickerTouchStartY = event.touches?.[0]?.clientY ?? null;
-  },
-  { passive: true },
-);
-
-saleProductSheet?.addEventListener(
-  "touchend",
-  (event) => {
-    if (salePickerTouchStartY === null) return;
-    const endY = event.changedTouches?.[0]?.clientY ?? salePickerTouchStartY;
-    if (endY - salePickerTouchStartY > 70) closeSaleProductPicker();
-    salePickerTouchStartY = null;
   },
   { passive: true },
 );
