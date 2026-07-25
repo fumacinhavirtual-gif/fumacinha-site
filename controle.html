@@ -867,6 +867,81 @@
 
         </section>
 
+        <section class="tab-panel hidden" data-panel="coupons">
+          <section class="panel-card coupons-panel">
+            <div class="section-head">
+              <div>
+                <p class="eyebrow">Descontos</p>
+                <h2>Cupons</h2>
+              </div>
+              <button type="button" class="primary-action" data-coupon-new>+ Novo cupom</button>
+            </div>
+            <p class="muted-text">Crie cupons de desconto para o checkout do site. Nesta versao, o desconto aplicado e sempre em valor fixo.</p>
+            <div class="coupon-kpis" data-coupon-kpis></div>
+            <p class="coupon-status-message" data-coupon-status></p>
+            <div class="coupon-list" data-coupon-list></div>
+          </section>
+        </section>
+
+        <div class="coupon-modal-shell hidden" data-coupon-modal-shell aria-hidden="true">
+          <div class="coupon-modal-overlay" data-coupon-modal-close></div>
+          <section class="coupon-modal" role="dialog" aria-modal="true" aria-label="Cadastro de cupom">
+            <header>
+              <div>
+                <p class="eyebrow">Cupons</p>
+                <h2 data-coupon-modal-title>Novo cupom</h2>
+              </div>
+              <button type="button" data-coupon-modal-close aria-label="Fechar">×</button>
+            </header>
+            <form class="coupon-form" data-coupon-form>
+              <p class="coupon-form-error" data-coupon-form-error></p>
+              <label>Nome interno
+                <input type="text" name="nome_interno" placeholder="Campanha do fim de semana" />
+              </label>
+              <label>Codigo do cupom
+                <input type="text" name="codigo" placeholder="FMC" required />
+              </label>
+              <div class="coupon-form-grid">
+                <label>Tipo de desconto
+                  <select name="tipo_desconto">
+                    <option value="valor" selected>Desconto em valor</option>
+                    <option value="percentual" disabled>Porcentagem em breve</option>
+                  </select>
+                </label>
+                <label>Valor do desconto
+                  <input type="text" name="valor" inputmode="decimal" placeholder="10,00" required />
+                </label>
+              </div>
+              <label>Valor minimo da compra
+                <input type="text" name="valor_minimo" inputmode="decimal" placeholder="Opcional" />
+              </label>
+              <div class="coupon-form-grid">
+                <label>Data de inicio
+                  <input type="date" name="inicio" />
+                </label>
+                <label>Data de termino
+                  <input type="date" name="fim" />
+                </label>
+              </div>
+              <div class="coupon-form-grid">
+                <label>Limite de usos
+                  <input type="number" name="limite_uso" min="0" step="1" placeholder="Opcional" />
+                </label>
+                <label>Status
+                  <select name="ativo">
+                    <option value="true" selected>Ativo</option>
+                    <option value="false">Inativo</option>
+                  </select>
+                </label>
+              </div>
+              <div class="coupon-modal-actions">
+                <button type="button" class="ghost-action" data-coupon-modal-close>Cancelar</button>
+                <button type="submit" class="primary-action" data-coupon-save>Salvar cupom</button>
+              </div>
+            </form>
+          </section>
+        </div>
+
         <section class="tab-panel hidden" data-panel="clients">
           <section class="panel-card clients-panel">
             <div class="section-head">

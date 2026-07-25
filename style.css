@@ -1464,6 +1464,27 @@ body.order-confirmation-view .whatsapp-float {
   gap: 7px;
 }
 
+.cart-coupon-line,
+.cart-final-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--black);
+}
+
+.cart-coupon-line.hidden,
+.cart-final-total.hidden {
+  display: none;
+}
+
+.cart-coupon-line strong:last-child,
+.cart-final-total strong:last-child {
+  color: var(--green);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
 .total-delivery-row span,
 .order-total-delivery span {
   min-width: 0;
@@ -1789,6 +1810,52 @@ body.order-confirmation-view .whatsapp-float {
   grid-column: 1 / -1;
 }
 
+.order-coupon-field {
+  grid-column: 1 / -1;
+}
+
+.coupon-apply-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.coupon-apply-row button {
+  min-height: 56px;
+  border: 0;
+  border-radius: 16px;
+  padding: 0 18px;
+  color: #fff;
+  background: var(--green);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.coupon-apply-row button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.coupon-message {
+  min-height: 0;
+  margin: -2px 0 0;
+  font-weight: 900;
+}
+
+.coupon-message.success {
+  color: var(--green);
+}
+
+.coupon-message.error {
+  color: #b52020;
+}
+
+.coupon-message.loading {
+  color: var(--muted);
+}
+
 .order-form-error {
   min-height: 0;
   margin: -8px 0 0;
@@ -1848,7 +1915,8 @@ body.order-confirmation-view .whatsapp-float {
 }
 
 .order-summary-line:nth-child(2) > strong,
-.order-summary-line:nth-child(3) > strong {
+.coupon-summary-line > strong,
+.final-total-line > strong {
   color: var(--green);
 }
 
@@ -3133,6 +3201,22 @@ body.order-confirmation-view .whatsapp-float {
   .home-banner-slide,
   .home-banner-slide img {
     min-height: 170px;
+  }
+
+  .coupon-apply-row {
+    grid-template-columns: minmax(0, 1fr) 92px;
+    gap: 8px;
+  }
+
+  .coupon-apply-row button,
+  .coupon-apply-row input {
+    min-height: 48px;
+    border-radius: 14px;
+    font-size: 0.92rem;
+  }
+
+  .coupon-apply-row button {
+    padding-inline: 10px;
   }
 
   .category-section {

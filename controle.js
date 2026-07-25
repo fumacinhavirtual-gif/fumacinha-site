@@ -19,6 +19,7 @@ const TABLES = {
   changeMoves: "MOVIMENTACOES_TROCO",
   exchangeChecks: "CONFERENCIAS_TROCAS",
   clients: "clientes",
+  coupons: "cupons",
   costGroups: "GRUPOS_CUSTO",
   costGroupAudit: "ALTERACOES_GRUPOS_CUSTO",
   siteConfig: "SITE_CONFIG",
@@ -63,6 +64,11 @@ const app = {
   changeMoves: [],
   exchangeChecks: [],
   clients: [],
+  coupons: [],
+  couponsLoading: false,
+  couponsError: "",
+  editingCouponId: null,
+  couponSaving: false,
   clientsLoading: false,
   clientsError: "",
   clientStatusFilter: "active",
@@ -278,6 +284,13 @@ const clientsCrmDashboard = $("[data-clients-crm-dashboard]");
 const clientRecoveryList = $("[data-client-recovery-list]");
 const clientRankingList = $("[data-client-ranking-list]");
 const clientRankingSort = $("[data-client-ranking-sort]");
+const couponKpis = $("[data-coupon-kpis]");
+const couponList = $("[data-coupon-list]");
+const couponStatus = $("[data-coupon-status]");
+const couponModalShell = $("[data-coupon-modal-shell]");
+const couponModalTitle = $("[data-coupon-modal-title]");
+const couponForm = $("[data-coupon-form]");
+const couponFormError = $("[data-coupon-form-error]");
 let toastTimer = null;
 let saleConfirmationTimer = null;
 let clientSearchTimer = null;
@@ -1353,7 +1366,7 @@ async function loadAll() {
   }
   await loadCostGroupsFromSupabase({ silent: true });
 
-  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
+  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, couponsResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
@@ -1368,6 +1381,7 @@ async function loadAll() {
     supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.exchangeChecks).select("*").order("data_caixa", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.coupons).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
@@ -1399,6 +1413,10 @@ async function loadAll() {
   app.cashMovements = readData(cashMovesResult, "movimentacoes de caixa", app.cashMovements);
   app.changeBox = readData(changeBoxResult, "caixa de troco", app.changeBox ? [app.changeBox] : [])[0] || null;
   app.changeMoves = readData(changeMovesResult, "movimentacoes de troco", app.changeMoves);
+  app.coupons = readData(couponsResult, "cupons", app.coupons);
+  app.couponsError = couponsResult.status === "rejected" || couponsResult.value?.error
+    ? "Execute o arquivo SUPABASE_CUPONS.sql no SQL Editor do Supabase para ativar os cupons."
+    : "";
   app.exchangeChecks = exchangeChecksResult.status === "fulfilled" && !exchangeChecksResult.value.error
     ? exchangeChecksResult.value.data || []
     : [];
@@ -1455,6 +1473,7 @@ function renderAll() {
   renderSafely("relatorios", renderReports);
   renderSafely("conferencia", renderCashClosing);
   renderSafely("rotas", renderRoutes);
+  renderSafely("cupons", renderCoupons);
   renderSafely("status da loja", renderStoreStatus);
 }
 
@@ -1464,6 +1483,229 @@ function renderAnalyticsFilters() {
     select.value = analyticsPeriodFor(key);
     select.title = ANALYTICS_PERIOD_LABELS[select.value] || "Este mes";
   });
+}
+
+function normalizeCouponCode(value = "") {
+  return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function couponById(id) {
+  return app.coupons.find((coupon) => String(coupon.id) === String(id));
+}
+
+function couponDateInputValue(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return localDateValue(date);
+}
+
+function couponDateLabel(value) {
+  if (!value) return "Sem validade";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Sem validade";
+  return date.toLocaleDateString("pt-BR");
+}
+
+function couponLimitLabel(coupon) {
+  const limit = Number(coupon.limite_uso || 0);
+  const uses = Number(coupon.usos || 0);
+  return limit > 0 ? `${uses}/${limit}` : `${uses}`;
+}
+
+function couponStatusLabel(coupon) {
+  const now = new Date();
+  const start = coupon.inicio ? new Date(coupon.inicio) : null;
+  const end = coupon.fim ? new Date(coupon.fim) : null;
+  if (coupon.ativo === false) return { text: "Inativo", className: "inactive" };
+  if (start && start > now) return { text: "Agendado", className: "scheduled" };
+  if (end && end < now) return { text: "Expirado", className: "expired" };
+  if (Number(coupon.limite_uso || 0) > 0 && Number(coupon.usos || 0) >= Number(coupon.limite_uso || 0)) {
+    return { text: "Limite atingido", className: "expired" };
+  }
+  return { text: "Ativo", className: "active" };
+}
+
+function setCouponFormError(message = "") {
+  if (!couponFormError) return;
+  couponFormError.textContent = message;
+  couponFormError.classList.toggle("hidden", !message);
+}
+
+function renderCoupons() {
+  if (!couponList) return;
+  const coupons = [...app.coupons].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  const activeCount = coupons.filter((coupon) => couponStatusLabel(coupon).className === "active").length;
+  const uses = coupons.reduce((sum, coupon) => sum + Number(coupon.usos || 0), 0);
+  const discount = coupons.reduce((sum, coupon) => sum + Number(coupon.total_desconto || 0), 0);
+  if (couponKpis) {
+    couponKpis.innerHTML = `
+      <article><span>🏷️</span><strong>${coupons.length}</strong><small>Cupons cadastrados</small></article>
+      <article><span>✅</span><strong>${activeCount}</strong><small>Ativos agora</small></article>
+      <article><span>🧾</span><strong>${uses}</strong><small>Utilizacoes</small></article>
+      <article><span>💸</span><strong>${escapeHtml(currency.format(discount))}</strong><small>Descontos dados</small></article>
+    `;
+  }
+  if (couponStatus) {
+    couponStatus.textContent = app.couponsError || "";
+    couponStatus.className = `coupon-status-message ${app.couponsError ? "error" : ""}`.trim();
+  }
+  if (app.couponsLoading) {
+    couponList.innerHTML = `<div class="empty-state"><p>Carregando cupons...</p></div>`;
+    return;
+  }
+  if (app.couponsError) {
+    couponList.innerHTML = `<div class="empty-state"><p>${escapeHtml(app.couponsError)}</p><button type="button" class="ghost-action" data-coupons-retry>Tentar novamente</button></div>`;
+    return;
+  }
+  couponList.innerHTML = coupons.length ? coupons.map((coupon) => {
+    const status = couponStatusLabel(coupon);
+    const value = Number(coupon.valor || 0);
+    return `
+      <article class="coupon-card">
+        <div class="coupon-card-main">
+          <span class="coupon-code">${escapeHtml(coupon.codigo || "")}</span>
+          ${coupon.nome_interno ? `<small>${escapeHtml(coupon.nome_interno)}</small>` : ""}
+          <strong>${escapeHtml(currency.format(value))}</strong>
+          <span class="coupon-validity">Validade: ${escapeHtml(couponDateLabel(coupon.fim))}</span>
+        </div>
+        <div class="coupon-card-stats">
+          <span class="coupon-status-pill ${status.className}">${escapeHtml(status.text)}</span>
+          <span><b>${escapeHtml(couponLimitLabel(coupon))}</b> usos</span>
+          <span><b>${escapeHtml(currency.format(Number(coupon.total_desconto || 0)))}</b> concedidos</span>
+          <span>Ultima: ${escapeHtml(couponDateLabel(coupon.ultima_utilizacao))}</span>
+        </div>
+        <div class="coupon-actions">
+          <button type="button" class="ghost-action" data-coupon-edit="${escapeHtml(coupon.id)}">Editar</button>
+          <button type="button" class="ghost-action" data-coupon-toggle="${escapeHtml(coupon.id)}">${coupon.ativo === false ? "Ativar" : "Desativar"}</button>
+          <button type="button" class="danger-action" data-coupon-delete="${escapeHtml(coupon.id)}">Excluir</button>
+        </div>
+      </article>
+    `;
+  }).join("") : `<p class="empty-state">Nenhum cupom cadastrado.</p>`;
+}
+
+function openCouponModal(id = "") {
+  app.editingCouponId = id || null;
+  const coupon = couponById(id);
+  if (couponModalTitle) couponModalTitle.textContent = coupon ? "Editar cupom" : "Novo cupom";
+  setCouponFormError("");
+  if (couponForm) {
+    couponForm.elements.nome_interno.value = coupon?.nome_interno || "";
+    couponForm.elements.codigo.value = coupon?.codigo || "";
+    couponForm.elements.tipo_desconto.value = coupon?.tipo_desconto || "valor";
+    couponForm.elements.valor.value = coupon ? Number(coupon.valor || 0).toFixed(2).replace(".", ",") : "";
+    couponForm.elements.valor_minimo.value = coupon?.valor_minimo ? Number(coupon.valor_minimo).toFixed(2).replace(".", ",") : "";
+    couponForm.elements.inicio.value = couponDateInputValue(coupon?.inicio);
+    couponForm.elements.fim.value = couponDateInputValue(coupon?.fim);
+    couponForm.elements.limite_uso.value = coupon?.limite_uso ?? "";
+    couponForm.elements.ativo.value = coupon?.ativo === false ? "false" : "true";
+  }
+  couponModalShell?.classList.remove("hidden");
+  couponModalShell?.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeCouponModal() {
+  app.editingCouponId = null;
+  app.couponSaving = false;
+  couponModalShell?.classList.add("hidden");
+  couponModalShell?.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+}
+
+async function saveCoupon(event) {
+  event.preventDefault();
+  if (app.couponSaving) return;
+  const form = event.target;
+  const id = app.editingCouponId;
+  const codigo = normalizeCouponCode(form.elements.codigo.value);
+  const valor = parseMoney(form.elements.valor.value);
+  const valorMinimo = parseMoney(form.elements.valor_minimo.value);
+  if (!codigo) return setCouponFormError("Informe o codigo do cupom.");
+  if (valor <= 0) return setCouponFormError("Informe um valor de desconto maior que zero.");
+  app.couponSaving = true;
+  setCouponFormError("");
+  const saveButton = form.querySelector("[data-coupon-save]");
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = "Salvando...";
+  }
+  try {
+    await requireUserId();
+    const payload = {
+      nome_interno: form.elements.nome_interno.value.trim() || null,
+      codigo,
+      codigo_normalizado: codigo,
+      tipo_desconto: "valor",
+      valor,
+      valor_minimo: valorMinimo || 0,
+      inicio: form.elements.inicio.value ? `${form.elements.inicio.value}T00:00:00` : null,
+      fim: form.elements.fim.value ? `${form.elements.fim.value}T23:59:59` : null,
+      limite_uso: form.elements.limite_uso.value === "" ? null : Math.max(0, Number.parseInt(form.elements.limite_uso.value, 10)),
+      ativo: form.elements.ativo.value !== "false",
+      updated_at: new Date().toISOString(),
+    };
+    const query = id
+      ? supabaseClient.from(TABLES.coupons).update(payload).eq("id", id)
+      : supabaseClient.from(TABLES.coupons).insert(payload);
+    const { data, error } = await query.select("*").single();
+    if (error) throw error;
+    app.coupons = id
+      ? app.coupons.map((coupon) => String(coupon.id) === String(id) ? data : coupon)
+      : [data, ...app.coupons];
+    showToast(id ? "Cupom atualizado com sucesso." : "Cupom criado com sucesso.", "success");
+    closeCouponModal();
+    renderCoupons();
+  } catch (error) {
+    console.error("Erro ao salvar cupom:", error);
+    const duplicate = String(error?.message || "").toLowerCase().includes("duplicate") || String(error?.code || "") === "23505";
+    setCouponFormError(duplicate ? "Ja existe um cupom com este codigo." : error.message || "Nao foi possivel salvar o cupom.");
+  } finally {
+    app.couponSaving = false;
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = "Salvar cupom";
+    }
+  }
+}
+
+async function toggleCoupon(id) {
+  const coupon = couponById(id);
+  if (!coupon) return;
+  try {
+    await requireUserId();
+    const { data, error } = await supabaseClient
+      .from(TABLES.coupons)
+      .update({ ativo: coupon.ativo === false, updated_at: new Date().toISOString() })
+      .eq("id", id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    app.coupons = app.coupons.map((row) => String(row.id) === String(id) ? data : row);
+    showToast(data.ativo ? "Cupom ativado." : "Cupom desativado.", "success");
+    renderCoupons();
+  } catch (error) {
+    console.error("Erro ao alterar cupom:", error);
+    showToast(error.message || "Nao foi possivel alterar o cupom.", "error");
+  }
+}
+
+async function deleteCoupon(id) {
+  const coupon = couponById(id);
+  if (!coupon) return;
+  if (!window.confirm(`Excluir o cupom ${coupon.codigo}? Pedidos antigos continuarao registrados.`)) return;
+  try {
+    await requireUserId();
+    const { error } = await supabaseClient.from(TABLES.coupons).delete().eq("id", id);
+    if (error) throw error;
+    app.coupons = app.coupons.filter((row) => String(row.id) !== String(id));
+    showToast("Cupom excluido.", "success");
+    renderCoupons();
+  } catch (error) {
+    console.error("Erro ao excluir cupom:", error);
+    showToast(error.message || "Nao foi possivel excluir o cupom.", "error");
+  }
 }
 
 function renderStoreStatus() {
@@ -1571,7 +1813,7 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance", "cash", "clients"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance", "cash", "clients", "coupons"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
@@ -4790,6 +5032,18 @@ function ensureClientsTab() {
   nav.insertBefore(button, historyButton);
 }
 
+function ensureCouponsTab() {
+  if (!sideMenu || sideMenu.querySelector('[data-tab="coupons"]')) return;
+  const nav = sideMenu.querySelector(".side-menu-nav");
+  const historyButton = nav?.querySelector('[data-tab="history"]');
+  if (!nav || !historyButton) return;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.dataset.tab = "coupons";
+  button.innerHTML = '<span>&#127991;&#65039;</span> Cupons';
+  nav.insertBefore(button, historyButton);
+}
+
 function clientRowsUnfilteredCount() {
   const previousSearch = app.clientSearch;
   app.clientSearch = "";
@@ -6991,6 +7245,7 @@ function switchTab(tab) {
     renderTopClients();
     if (!app.clients.length && !app.clientsError) loadClientsForDirectory();
   }
+  if (tab === "coupons") renderCoupons();
 }
 
 function openSideMenu() {
@@ -7043,6 +7298,10 @@ cashForm?.addEventListener("submit", closeCash);
 document.addEventListener("submit", (event) => {
   if (event.target.matches("[data-sale-client-quick-form]")) {
     saveSaleClientQuick(event);
+    return;
+  }
+  if (event.target.matches("[data-coupon-form]")) {
+    saveCoupon(event);
     return;
   }
   if (!event.target.matches("[data-client-form]")) return;
@@ -7508,6 +7767,33 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-client-modal-close]")) closeClientModal();
   if (event.target.closest("[data-clients-retry]")) loadClientsForDirectory();
+  if (event.target.closest("[data-coupon-new]")) {
+    openCouponModal();
+    return;
+  }
+  const couponEdit = event.target.closest("[data-coupon-edit]");
+  if (couponEdit) {
+    openCouponModal(couponEdit.dataset.couponEdit);
+    return;
+  }
+  const couponToggle = event.target.closest("[data-coupon-toggle]");
+  if (couponToggle) {
+    await toggleCoupon(couponToggle.dataset.couponToggle);
+    return;
+  }
+  const couponDelete = event.target.closest("[data-coupon-delete]");
+  if (couponDelete) {
+    await deleteCoupon(couponDelete.dataset.couponDelete);
+    return;
+  }
+  if (event.target.closest("[data-coupon-modal-close]")) {
+    closeCouponModal();
+    return;
+  }
+  if (event.target.closest("[data-coupons-retry]")) {
+    await loadAll();
+    return;
+  }
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();
     renderAuth(false);
@@ -7564,6 +7850,9 @@ document.addEventListener("input", (event) => {
       app.clientSearch = event.target.value;
       renderClients();
     }, 250);
+  }
+  if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo"].includes(event.target.name)) {
+    setCouponFormError("");
   }
   if (event.target.matches("[data-sale-product-search]")) {
     app.saleProductSearch = event.target.value;
@@ -7629,6 +7918,9 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.matches("[data-stock-edit-image-file]")) {
     selectStockEditImage(event.target.files?.[0] || null);
+  }
+  if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo"].includes(event.target.name)) {
+    formatMoneyInput(event.target);
   }
   if (event.target.matches("[data-cost-group-select], [data-cost-auto-toggle]")) {
     syncCostGroupForm();
@@ -7782,6 +8074,10 @@ document.addEventListener("keydown", (event) => {
     closeClientModal();
     return;
   }
+  if (couponModalShell && !couponModalShell.classList.contains("hidden")) {
+    closeCouponModal();
+    return;
+  }
   if ($$("[data-history-menu]").some((menu) => !menu.classList.contains("hidden"))) {
     closeHistoryMenus();
     return;
@@ -7793,6 +8089,7 @@ document.addEventListener("keydown", (event) => {
 
 function initDefaults() {
   ensureClientsTab();
+  ensureCouponsTab();
   ensureSplitPaymentPanel();
   app.cashDate = localDateValue();
   app.routesDate = localDateValue();

@@ -129,6 +129,8 @@
           <div class="summary-divider"></div>
           <div class="summary-row total-delivery-row">
             <span><strong>Valor dos produtos:</strong> <strong data-cart-normal-total>R$ 0,00</strong></span>
+            <span class="cart-coupon-line hidden" data-cart-coupon-line><strong data-cart-coupon-label>Cupom</strong> <strong data-cart-coupon-discount>- R$ 0,00</strong></span>
+            <span class="cart-final-total hidden" data-cart-final-total-line><strong>Total com desconto:</strong> <strong data-cart-final-total>R$ 0,00</strong></span>
             <span>Taxa de entrega: A combinar</span>
           </div>
           <button class="btn whatsapp checkout disabled" data-checkout type="button" aria-disabled="true">Continuar pedido</button>
@@ -169,6 +171,25 @@
               </span>
               <input type="tel" name="telefone" inputmode="tel" autocomplete="tel" placeholder="(62) 00000-0000" />
               <small>Opcional. Usado apenas para identificar seu pedido.</small>
+            </label>
+            <label class="order-coupon-field">
+              <span class="order-field-title">
+                <span class="order-field-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M4 9V5a1 1 0 0 1 1-1h4" />
+                    <path d="M15 4h4a1 1 0 0 1 1 1v4" />
+                    <path d="M20 15v4a1 1 0 0 1-1 1h-4" />
+                    <path d="M9 20H5a1 1 0 0 1-1-1v-4" />
+                    <path d="m8 12 2.5 2.5L16 9" />
+                  </svg>
+                </span>
+                Cupom de desconto
+              </span>
+              <div class="coupon-apply-row">
+                <input type="text" name="cupom" data-coupon-input placeholder="Digite seu cupom" autocomplete="off" />
+                <button type="button" data-apply-coupon>Aplicar</button>
+              </div>
+              <small data-coupon-message></small>
             </label>
           </div>
           <p class="order-form-error" data-order-error></p>

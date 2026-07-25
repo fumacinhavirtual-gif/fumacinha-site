@@ -74,6 +74,17 @@ const state = {
     filter: "all",
     lowStockLimit: LOW_STOCK_DEFAULT_LIMIT,
   },
+  coupon: {
+    id: null,
+    code: "",
+    type: "valor",
+    value: 0,
+    discount: 0,
+    total: 0,
+    message: "",
+    status: "",
+    applying: false,
+  },
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -92,12 +103,20 @@ const cartCount = document.querySelector("[data-cart-count]");
 const cartTrigger = document.querySelector("[data-open-cart]");
 const cartUnits = document.querySelector("[data-cart-units]");
 const cartNormalTotal = document.querySelector("[data-cart-normal-total]");
+const cartCouponLine = document.querySelector("[data-cart-coupon-line]");
+const cartCouponLabel = document.querySelector("[data-cart-coupon-label]");
+const cartCouponDiscount = document.querySelector("[data-cart-coupon-discount]");
+const cartFinalTotalLine = document.querySelector("[data-cart-final-total-line]");
+const cartFinalTotal = document.querySelector("[data-cart-final-total]");
 const cartFooter = document.querySelector("[data-cart-footer]");
 const checkout = document.querySelector("[data-checkout]");
 const orderConfirmation = document.querySelector("[data-order-confirmation]");
 const orderConfirmationForm = document.querySelector("[data-order-confirmation-form]");
 const orderSummary = document.querySelector("[data-order-summary]");
 const orderError = document.querySelector("[data-order-error]");
+const couponInput = document.querySelector("[data-coupon-input]");
+const couponApplyButton = document.querySelector("[data-apply-coupon]");
+const couponMessage = document.querySelector("[data-coupon-message]");
 const toastRegion = document.querySelector("[data-toast-region]");
 const pageScroll = document.querySelector("[data-page-scroll]");
 const searchInput = document.querySelector("[data-search]");
@@ -1466,6 +1485,116 @@ function getCartSummary() {
   return { items, count, normalTotal };
 }
 
+function normalizeCouponCode(value = "") {
+  return String(value || "").trim().replace(/\s+/g, "").toUpperCase();
+}
+
+function couponDiscountForSubtotal(subtotal = 0) {
+  return Math.min(Math.max(0, Number(state.coupon.discount || 0)), Math.max(0, Number(subtotal || 0)));
+}
+
+function getCheckoutTotals() {
+  const { items, count, normalTotal } = getCartSummary();
+  const discount = state.coupon.id ? couponDiscountForSubtotal(normalTotal) : 0;
+  const finalTotal = Math.max(0, normalTotal - discount);
+  return { items, count, normalTotal, discount, finalTotal };
+}
+
+function resetCoupon(message = "", status = "") {
+  state.coupon = {
+    id: null,
+    code: "",
+    type: "valor",
+    value: 0,
+    discount: 0,
+    total: 0,
+    message,
+    status,
+    applying: false,
+  };
+  if (couponInput && !message) couponInput.value = "";
+  renderCouponState();
+}
+
+function renderCouponState() {
+  const { normalTotal, discount, finalTotal } = getCheckoutTotals();
+  const hasCoupon = Boolean(state.coupon.id && discount > 0);
+  cartCouponLine?.classList.toggle("hidden", !hasCoupon);
+  cartFinalTotalLine?.classList.toggle("hidden", !hasCoupon);
+  if (cartCouponLabel) cartCouponLabel.textContent = hasCoupon ? `Cupom ${state.coupon.code}` : "Cupom";
+  if (cartCouponDiscount) cartCouponDiscount.textContent = `- ${currency.format(discount)}`;
+  if (cartFinalTotal) cartFinalTotal.textContent = currency.format(finalTotal);
+  if (couponInput && state.coupon.code && normalizeCouponCode(couponInput.value) !== state.coupon.code) {
+    couponInput.value = state.coupon.code;
+  }
+  if (couponMessage) {
+    couponMessage.textContent = state.coupon.message || "";
+    couponMessage.className = `coupon-message ${state.coupon.status || ""}`.trim();
+  }
+  if (couponApplyButton) {
+    couponApplyButton.disabled = Boolean(state.coupon.applying);
+    couponApplyButton.textContent = state.coupon.applying ? "Aplicando..." : "Aplicar";
+  }
+  if (hasCoupon && normalTotal <= 0) resetCoupon();
+}
+
+async function applyCoupon() {
+  if (!supabaseClient) {
+    state.coupon.message = "Cupom indisponivel no momento.";
+    state.coupon.status = "error";
+    renderCouponState();
+    return;
+  }
+  const code = normalizeCouponCode(couponInput?.value || "");
+  if (!code) {
+    resetCoupon("Digite seu cupom.", "error");
+    return;
+  }
+  const { normalTotal } = getCartSummary();
+  if (normalTotal <= 0) {
+    resetCoupon("Adicione produtos antes de aplicar o cupom.", "error");
+    return;
+  }
+  state.coupon.applying = true;
+  state.coupon.message = "Validando cupom...";
+  state.coupon.status = "loading";
+  renderCouponState();
+  try {
+    const { data, error } = await supabaseClient.rpc("validar_cupom_checkout", {
+      p_codigo: code,
+      p_subtotal: normalTotal,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.valido) {
+      resetCoupon(row?.mensagem || "Cupom invalido.", "error");
+      if (couponInput) couponInput.value = code;
+      return;
+    }
+    state.coupon = {
+      id: row.cupom_id,
+      code: row.codigo || code,
+      type: row.tipo_desconto || "valor",
+      value: Number(row.valor || 0),
+      discount: Number(row.desconto || 0),
+      total: Number(row.total || Math.max(0, normalTotal - Number(row.desconto || 0))),
+      message: "Cupom aplicado com sucesso.",
+      status: "success",
+      applying: false,
+    };
+    renderCart();
+    renderOrderSummary();
+    renderCouponState();
+  } catch (error) {
+    console.error("Erro ao validar cupom:", error);
+    resetCoupon("Nao foi possivel validar o cupom.", "error");
+    if (couponInput) couponInput.value = code;
+  } finally {
+    state.coupon.applying = false;
+    renderCouponState();
+  }
+}
+
 function buildWhatsAppSendUrl(text) {
   return `https://api.whatsapp.com/send?phone=${settings.whatsapp}&text=${encodeURIComponent(text)}`;
 }
@@ -1609,7 +1738,20 @@ function buildConfirmedWhatsAppUrlWithImages(customer = {}) {
 }
 
 function buildOrderWhatsAppUrl(customer = {}, order = {}) {
-  const { items, normalTotal } = getCartSummary();
+  const { items, normalTotal, discount, finalTotal } = getCheckoutTotals();
+  const couponLines = state.coupon.id
+    ? [
+        "",
+        "Cupom utilizado:",
+        state.coupon.code,
+        "",
+        "Desconto:",
+        currency.format(discount),
+        "",
+        "Total com desconto:",
+        currency.format(finalTotal),
+      ]
+    : [];
   const lines = [
     "\uD83D\uDCE6 *Pedido Fumacinha*",
     `Codigo: ${order.codigo || "Pendente"}`,
@@ -1628,6 +1770,7 @@ function buildOrderWhatsAppUrl(customer = {}, order = {}) {
     "",
     "\uD83D\uDCB0 *Valor do Pedido:*",
     currency.format(normalTotal),
+    ...couponLines,
     "",
     "\uD83D\uDE9A *Entrega:*",
     "Taxa a combinar",
@@ -1645,6 +1788,12 @@ function normalizeCheckoutWhatsapp(value = "") {
 function isMissingClienteIdError(error) {
   const message = String(error?.message || error?.details || "").toLowerCase();
   return message.includes("cliente_id") && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
+}
+
+function isMissingCouponColumnError(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return ["cupom_id", "cupom_codigo", "cupom_desconto", "valor_total_com_desconto"].some((field) => message.includes(field))
+    && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
 }
 
 async function identifyCheckoutClient(customer = {}) {
@@ -1669,7 +1818,32 @@ async function identifyCheckoutClient(customer = {}) {
 async function savePendingSiteOrder(customer = {}) {
   if (!supabaseClient) throw new Error("Configure o Supabase para registrar pedidos.");
   if (!(await refreshStoreAvailability())) throw new Error(storeClosedText());
-  const { items, normalTotal } = getCartSummary();
+  let totals = getCheckoutTotals();
+  if (state.coupon.id) {
+    const { data, error } = await supabaseClient.rpc("validar_cupom_checkout", {
+      p_codigo: state.coupon.code,
+      p_subtotal: totals.normalTotal,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row?.valido) {
+      resetCoupon(row?.mensagem || "Cupom invalido.", "error");
+      throw new Error(row?.mensagem || "Cupom invalido.");
+    }
+    state.coupon = {
+      ...state.coupon,
+      id: row.cupom_id,
+      code: row.codigo || state.coupon.code,
+      type: row.tipo_desconto || "valor",
+      value: Number(row.valor || 0),
+      discount: Number(row.desconto || 0),
+      total: Number(row.total || Math.max(0, totals.normalTotal - Number(row.desconto || 0))),
+      message: "Cupom aplicado com sucesso.",
+      status: "success",
+    };
+    totals = getCheckoutTotals();
+  }
+  const { items, normalTotal, discount, finalTotal } = totals;
   if (!items.length) throw new Error("Adicione produtos ao carrinho.");
 
   const invalidItem = items.find((item) => !item.product?.id || item.quantity <= 0 || item.quantity > Number(item.product.estoque || 0));
@@ -1683,7 +1857,12 @@ async function savePendingSiteOrder(customer = {}) {
     cliente_telefone: customer.telefone || "",
     origem: "Site",
     status: "Aguardando confirmacao",
-    valor_produtos: normalTotal,
+    valor_produtos: finalTotal,
+    valor_subtotal: normalTotal,
+    cupom_id: state.coupon.id,
+    cupom_codigo: state.coupon.id ? state.coupon.code : null,
+    cupom_desconto: discount,
+    valor_total_com_desconto: finalTotal,
   };
   const itens = items.map((item) => ({
     produto_id: String(item.product.id),
@@ -1699,10 +1878,15 @@ async function savePendingSiteOrder(customer = {}) {
     p_itens: itens,
   });
 
-  if (isMissingClienteIdError(error)) {
-    console.error("Coluna cliente_id ausente em PEDIDOS. Execute SUPABASE_CLIENTES_INTEGRACAO.sql para vincular pedidos a clientes.", error);
+  if (isMissingClienteIdError(error) || isMissingCouponColumnError(error)) {
+    console.error("Colunas opcionais ausentes em PEDIDOS. Execute os SQLs de clientes/cupons para ativar os vinculos completos.", error);
     const fallbackPedido = { ...pedido };
     delete fallbackPedido.cliente_id;
+    delete fallbackPedido.valor_subtotal;
+    delete fallbackPedido.cupom_id;
+    delete fallbackPedido.cupom_codigo;
+    delete fallbackPedido.cupom_desconto;
+    delete fallbackPedido.valor_total_com_desconto;
     const fallback = await supabaseClient.rpc("registrar_pedido_site", {
       p_pedido: fallbackPedido,
       p_itens: itens,
@@ -1712,6 +1896,13 @@ async function savePendingSiteOrder(customer = {}) {
   }
 
   if (error) throw error;
+  if (state.coupon.id && discount > 0) {
+    const usage = await supabaseClient.rpc("registrar_uso_cupom", {
+      p_cupom_id: state.coupon.id,
+      p_desconto: discount,
+    });
+    if (usage.error) console.error("Pedido registrado, mas nao foi possivel contabilizar o uso do cupom:", usage.error);
+  }
   return Array.isArray(data) ? data[0] : data;
 }
 
@@ -1721,6 +1912,7 @@ function renderCart() {
   cartCount.textContent = count;
   cartUnits.textContent = `Quantidade de produtos: ${count}`;
   cartNormalTotal.textContent = currency.format(normalTotal);
+  renderCouponState();
   cartEmpty.classList.toggle("hidden", items.length > 0);
   cartFooter.classList.toggle("hidden", items.length === 0);
 
@@ -1850,7 +2042,17 @@ function closeCart() {
 
 function renderOrderSummary() {
   if (!orderSummary) return;
-  const { count, normalTotal } = getCartSummary();
+  const { count, normalTotal, discount, finalTotal } = getCheckoutTotals();
+  const couponLine = state.coupon.id ? `
+      <div class="order-summary-line coupon-summary-line">
+        <span class="summary-label"><span class="summary-icon" aria-hidden="true">%</span><span><strong>Cupom ${escapeHtml(state.coupon.code)}</strong><small>Desconto aplicado</small></span></span>
+        <strong>- ${currency.format(discount)}</strong>
+      </div>
+      <div class="order-summary-line final-total-line">
+        <span class="summary-label"><span class="summary-icon" aria-hidden="true">$</span><span><strong>Total com desconto</strong><small>Valor final dos produtos</small></span></span>
+        <strong>${currency.format(finalTotal)}</strong>
+      </div>
+    ` : "";
   orderSummary.innerHTML = `
     <h3>Resumo do pedido</h3>
     <div class="order-summary-list">
@@ -1862,6 +2064,7 @@ function renderOrderSummary() {
         <span class="summary-label"><span class="summary-icon" aria-hidden="true">$</span><span><strong>Valor dos produtos</strong><small>Somente valor dos itens</small></span></span>
         <strong>${currency.format(normalTotal)}</strong>
       </div>
+      ${couponLine}
       <div class="order-summary-line">
         <span class="summary-label"><span class="summary-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="7" cy="18" r="2" /><circle cx="18" cy="18" r="2" /><path d="M5 18H3.8a1.8 1.8 0 0 1-1.8-1.8V14h4l2-5h6l2 4h2.6a2.4 2.4 0 0 1 2.2 1.5l.7 1.5H20" /><path d="M9 18h7" /><path d="M10 9l-1.5 4" /><path d="M14 9l1.5 4" /></svg></span><span><strong>Taxa de entrega</strong><small>Sera calculada depois</small></span></span>
         <strong>A combinar</strong>
@@ -1914,6 +2117,7 @@ function completeCheckoutAndPrepareHome() {
   state.checkoutCompleted = true;
   sessionStorage.setItem(CHECKOUT_COMPLETED_KEY, "1");
   state.cart.clear();
+  resetCoupon();
   renderCart();
   orderConfirmationForm?.reset();
   closeOrderConfirmation();
@@ -3206,6 +3410,10 @@ document.addEventListener("click", async (event) => {
     closeOrderConfirmation();
     openCart();
   }
+  if (event.target.closest("[data-apply-coupon]")) {
+    applyCoupon();
+    return;
+  }
   if (event.target.closest("[data-home-link]")) {
     closeOrderConfirmation();
     showHome();
@@ -3432,6 +3640,20 @@ orderConfirmationForm?.addEventListener("submit", async (event) => {
     setOrderSubmitState(false);
     if (orderError) orderError.textContent = error?.message || "Nao foi possivel registrar o pedido. Tente novamente.";
   }
+});
+
+couponInput?.addEventListener("input", () => {
+  const code = normalizeCouponCode(couponInput.value);
+  if (state.coupon.id && code !== state.coupon.code) {
+    state.coupon = { ...state.coupon, id: null, code: "", discount: 0, total: 0, message: "", status: "" };
+    renderCouponState();
+  }
+});
+
+couponInput?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  applyCoupon();
 });
 
 window.addEventListener("pageshow", () => {
