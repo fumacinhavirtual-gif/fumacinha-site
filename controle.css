@@ -4595,8 +4595,7 @@ body.modal-open {
 }
 
 .sale-client-hidden-fields {
-  display: grid;
-  gap: 8px;
+  display: none;
 }
 
 .sale-client-hidden-fields label {

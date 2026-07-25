@@ -100,6 +100,10 @@ const app = {
   selectedSaleClientId: null,
   saleClientSnapshot: null,
   saleClientSearch: "",
+  saleClientResults: [],
+  saleClientLoading: false,
+  saleClientError: "",
+  saleClientSearchVersion: 0,
   saleClientQuickSaving: false,
   saleClientQuickDuplicateId: null,
   seenOrderIds: new Set(),
@@ -1346,7 +1350,7 @@ async function loadAll() {
   }
   await loadCostGroupsFromSupabase({ silent: true });
 
-  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, clientsResult, siteConfigResult] = await Promise.allSettled([
+  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
@@ -1361,7 +1365,6 @@ async function loadAll() {
     supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.exchangeChecks).select("*").order("data_caixa", { ascending: false }).limit(1000),
-    supabaseClient.from(TABLES.clients).select("*").order("nome", { ascending: true }).limit(500),
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
 
@@ -1398,13 +1401,6 @@ async function loadAll() {
     : [];
   if (exchangeChecksResult.status === "rejected" || exchangeChecksResult.value?.error) {
     console.error("Erro ao carregar conferencias de trocas:", exchangeChecksResult.reason || exchangeChecksResult.value?.error);
-  }
-  app.clients = clientsResult.status === "fulfilled" && !clientsResult.value.error ? clientsResult.value.data || [] : app.clients;
-  app.clientsError = "";
-  if (clientsResult.status === "rejected" || clientsResult.value?.error) {
-    const error = clientsResult.reason || clientsResult.value?.error;
-    app.clientsError = error?.message || "Nao foi possivel carregar os clientes.";
-    console.error("Erro ao carregar clientes:", error);
   }
   const localExchangeSync = await syncLocalExchangeChecks();
   const siteConfigData = readData(siteConfigResult, "configuracao do site", app.siteConfig);
@@ -4854,13 +4850,80 @@ function saleClientMatchesSearch(client, query) {
   return name.includes(searchText) || observation.includes(searchText) || (searchPhone && phone.includes(searchPhone));
 }
 
-function saleClientSearchResults() {
-  const query = app.saleClientSearch.trim();
-  return app.clients
-    .filter((client) => client.ativo !== false)
-    .filter((client) => saleClientMatchesSearch(client, query))
-    .sort((a, b) => String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR"))
-    .slice(0, 8);
+function saleClientSearchReady(query = app.saleClientSearch) {
+  const text = normalizeText(query);
+  const phone = normalizeClientWhatsapp(query);
+  return text.length >= 2 || phone.length >= 3;
+}
+
+function supabaseSearchTerm(value = "") {
+  return String(value || "").replace(/[%,()]/g, " ").trim().replace(/\s+/g, " ");
+}
+
+function clientBairroLabel(client = {}) {
+  const text = String(client.observacao || "").trim();
+  const match = text.match(/^bairro:\s*(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+async function searchSaleClients(query = app.saleClientSearch) {
+  const version = app.saleClientSearchVersion + 1;
+  app.saleClientSearchVersion = version;
+  app.saleClientError = "";
+  app.saleClientResults = [];
+  if (!saleClientSearchReady(query)) {
+    app.saleClientLoading = false;
+    renderSaleClientPanel();
+    return;
+  }
+  app.saleClientLoading = true;
+  renderSaleClientPanel();
+  try {
+    await requireUserId();
+    const text = supabaseSearchTerm(query);
+    const phone = normalizeClientWhatsapp(query);
+    const clauses = [];
+    if (text.length >= 2) clauses.push(`nome.ilike.%${text}%`, `observacao.ilike.%${text}%`);
+    if (phone.length >= 3) clauses.push(`whatsapp_normalizado.ilike.%${phone}%`, `whatsapp.ilike.%${phone}%`);
+    let request = supabaseClient
+      .from(TABLES.clients)
+      .select("*")
+      .eq("ativo", true)
+      .order("nome", { ascending: true })
+      .limit(10);
+    if (clauses.length) request = request.or(clauses.join(","));
+    const { data, error } = await request;
+    if (error) throw error;
+    if (version !== app.saleClientSearchVersion) return;
+    app.saleClientResults = data || [];
+    app.clients = [
+      ...(data || []),
+      ...app.clients.filter((client) => !(data || []).some((row) => String(row.id) === String(client.id))),
+    ];
+    app.saleClientLoading = false;
+    renderSaleClientPanel();
+  } catch (error) {
+    if (version !== app.saleClientSearchVersion) return;
+    console.error("Erro ao pesquisar cliente na venda:", error);
+    app.saleClientError = error.message || "Nao foi possivel pesquisar clientes.";
+    app.saleClientLoading = false;
+    renderSaleClientPanel();
+  }
+}
+
+async function findClientByWhatsappFromSupabase(normalized) {
+  const local = clientByWhatsapp(normalized);
+  if (local) return local;
+  const { data, error } = await supabaseClient
+    .from(TABLES.clients)
+    .select("*")
+    .eq("whatsapp_normalizado", normalized)
+    .maybeSingle();
+  if (error) throw error;
+  if (data) {
+    app.clients = [data, ...app.clients.filter((client) => String(client.id) !== String(data.id))];
+  }
+  return data || null;
 }
 
 function fillSaleClientFields(client = null) {
@@ -4875,6 +4938,8 @@ function selectSaleClient(id) {
   app.selectedSaleClientId = client.id;
   app.saleClientSnapshot = null;
   app.saleClientSearch = "";
+  app.saleClientResults = [];
+  app.saleClientError = "";
   if (saleClientSearchInput) saleClientSearchInput.value = "";
   fillSaleClientFields(client);
   renderSaleClientPanel();
@@ -4883,6 +4948,8 @@ function selectSaleClient(id) {
 function clearSaleClientSelection(clearFields = true) {
   app.selectedSaleClientId = null;
   app.saleClientSnapshot = null;
+  app.saleClientResults = [];
+  app.saleClientError = "";
   if (clearFields) fillSaleClientFields(null);
   renderSaleClientPanel();
 }
@@ -4923,14 +4990,16 @@ function renderSaleClientPanel() {
   saleClientSearchField.classList.toggle("hidden", Boolean(selected));
   if (selected) {
     const phone = normalizeClientWhatsapp(selected.whatsapp_normalizado || selected.whatsapp);
+    const bairro = clientBairroLabel(selected) || saleForm?.elements.bairro?.value || "";
     saleClientSelectedRoot.innerHTML = `
       <div class="sale-client-selected-card">
         <span>Cliente selecionado</span>
         <strong>${escapeHtml(selected.nome || "Cliente")}</strong>
         <small>${escapeHtml(phoneDisplay(phone))}</small>
+        ${bairro ? `<small>${escapeHtml(bairro)}</small>` : ""}
         <div>
           <button type="button" data-sale-client-change>Trocar</button>
-          <button type="button" data-sale-client-clear>Limpar selecao</button>
+          <button type="button" data-sale-client-clear>Remover</button>
           ${phone && clientWhatsappUrl(phone, selected.nome) ? `<a href="${clientWhatsappUrl(phone, selected.nome)}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
         </div>
       </div>
@@ -4939,25 +5008,32 @@ function renderSaleClientPanel() {
     return;
   }
   saleClientSelectedRoot.innerHTML = "";
-  if (app.clientsError) {
-    saleClientResultsRoot.innerHTML = `<div class="sale-client-empty"><p>Nao foi possivel pesquisar clientes.</p><button type="button" data-clients-retry>Tentar novamente</button></div>`;
+  const query = app.saleClientSearch.trim();
+  if (!saleClientSearchReady(query)) {
+    saleClientResultsRoot.innerHTML = "";
     return;
   }
-  const query = app.saleClientSearch.trim();
-  const rows = saleClientSearchResults();
+  if (app.saleClientLoading) {
+    saleClientResultsRoot.innerHTML = `<div class="sale-client-empty"><p>Pesquisando...</p></div>`;
+    return;
+  }
+  if (app.saleClientError) {
+    saleClientResultsRoot.innerHTML = `<div class="sale-client-empty"><p>Nao foi possivel pesquisar clientes.</p><button type="button" data-sale-client-retry>Tentar novamente</button></div>`;
+    return;
+  }
+  const rows = app.saleClientResults;
   if (!rows.length) {
-    saleClientResultsRoot.innerHTML = query
-      ? `<div class="sale-client-empty"><p>Nenhum cliente encontrado.</p></div>`
-      : `<div class="sale-client-empty"><p>Pesquise para selecionar um cliente cadastrado.</p></div>`;
+    saleClientResultsRoot.innerHTML = `<div class="sale-client-empty"><p>Nenhum cliente encontrado.</p></div>`;
     return;
   }
   saleClientResultsRoot.innerHTML = rows.map((client) => {
     const phone = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+    const bairro = clientBairroLabel(client);
     return `
       <button type="button" class="sale-client-result" data-sale-client-select="${escapeHtml(client.id)}">
         <strong>${escapeHtml(client.nome || "Cliente")}</strong>
         <span>${escapeHtml(phoneDisplay(phone))}</span>
-        ${client.observacao ? `<small>${escapeHtml(String(client.observacao).slice(0, 80))}</small>` : ""}
+        ${bairro ? `<small>${escapeHtml(bairro)}</small>` : ""}
         <em>${client.ativo === false ? "Inativo" : "Ativo"}</em>
       </button>
     `;
@@ -5021,7 +5097,13 @@ async function saveSaleClientQuick(event) {
   if (!nome) return setSaleClientQuickStatus("Informe o nome do cliente.");
   if (!String(whatsappRaw || "").trim()) return setSaleClientQuickStatus("Informe o WhatsApp do cliente.");
   if (!isValidClientWhatsapp(whatsappRaw)) return setSaleClientQuickStatus("Informe um numero de WhatsApp valido.");
-  const duplicate = clientByWhatsapp(whatsappNormalizado);
+  let duplicate = null;
+  try {
+    duplicate = await findClientByWhatsappFromSupabase(whatsappNormalizado);
+  } catch (error) {
+    console.error("Erro ao verificar cliente duplicado:", error);
+    return setSaleClientQuickStatus("Nao foi possivel verificar este WhatsApp.");
+  }
   if (duplicate) {
     app.saleClientQuickDuplicateId = duplicate.id;
     renderSaleClientQuickDuplicate(duplicate);
@@ -5096,8 +5178,36 @@ function setClientStatus(message = "", type = "") {
   clientStatusMessage.className = `client-status-message ${type || ""}`.trim();
 }
 
+async function loadClientsForDirectory() {
+  if (!supabaseClient || app.clientsLoading) return;
+  app.clientsLoading = true;
+  app.clientsError = "";
+  renderClients();
+  try {
+    await requireUserId();
+    const { data, error } = await supabaseClient
+      .from(TABLES.clients)
+      .select("*")
+      .order("nome", { ascending: true })
+      .limit(500);
+    if (error) throw error;
+    app.clients = data || [];
+  } catch (error) {
+    console.error("Erro ao carregar clientes:", error);
+    app.clientsError = error.message || "Nao foi possivel carregar os clientes.";
+  } finally {
+    app.clientsLoading = false;
+    renderClients();
+  }
+}
+
 function renderClients() {
   if (!clientsListRoot) return;
+  if (app.clientsLoading) {
+    if (clientsCount) clientsCount.textContent = "Carregando clientes...";
+    clientsListRoot.innerHTML = `<div class="empty-state"><p>Carregando clientes...</p></div>`;
+    return;
+  }
   if (app.clientsError) {
     if (clientsCount) clientsCount.textContent = "Clientes indisponiveis";
     setClientStatus("Nao foi possivel carregar os clientes.", "error");
@@ -6466,7 +6576,10 @@ function switchTab(tab) {
     renderFinance();
     renderReports();
   }
-  if (tab === "clients") renderTopClients();
+  if (tab === "clients") {
+    renderTopClients();
+    if (!app.clients.length && !app.clientsError) loadClientsForDirectory();
+  }
 }
 
 function openSideMenu() {
@@ -6959,6 +7072,10 @@ document.addEventListener("click", async (event) => {
     openSaleClientQuick();
     return;
   }
+  if (event.target.closest("[data-sale-client-retry]")) {
+    searchSaleClients();
+    return;
+  }
   if (event.target.closest("[data-sale-client-quick-close]")) {
     closeSaleClientQuick();
     return;
@@ -6978,7 +7095,7 @@ document.addEventListener("click", async (event) => {
   const clientToggle = event.target.closest("[data-client-toggle]");
   if (clientToggle) toggleClientStatus(clientToggle.dataset.clientToggle);
   if (event.target.closest("[data-client-modal-close]")) closeClientModal();
-  if (event.target.closest("[data-clients-retry]")) loadAll();
+  if (event.target.closest("[data-clients-retry]")) loadClientsForDirectory();
   if (event.target.closest("[data-logout]")) {
     await supabaseClient?.auth.signOut();
     renderAuth(false);
@@ -6998,10 +7115,13 @@ document.addEventListener("input", (event) => {
   }
   if (event.target.matches("[data-sale-client-search]")) {
     const value = event.target.value;
+    app.saleClientSearch = value;
+    app.saleClientResults = [];
+    app.saleClientError = "";
+    renderSaleClientPanel();
     window.clearTimeout(saleClientSearchTimer);
     saleClientSearchTimer = window.setTimeout(() => {
-      app.saleClientSearch = value;
-      renderSaleClientPanel();
+      searchSaleClients(value);
     }, 280);
   }
   if (event.target.matches("[data-stock-product-image-url]")) {
