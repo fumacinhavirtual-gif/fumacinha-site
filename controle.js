@@ -3439,7 +3439,7 @@ function saleHistoryLineDetails(sale, products, linkedOrder) {
     image: firstItem.image || "./assets/fumacinha-logo.png",
     createdTime: createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     routeTime: saleRouteTime(sale) || "--:--",
-    customer: sale.cliente_nome || linkedOrder?.cliente_nome || "Cliente nao informado",
+    customer: sale.cliente_nome || linkedOrder?.cliente_nome || "Nao informado",
     payment: paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Pagamento",
   };
 }
