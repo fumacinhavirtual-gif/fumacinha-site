@@ -5459,6 +5459,13 @@ function setClientStatus(message = "", type = "") {
   clientStatusMessage.className = `client-status-message ${type || ""}`.trim();
 }
 
+function closeClientActionMenus(except = null) {
+  $$(".client-actions-menu[open]").forEach((menu) => {
+    if (except && menu === except) return;
+    menu.removeAttribute("open");
+  });
+}
+
 async function loadClientsForDirectory() {
   if (!supabaseClient || app.clientsLoading) return;
   app.clientsLoading = true;
@@ -5532,6 +5539,7 @@ function renderClients() {
             <button type="button" data-client-edit="${escapeHtml(client.id)}">Editar</button>
             ${whatsapp ? `<a href="${whatsapp}" target="_blank" rel="noreferrer">Abrir WhatsApp</a>` : ""}
             <button type="button" data-client-toggle="${escapeHtml(client.id)}">${client.ativo === false ? "Reativar" : "Inativar"}</button>
+            <button type="button" class="danger-link" data-client-delete="${escapeHtml(client.id)}">Excluir contato</button>
           </div>
         </details>
       </article>
@@ -5759,6 +5767,41 @@ async function toggleClientStatus(id) {
   } catch (error) {
     console.error("Erro ao alterar status do cliente:", error);
     showToast(error.message || "Nao foi possivel alterar o cliente.", "error");
+  }
+}
+
+async function clearClientRelation(table, id) {
+  const result = await supabaseClient
+    .from(table)
+    .update({ cliente_id: null })
+    .eq("cliente_id", id);
+  if (isMissingClientIdColumnError(result.error)) return;
+  if (result.error) throw result.error;
+}
+
+async function deleteClient(id) {
+  const client = clientById(id);
+  if (!client) return;
+  const confirmed = window.confirm(`Excluir o contato ${client.nome || "selecionado"} definitivamente?\n\nEssa acao apaga o cadastro do cliente da lista.`);
+  if (!confirmed) return;
+  try {
+    await requireUserId();
+    await clearClientRelation(TABLES.sales, id);
+    await clearClientRelation(TABLES.orders, id);
+    const { error } = await supabaseClient
+      .from(TABLES.clients)
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+    app.clients = app.clients.filter((row) => String(row.id) !== String(id));
+    if (String(app.selectedSaleClientId || "") === String(id)) clearSaleClientSelection();
+    if (String(app.viewingClientId || "") === String(id) || String(app.editingClientId || "") === String(id)) closeClientModal();
+    closeClientActionMenus();
+    showToast("Contato excluido com sucesso.", "success");
+    renderClients();
+  } catch (error) {
+    console.error("Erro ao excluir cliente:", error);
+    showToast(error.message || "Nao foi possivel excluir o contato.", "error");
   }
 }
 
@@ -7060,6 +7103,13 @@ window.addEventListener("online", () => {
 });
 
 document.addEventListener("click", async (event) => {
+  const clientActionsMenu = event.target.closest(".client-actions-menu");
+  if (clientActionsMenu) {
+    closeClientActionMenus(clientActionsMenu);
+  } else {
+    closeClientActionMenus();
+  }
+
   if (event.target.closest("[data-confirm-cancel]")) {
     closeConfirmation();
     return;
@@ -7437,11 +7487,25 @@ document.addEventListener("click", async (event) => {
   }
   if (event.target.closest("[data-client-add]")) openClientModal("form");
   const clientView = event.target.closest("[data-client-view]");
-  if (clientView) openClientModal("view", clientView.dataset.clientView);
+  if (clientView) {
+    closeClientActionMenus();
+    openClientModal("view", clientView.dataset.clientView);
+  }
   const clientEdit = event.target.closest("[data-client-edit]");
-  if (clientEdit) openClientModal("form", clientEdit.dataset.clientEdit);
+  if (clientEdit) {
+    closeClientActionMenus();
+    openClientModal("form", clientEdit.dataset.clientEdit);
+  }
   const clientToggle = event.target.closest("[data-client-toggle]");
-  if (clientToggle) toggleClientStatus(clientToggle.dataset.clientToggle);
+  if (clientToggle) {
+    closeClientActionMenus();
+    await toggleClientStatus(clientToggle.dataset.clientToggle);
+  }
+  const clientDelete = event.target.closest("[data-client-delete]");
+  if (clientDelete) {
+    closeClientActionMenus();
+    await deleteClient(clientDelete.dataset.clientDelete);
+  }
   if (event.target.closest("[data-client-modal-close]")) closeClientModal();
   if (event.target.closest("[data-clients-retry]")) loadClientsForDirectory();
   if (event.target.closest("[data-logout]")) {

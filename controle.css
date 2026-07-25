@@ -4283,6 +4283,10 @@ body.modal-open {
   background: #f6f7f8;
 }
 
+.client-actions-menu .danger-link {
+  color: #d32f2f;
+}
+
 .client-modal-shell {
   position: fixed;
   inset: 0;
