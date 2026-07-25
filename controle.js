@@ -275,6 +275,10 @@ const clientModalShell = $("[data-client-modal-shell]");
 const clientModalContent = $("[data-client-modal-content]");
 const clientModalTitle = $("[data-client-modal-title]");
 const clientModalEyebrow = $("[data-client-modal-eyebrow]");
+const clientsCrmDashboard = $("[data-clients-crm-dashboard]");
+const clientRecoveryList = $("[data-client-recovery-list]");
+const clientRankingList = $("[data-client-ranking-list]");
+const clientRankingSort = $("[data-client-ranking-sort]");
 let toastTimer = null;
 let saleConfirmationTimer = null;
 let clientSearchTimer = null;
@@ -5164,12 +5168,193 @@ function filteredRegisteredClients() {
     return name.includes(searchText) || observation.includes(searchText) || (searchPhone && phone.includes(searchPhone));
   });
   rows.sort((a, b) => {
+    const metricsA = clientMetrics(a);
+    const metricsB = clientMetrics(b);
+    if (app.clientSort === "spent-desc") return metricsB.totalSpent - metricsA.totalSpent;
+    if (app.clientSort === "purchases-desc") return metricsB.purchaseCount - metricsA.purchaseCount;
+    if (app.clientSort === "ticket-desc") return metricsB.ticketAverage - metricsA.ticketAverage;
+    if (app.clientSort === "last-purchase") return (metricsB.lastPurchaseDate?.getTime() || 0) - (metricsA.lastPurchaseDate?.getTime() || 0);
     if (app.clientSort === "name-desc") return String(b.nome || "").localeCompare(String(a.nome || ""), "pt-BR");
     if (app.clientSort === "recent") return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     if (app.clientSort === "oldest") return new Date(a.created_at || 0) - new Date(b.created_at || 0);
     return String(a.nome || "").localeCompare(String(b.nome || ""), "pt-BR");
   });
   return rows;
+}
+
+function validClientSale(sale) {
+  return sale && !sale.cancelada && normalizeOrderStatus(sale.status || "") !== "cancelado";
+}
+
+function clientPhoneKey(client = {}) {
+  return normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp || "");
+}
+
+function salePhoneKey(sale = {}) {
+  const linkedOrder = saleLinkedOrder(sale);
+  return normalizeClientWhatsapp(sale.cliente_telefone || sale.telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || "");
+}
+
+function saleBelongsToClient(sale, client) {
+  if (!sale || !client) return false;
+  if (sale.cliente_id && client.id && String(sale.cliente_id) === String(client.id)) return true;
+  const linkedOrder = saleLinkedOrder(sale);
+  if (linkedOrder?.cliente_id && client.id && String(linkedOrder.cliente_id) === String(client.id)) return true;
+  const clientPhone = clientPhoneKey(client);
+  if (clientPhone && salePhoneKey(sale) === clientPhone) return true;
+  return false;
+}
+
+function clientSales(client) {
+  return app.sales
+    .filter((sale) => validClientSale(sale) && saleBelongsToClient(sale, client))
+    .sort((a, b) => saleDate(b) - saleDate(a));
+}
+
+function daysSince(date) {
+  if (!date) return null;
+  const today = new Date();
+  const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  return Math.max(0, Math.floor((start - target) / 86400000));
+}
+
+function mostCommonValue(values) {
+  const counts = new Map();
+  values.filter(Boolean).forEach((value) => counts.set(value, (counts.get(value) || 0) + 1));
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || "Nao informado";
+}
+
+function clientFavoriteProducts(sales) {
+  const rows = new Map();
+  sales.forEach((sale) => {
+    saleDetailItems(sale).forEach((item) => {
+      const key = normalizeText(item.name || "produto");
+      const current = rows.get(key) || { name: item.name || "Produto", quantity: 0, lastDate: null };
+      const date = saleDate(sale);
+      current.quantity += toNumber(item.quantity || 1);
+      if (!current.lastDate || date > current.lastDate) current.lastDate = date;
+      rows.set(key, current);
+    });
+  });
+  return [...rows.values()].sort((a, b) => b.quantity - a.quantity);
+}
+
+function clientMetrics(client) {
+  const sales = clientSales(client);
+  const totalSpent = sales.reduce((sum, sale) => sum + saleProductsValue(sale), 0);
+  const purchaseCount = sales.length;
+  const ticketAverage = purchaseCount ? totalSpent / purchaseCount : 0;
+  const firstPurchaseDate = sales.length ? saleDate(sales[sales.length - 1]) : null;
+  const lastPurchaseDate = sales.length ? saleDate(sales[0]) : null;
+  const favoriteProducts = clientFavoriteProducts(sales);
+  const paymentMethods = sales.flatMap((sale) => salePaymentMethods(sale));
+  const daysWithoutBuying = daysSince(lastPurchaseDate);
+  return {
+    sales,
+    totalSpent,
+    purchaseCount,
+    ticketAverage,
+    firstPurchaseDate,
+    lastPurchaseDate,
+    daysWithoutBuying,
+    favoriteProducts,
+    topProduct: favoriteProducts[0]?.name || "Nao informado",
+    topPayment: mostCommonValue(paymentMethods),
+    isVip: totalSpent >= 1000,
+    isRecurring: purchaseCount >= 2,
+  };
+}
+
+function clientDateShort(date) {
+  return date ? date.toLocaleDateString("pt-BR") : "Nao informado";
+}
+
+function renderClientsDashboard() {
+  if (!clientsCrmDashboard) return;
+  const now = new Date();
+  const month = now.getMonth();
+  const year = now.getFullYear();
+  const metrics = app.clients.map((client) => clientMetrics(client));
+  const active = app.clients.filter((client) => client.ativo !== false).length;
+  const newThisMonth = app.clients.filter((client) => {
+    const date = new Date(client.created_at || 0);
+    return date.getMonth() === month && date.getFullYear() === year;
+  }).length;
+  const recurring = metrics.filter((row) => row.isRecurring).length;
+  const inactive30 = metrics.filter((row) => row.purchaseCount > 0 && (row.daysWithoutBuying || 0) >= 30).length;
+  clientsCrmDashboard.innerHTML = [
+    { icon: "👥", label: "Clientes ativos", value: active },
+    { icon: "+", label: "Novos clientes", value: newThisMonth },
+    { icon: "↻", label: "Recorrentes", value: recurring },
+    { icon: "!", label: "Sem comprar 30d", value: inactive30 },
+  ].map((card) => `
+    <article>
+      <span>${escapeHtml(card.icon)}</span>
+      <div><strong>${card.value}</strong><small>${escapeHtml(card.label)}</small></div>
+    </article>
+  `).join("");
+}
+
+function recoveryBucket(days) {
+  if (days === null) return "";
+  if (days >= 90) return "Mais de 90 dias";
+  if (days >= 60) return "60 dias sem comprar";
+  if (days >= 30) return "30 dias sem comprar";
+  if (days >= 15) return "15 dias sem comprar";
+  return "";
+}
+
+function renderClientRecovery() {
+  if (!clientRecoveryList) return;
+  const rows = app.clients
+    .map((client) => ({ client, metrics: clientMetrics(client) }))
+    .filter((row) => row.metrics.purchaseCount > 0 && recoveryBucket(row.metrics.daysWithoutBuying))
+    .sort((a, b) => (b.metrics.daysWithoutBuying || 0) - (a.metrics.daysWithoutBuying || 0))
+    .slice(0, 8);
+  clientRecoveryList.innerHTML = rows.length ? rows.map(({ client, metrics }) => {
+    const phone = clientPhoneKey(client);
+    const url = clientWhatsappUrl(phone, client.nome);
+    return `
+      <article class="client-recovery-card">
+        <div>
+          <strong>${escapeHtml(client.nome || "Cliente")}</strong>
+          <span>${escapeHtml(recoveryBucket(metrics.daysWithoutBuying))} • ultima compra ${escapeHtml(clientDateShort(metrics.lastPurchaseDate))}</span>
+          <small>${escapeHtml(currency.format(metrics.totalSpent))} gastos</small>
+        </div>
+        ${url ? `<a href="${url}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
+      </article>
+    `;
+  }).join("") : `<p class="empty-state">Nenhum cliente para recuperar agora.</p>`;
+}
+
+function rankingClients() {
+  const sort = clientRankingSort?.value || "spent-desc";
+  return app.clients
+    .map((client) => ({ client, metrics: clientMetrics(client) }))
+    .filter((row) => row.metrics.purchaseCount > 0)
+    .sort((a, b) => {
+      if (sort === "purchases-desc") return b.metrics.purchaseCount - a.metrics.purchaseCount;
+      if (sort === "ticket-desc") return b.metrics.ticketAverage - a.metrics.ticketAverage;
+      if (sort === "last-purchase") return (b.metrics.lastPurchaseDate?.getTime() || 0) - (a.metrics.lastPurchaseDate?.getTime() || 0);
+      return b.metrics.totalSpent - a.metrics.totalSpent;
+    })
+    .slice(0, 10);
+}
+
+function renderClientRanking() {
+  if (!clientRankingList) return;
+  const medals = ["🥇", "🥈", "🥉"];
+  const rows = rankingClients();
+  clientRankingList.innerHTML = rows.length ? rows.map(({ client, metrics }, index) => `
+    <article class="client-ranking-card" data-client-view="${escapeHtml(client.id)}" role="button" tabindex="0">
+      <span>${medals[index] || `${index + 1}º`}</span>
+      <div>
+        <strong>${escapeHtml(client.nome || "Cliente")}</strong>
+        <small>${escapeHtml(currency.format(metrics.totalSpent))} • ${metrics.purchaseCount} compras • ticket ${escapeHtml(currency.format(metrics.ticketAverage))}</small>
+      </div>
+    </article>
+  `).join("") : `<p class="empty-state">Ranking sem compras registradas.</p>`;
 }
 
 function setClientStatus(message = "", type = "") {
@@ -5203,6 +5388,9 @@ async function loadClientsForDirectory() {
 
 function renderClients() {
   if (!clientsListRoot) return;
+  renderClientsDashboard();
+  renderClientRecovery();
+  renderClientRanking();
   if (app.clientsLoading) {
     if (clientsCount) clientsCount.textContent = "Carregando clientes...";
     clientsListRoot.innerHTML = `<div class="empty-state"><p>Carregando clientes...</p></div>`;
@@ -5216,27 +5404,40 @@ function renderClients() {
   }
   setClientStatus("", "");
   const rows = filteredRegisteredClients();
-  if (clientsCount) clientsCount.textContent = `${rows.length} ${rows.length === 1 ? "cliente encontrado" : "clientes encontrados"}`;
+  const visibleRows = rows.slice(0, 40);
+  if (clientsCount) clientsCount.textContent = `${rows.length} ${rows.length === 1 ? "cliente encontrado" : "clientes encontrados"}${rows.length > visibleRows.length ? ` • mostrando ${visibleRows.length}` : ""}`;
   const hasSearch = app.clientSearch.trim();
-  clientsListRoot.innerHTML = rows.length ? rows.map((client) => {
+  clientsListRoot.innerHTML = rows.length ? visibleRows.map((client) => {
     const normalized = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
     const whatsapp = clientWhatsappUrl(normalized, client.nome);
+    const metrics = clientMetrics(client);
+    const lastPurchase = metrics.lastPurchaseDate ? clientDateShort(metrics.lastPurchaseDate) : "Sem compras";
     return `
       <article class="client-row" data-client-row="${escapeHtml(client.id)}">
         <div class="client-avatar">${escapeHtml((client.nome || "?").trim().charAt(0).toUpperCase() || "?")}</div>
         <div class="client-main">
-          <strong>${escapeHtml(client.nome || "Cliente sem nome")}</strong>
+          <strong>${escapeHtml(client.nome || "Cliente sem nome")} ${metrics.isVip ? `<em class="client-vip-pill">VIP</em>` : ""}</strong>
           <span>${escapeHtml(phoneDisplay(normalized))}</span>
-          <small>${escapeHtml(client.observacao ? `${client.observacao.slice(0, 90)}${client.observacao.length > 90 ? "..." : ""}` : "Sem observacao")}</small>
+          <small>Ultima compra: ${escapeHtml(lastPurchase)}</small>
+        </div>
+        <div class="client-stats">
+          <strong>${metrics.purchaseCount}</strong>
+          <span>compras</span>
+        </div>
+        <div class="client-total">
+          <strong>${escapeHtml(currency.format(metrics.totalSpent))}</strong>
+          <span>total gasto</span>
         </div>
         <span class="client-status-pill ${client.ativo === false ? "inactive" : "active"}">${client.ativo === false ? "Inativo" : "Ativo"}</span>
-        <span class="client-created">${clientDateLabel(client.created_at)}</span>
-        <div class="client-actions">
-          <button type="button" data-client-view="${escapeHtml(client.id)}">Visualizar</button>
-          <button type="button" data-client-edit="${escapeHtml(client.id)}">Editar</button>
-          ${whatsapp ? `<a href="${whatsapp}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
-          <button type="button" data-client-toggle="${escapeHtml(client.id)}">${client.ativo === false ? "Reativar" : "Inativar"}</button>
-        </div>
+        <details class="client-actions-menu">
+          <summary aria-label="Acoes do cliente ${escapeHtml(client.nome || "")}">•••</summary>
+          <div>
+            <button type="button" data-client-view="${escapeHtml(client.id)}">Visualizar</button>
+            <button type="button" data-client-edit="${escapeHtml(client.id)}">Editar</button>
+            ${whatsapp ? `<a href="${whatsapp}" target="_blank" rel="noreferrer">Abrir WhatsApp</a>` : ""}
+            <button type="button" data-client-toggle="${escapeHtml(client.id)}">${client.ativo === false ? "Reativar" : "Inativar"}</button>
+          </div>
+        </details>
       </article>
     `;
   }).join("") : `<p class="empty-state">${hasSearch ? "Nenhum cliente encontrado para esta pesquisa." : "Nenhum cliente cadastrado."}</p>`;
@@ -5271,6 +5472,73 @@ function duplicateClientWarning(client) {
   `;
 }
 
+function clientProfileMarkup(client) {
+  const normalized = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
+  const metrics = clientMetrics(client);
+  const favoriteProducts = metrics.favoriteProducts.slice(0, 5);
+  return `
+    <section class="client-profile-hero">
+      <div class="client-avatar">${escapeHtml((client.nome || "?").trim().charAt(0).toUpperCase() || "?")}</div>
+      <div>
+        <h3>${escapeHtml(client.nome || "Cliente")}</h3>
+        <p>${escapeHtml(phoneDisplay(normalized))}</p>
+        <span class="client-status-pill ${client.ativo === false ? "inactive" : "active"}">${client.ativo === false ? "Inativo" : "Ativo"}</span>
+        ${metrics.isVip ? `<span class="client-vip-pill">VIP</span>` : ""}
+      </div>
+    </section>
+    <section class="client-profile-section">
+      <h3>Resumo financeiro</h3>
+      <div class="client-finance-summary">
+        <article><strong>${escapeHtml(currency.format(metrics.totalSpent))}</strong><span>Total gasto</span></article>
+        <article><strong>${metrics.purchaseCount}</strong><span>Compras</span></article>
+        <article><strong>${escapeHtml(currency.format(metrics.ticketAverage))}</strong><span>Ticket medio</span></article>
+        <article><strong>${metrics.daysWithoutBuying === null ? "--" : metrics.daysWithoutBuying}</strong><span>Dias sem comprar</span></article>
+      </div>
+    </section>
+    <section class="client-profile-section">
+      <h3>Dados e preferencias</h3>
+      <div class="client-view-card">
+        <div><span>Bairro</span><strong>${escapeHtml(clientBairroLabel(client) || "Nao informado")}</strong></div>
+        <div><span>Primeira compra</span><strong>${escapeHtml(clientDateShort(metrics.firstPurchaseDate))}</strong></div>
+        <div><span>Ultima compra</span><strong>${escapeHtml(clientDateShort(metrics.lastPurchaseDate))}</strong></div>
+        <div><span>Produto mais comprado</span><strong>${escapeHtml(metrics.topProduct)}</strong></div>
+        <div><span>Pagamento preferido</span><strong>${escapeHtml(metrics.topPayment)}</strong></div>
+        <div><span>VIP acima de</span><strong>R$ 1.000</strong></div>
+      </div>
+    </section>
+    <section class="client-profile-section">
+      <h3>Produtos mais comprados</h3>
+      <div class="client-favorite-products">
+        ${favoriteProducts.length ? favoriteProducts.map((item) => `
+          <article>
+            <strong>${escapeHtml(item.name)}</strong>
+            <span>${item.quantity} un - ultima compra ${escapeHtml(clientDateShort(item.lastDate))}</span>
+          </article>
+        `).join("") : `<p class="empty-state">Sem produtos comprados ainda.</p>`}
+      </div>
+    </section>
+    <section class="client-profile-section">
+      <h3>Historico de compras</h3>
+      <div class="client-purchase-history">
+        ${metrics.sales.length ? metrics.sales.map((sale) => {
+          const items = saleDetailItems(sale);
+          const quantity = items.reduce((sum, item) => sum + toNumber(item.quantity || 1), 0);
+          return `
+            <article data-sale-detail-row="${escapeHtml(sale.id)}" tabindex="0" role="button" aria-label="Abrir detalhes da venda ${escapeHtml(saleDetailCode(sale))}">
+              <div>
+                <strong>${escapeHtml(saleDetailCode(sale))}</strong>
+                <span>${escapeHtml(saleDate(sale).toLocaleDateString("pt-BR"))} - ${quantity} ${quantity === 1 ? "item" : "itens"} - ${escapeHtml(salePaymentMethods(sale).join(", "))}</span>
+                <small>${escapeHtml(items.map((item) => item.name).join(", "))}</small>
+              </div>
+              <b>${escapeHtml(currency.format(saleProductsValue(sale)))}</b>
+            </article>
+          `;
+        }).join("") : `<p class="empty-state">Nenhuma compra vinculada a este cliente.</p>`}
+      </div>
+    </section>
+  `;
+}
+
 function renderClientModal(duplicate = null, errorMessage = "") {
   if (!clientModalContent) return;
   const isView = app.clientModalMode === "view";
@@ -5285,6 +5553,7 @@ function renderClientModal(duplicate = null, errorMessage = "") {
     const normalized = normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp);
     const whatsapp = clientWhatsappUrl(normalized, client.nome);
     clientModalContent.innerHTML = `
+      ${clientProfileMarkup(client)}
       <div class="client-view-card">
         <div><span>Nome completo</span><strong>${escapeHtml(client.nome || "Nao informado")}</strong></div>
         <div><span>WhatsApp</span><strong>${escapeHtml(phoneDisplay(normalized))}</strong></div>
@@ -7208,6 +7477,9 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-client-sort]")) {
     app.clientSort = event.target.value || "name-asc";
     renderClients();
+  }
+  if (event.target.matches("[data-client-ranking-sort]")) {
+    renderClientRanking();
   }
   if (event.target.matches("[data-stock-product-image-file]")) {
     selectStockProductImage(event.target.files?.[0] || null);

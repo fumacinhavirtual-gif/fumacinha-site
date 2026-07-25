@@ -861,11 +861,12 @@
             <div class="section-head">
               <div>
                 <p class="eyebrow">Clientes</p>
-                <h2>Cadastro de clientes</h2>
+                <h2>CRM de clientes</h2>
               </div>
               <button type="button" class="primary-action client-add-button" data-client-add>+ Adicionar cliente</button>
             </div>
-            <p class="muted-text">Cadastre, pesquise e gerencie os contatos dos clientes da Fumacinha.</p>
+            <p class="muted-text">Acompanhe compras, recorrencia e oportunidades de recuperacao dos clientes.</p>
+            <div class="client-crm-dashboard" data-clients-crm-dashboard></div>
             <div class="client-toolbar">
               <label class="client-search">Pesquisar por nome ou WhatsApp <input type="search" data-client-search placeholder="Pesquisar por nome ou WhatsApp" /></label>
               <label>Status
@@ -879,6 +880,10 @@
                 <select data-client-sort>
                   <option value="name-asc" selected>Ordem alfabetica A-Z</option>
                   <option value="name-desc">Ordem alfabetica Z-A</option>
+                  <option value="spent-desc">Maior valor gasto</option>
+                  <option value="purchases-desc">Mais compras</option>
+                  <option value="ticket-desc">Maior ticket medio</option>
+                  <option value="last-purchase">Ultima compra</option>
                   <option value="recent">Mais recentes</option>
                   <option value="oldest">Mais antigos</option>
                 </select>
@@ -890,6 +895,25 @@
             </div>
             <p class="client-status-message" data-client-status-message></p>
             <div class="clients-list" data-clients-list></div>
+            <section class="client-crm-section">
+              <div class="client-crm-section-head">
+                <h3>Clientes para recuperar</h3>
+                <span>15, 30, 60 e 90+ dias sem comprar</span>
+              </div>
+              <div class="client-recovery-list" data-client-recovery-list></div>
+            </section>
+            <section class="client-crm-section">
+              <div class="client-crm-section-head">
+                <h3>Ranking dos melhores clientes</h3>
+                <select data-client-ranking-sort aria-label="Ordenar ranking de clientes">
+                  <option value="spent-desc">Maior valor gasto</option>
+                  <option value="purchases-desc">Maior quantidade de compras</option>
+                  <option value="ticket-desc">Maior ticket medio</option>
+                  <option value="last-purchase">Mais recente</option>
+                </select>
+              </div>
+              <div class="client-ranking-list" data-client-ranking-list></div>
+            </section>
           </section>
         </section>
 
