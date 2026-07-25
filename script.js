@@ -85,6 +85,9 @@ const state = {
     status: "",
     applying: false,
   },
+  couponsAvailable: false,
+  couponsAvailabilityLoaded: false,
+  couponsAvailabilityLoading: false,
 };
 
 const currency = new Intl.NumberFormat("pt-BR", {
@@ -117,6 +120,7 @@ const orderError = document.querySelector("[data-order-error]");
 const couponInput = document.querySelector("[data-coupon-input]");
 const couponApplyButton = document.querySelector("[data-apply-coupon]");
 const couponMessage = document.querySelector("[data-coupon-message]");
+const couponField = document.querySelector("[data-coupon-field]");
 const toastRegion = document.querySelector("[data-toast-region]");
 const pageScroll = document.querySelector("[data-page-scroll]");
 const searchInput = document.querySelector("[data-search]");
@@ -1516,7 +1520,36 @@ function resetCoupon(message = "", status = "") {
   renderCouponState();
 }
 
+function renderCouponAvailability() {
+  const shouldShow = Boolean(state.couponsAvailable);
+  couponField?.classList.toggle("hidden", !shouldShow);
+  if (!shouldShow && (state.coupon.id || state.coupon.code || state.coupon.message)) resetCoupon();
+}
+
+async function loadCouponAvailability({ silent = false } = {}) {
+  if (!supabaseClient || state.couponsAvailabilityLoading) {
+    renderCouponAvailability();
+    return state.couponsAvailable;
+  }
+  state.couponsAvailabilityLoading = true;
+  try {
+    const { data, error } = await supabaseClient.rpc("existe_cupom_ativo_checkout");
+    if (error) throw error;
+    state.couponsAvailable = Boolean(data);
+    state.couponsAvailabilityLoaded = true;
+  } catch (error) {
+    if (!silent) console.error("Erro ao verificar cupons ativos:", error);
+    state.couponsAvailable = false;
+    state.couponsAvailabilityLoaded = true;
+  } finally {
+    state.couponsAvailabilityLoading = false;
+    renderCouponAvailability();
+  }
+  return state.couponsAvailable;
+}
+
 function renderCouponState() {
+  renderCouponAvailability();
   const { normalTotal, discount, finalTotal } = getCheckoutTotals();
   const hasCoupon = Boolean(state.coupon.id && discount > 0);
   cartCouponLine?.classList.toggle("hidden", !hasCoupon);
@@ -1539,6 +1572,10 @@ function renderCouponState() {
 }
 
 async function applyCoupon() {
+  if (!state.couponsAvailable) {
+    resetCoupon();
+    return;
+  }
   if (!supabaseClient) {
     state.coupon.message = "Cupom indisponivel no momento.";
     state.coupon.status = "error";
@@ -2076,6 +2113,7 @@ function renderOrderSummary() {
 function openOrderConfirmation() {
   const { items } = getCartSummary();
   if (!items.length || !orderConfirmation) return;
+  loadCouponAvailability({ silent: true });
   renderOrderSummary();
   if (orderError) orderError.textContent = "";
   setOrderSubmitState(false);
@@ -3920,6 +3958,7 @@ window.addEventListener("pageshow", () => {
 });
 window.addEventListener("focus", () => {
   syncPageScrollLock();
+  loadCouponAvailability({ silent: true });
 });
 document.addEventListener(
   "touchstart",
@@ -3937,5 +3976,7 @@ renderCart();
 setupWhatsAppDirectLinks();
 renderProductSkeletons();
 Promise.allSettled([loadProducts(), loadBannerConfig(), loadBenefits(), loadSiteConfig()]);
+loadCouponAvailability({ silent: true });
 if (supabaseClient) window.setInterval(refreshStoreAvailability, 30000);
+if (supabaseClient) window.setInterval(() => loadCouponAvailability({ silent: true }), 30000);
 handleSecretAdminAccess();

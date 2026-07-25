@@ -201,6 +201,23 @@ begin
 end;
 $$;
 
+create or replace function public.existe_cupom_ativo_checkout()
+returns boolean
+language sql
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.cupons c
+    where c.ativo = true
+      and (c.inicio is null or now() >= c.inicio)
+      and (c.fim is null or now() <= c.fim)
+      and (c.limite_uso is null or c.usos < c.limite_uso)
+    limit 1
+  );
+$$;
+
 create or replace function public.registrar_uso_cupom(
   p_cupom_id uuid,
   p_desconto numeric
@@ -341,8 +358,10 @@ end;
 $$;
 
 revoke all on function public.validar_cupom_checkout(text, numeric) from public;
+revoke all on function public.existe_cupom_ativo_checkout() from public;
 revoke all on function public.registrar_uso_cupom(uuid, numeric) from public;
 grant execute on function public.validar_cupom_checkout(text, numeric) to anon, authenticated;
+grant execute on function public.existe_cupom_ativo_checkout() to anon, authenticated;
 grant execute on function public.registrar_uso_cupom(uuid, numeric) to anon, authenticated;
 grant execute on function public.registrar_pedido_site(jsonb, jsonb) to anon, authenticated;
 
