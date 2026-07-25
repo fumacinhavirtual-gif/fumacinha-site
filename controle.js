@@ -3360,7 +3360,6 @@ function renderSalesHistoryRow(row) {
         <img class="sale-history-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
         <div class="sale-history-main">
           <div class="sale-history-top">
-            <span class="sale-history-status status-site">Confirmado</span>
             <strong>${escapeHtml(code)}</strong>
             <span>🌐 Site</span>
           </div>
@@ -3397,7 +3396,6 @@ function renderSalesHistoryRow(row) {
         <img class="sale-history-thumb" src="${escapeHtml(details.image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
         <div class="sale-history-main">
           <div class="sale-history-top">
-            <span class="sale-history-status ${escapeHtml(details.statusClass)}">${escapeHtml(details.status)}</span>
             <strong>${escapeHtml(details.code)}</strong>
             <span>${escapeHtml(details.originIcon)} ${escapeHtml(details.origin)}</span>
           </div>
