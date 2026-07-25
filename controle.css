@@ -8794,11 +8794,10 @@ body.modal-open {
     grid-template-columns: 44px minmax(0, 1fr) 40px;
     grid-template-areas:
       "avatar main menu"
-      "avatar stats menu"
-      "avatar total menu"
-      "avatar status menu";
+      "avatar stats status"
+      "avatar total status";
     align-items: start;
-    gap: 6px 10px;
+    gap: 5px 10px;
     padding: 12px;
     border-radius: 18px;
   }
@@ -8869,9 +8868,10 @@ body.modal-open {
 
   .client-status-pill {
     grid-area: status;
-    justify-self: start;
-    min-height: 28px;
-    padding: 5px 10px;
+    align-self: end;
+    justify-self: end;
+    min-height: 26px;
+    padding: 5px 9px;
     font-size: 0.74rem;
   }
 
