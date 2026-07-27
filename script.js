@@ -1505,6 +1505,15 @@ function getCheckoutTotals() {
   return { items, count, normalTotal, discount, finalTotal };
 }
 
+function couponItemsPayload(items = []) {
+  return items.map((item) => ({
+    produto_id: String(item.product?.id || ""),
+    quantidade: Math.max(1, Number(item.quantity || 1)),
+    valor_unitario: Number(item.product?.preco || 0),
+    subtotal: Number(item.product?.preco || 0) * Math.max(1, Number(item.quantity || 1)),
+  }));
+}
+
 function resetCoupon(message = "", status = "") {
   state.coupon = {
     id: null,
@@ -1573,14 +1582,22 @@ function renderCouponState() {
   if (hasCoupon && normalTotal <= 0) resetCoupon();
 }
 
-async function validateCouponCheckout(code, subtotal, quantity) {
+async function validateCouponCheckout(code, subtotal, quantity, items = []) {
   const args = {
     p_codigo: code,
     p_subtotal: subtotal,
     p_quantidade: Math.max(1, Number(quantity || 1)),
+    p_itens: couponItemsPayload(items),
   };
   const result = await supabaseClient.rpc("validar_cupom_checkout", args);
   const message = String(result.error?.message || result.error?.details || "").toLowerCase();
+  if (result.error && message.includes("p_itens")) {
+    return supabaseClient.rpc("validar_cupom_checkout", {
+      p_codigo: code,
+      p_subtotal: subtotal,
+      p_quantidade: Math.max(1, Number(quantity || 1)),
+    });
+  }
   if (result.error && message.includes("p_quantidade")) {
     return supabaseClient.rpc("validar_cupom_checkout", {
       p_codigo: code,
@@ -1606,7 +1623,7 @@ async function applyCoupon() {
     resetCoupon("Digite seu cupom.", "error");
     return;
   }
-  const { count, normalTotal } = getCartSummary();
+  const { items, count, normalTotal } = getCartSummary();
   if (normalTotal <= 0) {
     resetCoupon("Adicione produtos antes de aplicar o cupom.", "error");
     return;
@@ -1616,7 +1633,7 @@ async function applyCoupon() {
   state.coupon.status = "loading";
   renderCouponState();
   try {
-    const { data, error } = await validateCouponCheckout(code, normalTotal, count);
+    const { data, error } = await validateCouponCheckout(code, normalTotal, count, items);
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.valido) {
@@ -1874,7 +1891,7 @@ async function savePendingSiteOrder(customer = {}) {
   if (!(await refreshStoreAvailability())) throw new Error(storeClosedText());
   let totals = getCheckoutTotals();
   if (state.coupon.id) {
-    const { data, error } = await validateCouponCheckout(state.coupon.code, totals.normalTotal, totals.count);
+    const { data, error } = await validateCouponCheckout(state.coupon.code, totals.normalTotal, totals.count, totals.items);
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.valido) {

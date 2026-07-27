@@ -143,11 +143,13 @@ create index if not exists pedidos_cupom_id_idx on public."PEDIDOS" (cupom_id);
 
 drop function if exists public.validar_cupom_checkout(text, numeric);
 drop function if exists public.validar_cupom_checkout(text, numeric, integer);
+drop function if exists public.validar_cupom_checkout(text, numeric, integer, jsonb);
 
 create or replace function public.validar_cupom_checkout(
   p_codigo text,
   p_subtotal numeric,
-  p_quantidade integer default 1
+  p_quantidade integer default 1,
+  p_itens jsonb default '[]'::jsonb
 )
 returns table (
   valido boolean,
@@ -170,6 +172,9 @@ declare
   v_quantidade integer;
   v_cupom public.cupons%rowtype;
   v_desconto numeric(12, 2);
+  v_item jsonb;
+  v_item_preco numeric(12, 2);
+  v_item_quantidade integer;
 begin
   v_codigo := public.normalizar_codigo_cupom(p_codigo);
   v_subtotal := round(greatest(coalesce(p_subtotal, 0), 0), 2);
@@ -218,6 +223,32 @@ begin
 
   if v_cupom.tipo_desconto = 'percentual' then
     v_desconto := round(v_subtotal * least(v_cupom.valor, 100) / 100, 2);
+  elsif v_cupom.desconto_por_faixa
+    and jsonb_typeof(coalesce(p_itens, '[]'::jsonb)) = 'array'
+    and jsonb_array_length(coalesce(p_itens, '[]'::jsonb)) > 0 then
+    v_desconto := 0;
+
+    for v_item in select * from jsonb_array_elements(coalesce(p_itens, '[]'::jsonb))
+    loop
+      v_item_quantidade := greatest(coalesce(nullif(v_item->>'quantidade', '')::integer, 1), 1);
+      v_item_preco := round(greatest(coalesce(nullif(v_item->>'valor_unitario', '')::numeric, 0), 0), 2);
+
+      if v_item_preco <= 0 and v_item_quantidade > 0 then
+        v_item_preco := round(greatest(coalesce(nullif(v_item->>'subtotal', '')::numeric, 0), 0) / v_item_quantidade, 2);
+      end if;
+
+      if v_cupom.faixa_maior_de is not null
+        and v_cupom.faixa_maior_desconto is not null
+        and v_item_preco >= v_cupom.faixa_maior_de then
+        v_desconto := v_desconto + (least(v_cupom.faixa_maior_desconto, v_item_preco) * v_item_quantidade);
+      elsif v_cupom.faixa_menor_ate is not null
+        and v_cupom.faixa_menor_desconto is not null
+        and v_item_preco <= v_cupom.faixa_menor_ate then
+        v_desconto := v_desconto + (least(v_cupom.faixa_menor_desconto, v_item_preco) * v_item_quantidade);
+      end if;
+    end loop;
+
+    v_desconto := round(least(v_desconto, v_subtotal), 2);
   elsif v_cupom.desconto_por_faixa
     and v_cupom.faixa_maior_de is not null
     and v_cupom.faixa_maior_desconto is not null
@@ -394,10 +425,10 @@ begin
 end;
 $$;
 
-revoke all on function public.validar_cupom_checkout(text, numeric, integer) from public;
+revoke all on function public.validar_cupom_checkout(text, numeric, integer, jsonb) from public;
 revoke all on function public.existe_cupom_ativo_checkout() from public;
 revoke all on function public.registrar_uso_cupom(uuid, numeric) from public;
-grant execute on function public.validar_cupom_checkout(text, numeric, integer) to anon, authenticated;
+grant execute on function public.validar_cupom_checkout(text, numeric, integer, jsonb) to anon, authenticated;
 grant execute on function public.existe_cupom_ativo_checkout() to anon, authenticated;
 grant execute on function public.registrar_uso_cupom(uuid, numeric) to anon, authenticated;
 grant execute on function public.registrar_pedido_site(jsonb, jsonb) to anon, authenticated;
