@@ -12,6 +12,11 @@ create table if not exists public.cupons (
   tipo_desconto text not null default 'valor',
   valor numeric(12, 2) not null default 0,
   desconto_individual boolean not null default false,
+  desconto_por_faixa boolean not null default false,
+  faixa_menor_ate numeric(12, 2),
+  faixa_menor_desconto numeric(12, 2),
+  faixa_maior_de numeric(12, 2),
+  faixa_maior_desconto numeric(12, 2),
   valor_minimo numeric(12, 2) not null default 0,
   inicio timestamptz,
   fim timestamptz,
@@ -36,6 +41,11 @@ alter table public.cupons add column if not exists codigo_normalizado text not n
 alter table public.cupons add column if not exists tipo_desconto text not null default 'valor';
 alter table public.cupons add column if not exists valor numeric(12, 2) not null default 0;
 alter table public.cupons add column if not exists desconto_individual boolean not null default false;
+alter table public.cupons add column if not exists desconto_por_faixa boolean not null default false;
+alter table public.cupons add column if not exists faixa_menor_ate numeric(12, 2);
+alter table public.cupons add column if not exists faixa_menor_desconto numeric(12, 2);
+alter table public.cupons add column if not exists faixa_maior_de numeric(12, 2);
+alter table public.cupons add column if not exists faixa_maior_desconto numeric(12, 2);
 alter table public.cupons add column if not exists valor_minimo numeric(12, 2) not null default 0;
 alter table public.cupons add column if not exists inicio timestamptz;
 alter table public.cupons add column if not exists fim timestamptz;
@@ -76,6 +86,11 @@ begin
   new.tipo_desconto := coalesce(nullif(new.tipo_desconto, ''), 'valor');
   new.valor := round(coalesce(new.valor, 0), 2);
   new.desconto_individual := coalesce(new.desconto_individual, false);
+  new.desconto_por_faixa := coalesce(new.desconto_por_faixa, false);
+  new.faixa_menor_ate := case when new.faixa_menor_ate is null then null else round(greatest(new.faixa_menor_ate, 0), 2) end;
+  new.faixa_menor_desconto := case when new.faixa_menor_desconto is null then null else round(greatest(new.faixa_menor_desconto, 0), 2) end;
+  new.faixa_maior_de := case when new.faixa_maior_de is null then null else round(greatest(new.faixa_maior_de, 0), 2) end;
+  new.faixa_maior_desconto := case when new.faixa_maior_desconto is null then null else round(greatest(new.faixa_maior_desconto, 0), 2) end;
   new.valor_minimo := round(coalesce(new.valor_minimo, 0), 2);
   new.updated_at := now();
   return new;
@@ -127,6 +142,7 @@ $$;
 create index if not exists pedidos_cupom_id_idx on public."PEDIDOS" (cupom_id);
 
 drop function if exists public.validar_cupom_checkout(text, numeric);
+drop function if exists public.validar_cupom_checkout(text, numeric, integer);
 
 create or replace function public.validar_cupom_checkout(
   p_codigo text,
@@ -202,6 +218,16 @@ begin
 
   if v_cupom.tipo_desconto = 'percentual' then
     v_desconto := round(v_subtotal * least(v_cupom.valor, 100) / 100, 2);
+  elsif v_cupom.desconto_por_faixa
+    and v_cupom.faixa_maior_de is not null
+    and v_cupom.faixa_maior_desconto is not null
+    and v_subtotal >= v_cupom.faixa_maior_de then
+    v_desconto := round(least(v_cupom.faixa_maior_desconto, v_subtotal), 2);
+  elsif v_cupom.desconto_por_faixa
+    and v_cupom.faixa_menor_ate is not null
+    and v_cupom.faixa_menor_desconto is not null
+    and v_subtotal <= v_cupom.faixa_menor_ate then
+    v_desconto := round(least(v_cupom.faixa_menor_desconto, v_subtotal), 2);
   elsif v_cupom.desconto_individual then
     v_desconto := round(least(v_cupom.valor * v_quantidade, v_subtotal), 2);
   else

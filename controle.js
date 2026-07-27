@@ -1498,6 +1498,13 @@ function setCouponFormError(message = "") {
   couponFormError.classList.toggle("hidden", !message);
 }
 
+function updateCouponTierFields() {
+  if (!couponForm) return;
+  const enabled = Boolean(couponForm.elements.desconto_por_faixa?.checked);
+  const fields = $("[data-coupon-tier-fields]");
+  fields?.classList.toggle("hidden", !enabled);
+}
+
 function renderCoupons() {
   if (!couponList) return;
   const coupons = [...app.coupons].sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
@@ -1533,6 +1540,7 @@ function renderCoupons() {
           <span class="coupon-code">${escapeHtml(coupon.codigo || "")}</span>
           ${coupon.nome_interno ? `<small>${escapeHtml(coupon.nome_interno)}</small>` : ""}
           <strong>${escapeHtml(currency.format(value))}</strong>
+          ${coupon.desconto_por_faixa ? `<span class="coupon-mode-pill">Por faixa</span>` : ""}
           ${coupon.desconto_individual ? `<span class="coupon-mode-pill">Por unidade</span>` : ""}
           <span class="coupon-validity">Validade: ${escapeHtml(couponDateLabel(coupon.fim))}</span>
         </div>
@@ -1564,11 +1572,17 @@ function openCouponModal(id = "") {
     couponForm.elements.valor.value = coupon ? Number(coupon.valor || 0).toFixed(2).replace(".", ",") : "";
     couponForm.elements.valor_minimo.value = coupon?.valor_minimo ? Number(coupon.valor_minimo).toFixed(2).replace(".", ",") : "";
     if (couponForm.elements.desconto_individual) couponForm.elements.desconto_individual.checked = Boolean(coupon?.desconto_individual);
+    if (couponForm.elements.desconto_por_faixa) couponForm.elements.desconto_por_faixa.checked = Boolean(coupon?.desconto_por_faixa);
+    if (couponForm.elements.faixa_menor_ate) couponForm.elements.faixa_menor_ate.value = coupon?.faixa_menor_ate ? Number(coupon.faixa_menor_ate).toFixed(2).replace(".", ",") : "";
+    if (couponForm.elements.faixa_menor_desconto) couponForm.elements.faixa_menor_desconto.value = coupon?.faixa_menor_desconto ? Number(coupon.faixa_menor_desconto).toFixed(2).replace(".", ",") : "";
+    if (couponForm.elements.faixa_maior_de) couponForm.elements.faixa_maior_de.value = coupon?.faixa_maior_de ? Number(coupon.faixa_maior_de).toFixed(2).replace(".", ",") : "";
+    if (couponForm.elements.faixa_maior_desconto) couponForm.elements.faixa_maior_desconto.value = coupon?.faixa_maior_desconto ? Number(coupon.faixa_maior_desconto).toFixed(2).replace(".", ",") : "";
     couponForm.elements.inicio.value = couponDateInputValue(coupon?.inicio);
     couponForm.elements.fim.value = couponDateInputValue(coupon?.fim);
     couponForm.elements.limite_uso.value = coupon?.limite_uso ?? "";
     couponForm.elements.ativo.value = coupon?.ativo === false ? "false" : "true";
   }
+  updateCouponTierFields();
   couponModalShell?.classList.remove("hidden");
   couponModalShell?.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -1590,8 +1604,24 @@ async function saveCoupon(event) {
   const codigo = normalizeCouponCode(form.elements.codigo.value);
   const valor = parseMoney(form.elements.valor.value);
   const valorMinimo = parseMoney(form.elements.valor_minimo.value);
+  const descontoPorFaixa = Boolean(form.elements.desconto_por_faixa?.checked);
+  const faixaMenorAte = parseMoney(form.elements.faixa_menor_ate?.value || "");
+  const faixaMenorDesconto = parseMoney(form.elements.faixa_menor_desconto?.value || "");
+  const faixaMaiorDe = parseMoney(form.elements.faixa_maior_de?.value || "");
+  const faixaMaiorDesconto = parseMoney(form.elements.faixa_maior_desconto?.value || "");
   if (!codigo) return setCouponFormError("Informe o codigo do cupom.");
   if (valor <= 0) return setCouponFormError("Informe um valor de desconto maior que zero.");
+  if (descontoPorFaixa) {
+    const hasLowerTier = faixaMenorAte > 0 && faixaMenorDesconto > 0;
+    const hasHigherTier = faixaMaiorDe > 0 && faixaMaiorDesconto > 0;
+    if (!hasLowerTier && !hasHigherTier) return setCouponFormError("Informe pelo menos uma faixa de desconto valida.");
+    if ((faixaMenorAte > 0 && faixaMenorDesconto <= 0) || (faixaMenorDesconto > 0 && faixaMenorAte <= 0)) {
+      return setCouponFormError("Complete a faixa de menor valor com limite e desconto.");
+    }
+    if ((faixaMaiorDe > 0 && faixaMaiorDesconto <= 0) || (faixaMaiorDesconto > 0 && faixaMaiorDe <= 0)) {
+      return setCouponFormError("Complete a faixa de maior valor com limite e desconto.");
+    }
+  }
   app.couponSaving = true;
   setCouponFormError("");
   const saveButton = form.querySelector("[data-coupon-save]");
@@ -1609,6 +1639,11 @@ async function saveCoupon(event) {
       valor,
       valor_minimo: valorMinimo || 0,
       desconto_individual: Boolean(form.elements.desconto_individual?.checked),
+      desconto_por_faixa: descontoPorFaixa,
+      faixa_menor_ate: descontoPorFaixa && faixaMenorAte > 0 ? faixaMenorAte : null,
+      faixa_menor_desconto: descontoPorFaixa && faixaMenorDesconto > 0 ? faixaMenorDesconto : null,
+      faixa_maior_de: descontoPorFaixa && faixaMaiorDe > 0 ? faixaMaiorDe : null,
+      faixa_maior_desconto: descontoPorFaixa && faixaMaiorDesconto > 0 ? faixaMaiorDesconto : null,
       inicio: form.elements.inicio.value ? `${form.elements.inicio.value}T00:00:00` : null,
       fim: form.elements.fim.value ? `${form.elements.fim.value}T23:59:59` : null,
       limite_uso: form.elements.limite_uso.value === "" ? null : Math.max(0, Number.parseInt(form.elements.limite_uso.value, 10)),
@@ -7895,7 +7930,7 @@ document.addEventListener("input", (event) => {
       renderClients();
     }, 250);
   }
-  if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo"].includes(event.target.name)) {
+  if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo", "faixa_menor_ate", "faixa_menor_desconto", "faixa_maior_de", "faixa_maior_desconto"].includes(event.target.name)) {
     setCouponFormError("");
   }
   if (event.target.matches("[data-cost-update-value]")) {
@@ -7966,7 +8001,21 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-stock-edit-image-file]")) {
     selectStockEditImage(event.target.files?.[0] || null);
   }
-  if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo"].includes(event.target.name)) {
+  if (event.target.matches("[data-coupon-tier-toggle]")) {
+    if (event.target.checked && couponForm?.elements.desconto_individual) {
+      couponForm.elements.desconto_individual.checked = false;
+    }
+    updateCouponTierFields();
+    setCouponFormError("");
+  }
+  if (event.target.closest("[data-coupon-form]") && event.target.name === "desconto_individual") {
+    if (event.target.checked && couponForm?.elements.desconto_por_faixa) {
+      couponForm.elements.desconto_por_faixa.checked = false;
+      updateCouponTierFields();
+    }
+    setCouponFormError("");
+  }
+  if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo", "faixa_menor_ate", "faixa_menor_desconto", "faixa_maior_de", "faixa_maior_desconto"].includes(event.target.name)) {
     formatMoneyInput(event.target);
   }
   if (event.target.matches("[data-cost-update-value]")) {

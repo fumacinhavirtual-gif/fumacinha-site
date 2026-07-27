@@ -4569,6 +4569,15 @@ body.modal-open {
   line-height: 1.25;
 }
 
+.coupon-tier-fields {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(17, 17, 17, 0.08);
+  border-radius: 14px;
+  background: #fbfcfd;
+}
+
 .coupon-modal-actions {
   display: flex;
   justify-content: flex-end;

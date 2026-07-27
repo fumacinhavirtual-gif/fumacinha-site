@@ -867,7 +867,7 @@
               </div>
               <button type="button" class="primary-action" data-coupon-new>+ Novo cupom</button>
             </div>
-            <p class="muted-text">Crie cupons para o checkout do site com desconto fixo por pedido ou por unidade.</p>
+            <p class="muted-text">Crie cupons para o checkout do site com desconto fixo, por unidade ou por faixa de valor.</p>
             <div class="coupon-kpis" data-coupon-kpis></div>
             <p class="coupon-status-message" data-coupon-status></p>
             <div class="coupon-list" data-coupon-list></div>
@@ -912,6 +912,30 @@
                 <strong>Desconto individual por unidade</strong>
                 <small>Ex.: R$ 10,00 x 3 unidades = R$ 30,00 de desconto.</small>
               </label>
+              <label class="coupon-individual-toggle coupon-tier-toggle">
+                <input type="checkbox" name="desconto_por_faixa" data-coupon-tier-toggle />
+                <span></span>
+                <strong>Desconto por faixa de valor</strong>
+                <small>Ex.: ate R$ 70,00 desconta R$ 5,00; acima de R$ 90,00 desconta R$ 10,00.</small>
+              </label>
+              <div class="coupon-tier-fields hidden" data-coupon-tier-fields>
+                <div class="coupon-form-grid">
+                  <label>Compra ate
+                    <input type="text" name="faixa_menor_ate" inputmode="decimal" placeholder="70,00" />
+                  </label>
+                  <label>Desconto desta faixa
+                    <input type="text" name="faixa_menor_desconto" inputmode="decimal" placeholder="5,00" />
+                  </label>
+                </div>
+                <div class="coupon-form-grid">
+                  <label>Compra a partir de
+                    <input type="text" name="faixa_maior_de" inputmode="decimal" placeholder="90,00" />
+                  </label>
+                  <label>Desconto desta faixa
+                    <input type="text" name="faixa_maior_desconto" inputmode="decimal" placeholder="10,00" />
+                  </label>
+                </div>
+              </div>
               <div class="coupon-form-grid">
                 <label>Data de inicio
                   <input type="date" name="inicio" />
