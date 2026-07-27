@@ -755,7 +755,8 @@ function clientCurrentName(client = {}) {
 }
 
 function orderClientRecord(order = {}) {
-  return order?.cliente_id ? clientById(order.cliente_id) : null;
+  if (order?.cliente_id) return clientById(order.cliente_id) || null;
+  return clientBySnapshot(order.cliente_nome, order.cliente_telefone || order.telefone || "");
 }
 
 function saleClientRecord(sale = {}, linkedOrder = saleLinkedOrder(sale)) {
@@ -764,7 +765,10 @@ function saleClientRecord(sale = {}, linkedOrder = saleLinkedOrder(sale)) {
     if (client) return client;
   }
   if (linkedOrder?.cliente_id) return clientById(linkedOrder.cliente_id) || null;
-  return null;
+  return clientBySnapshot(
+    sale.cliente_nome || linkedOrder?.cliente_nome || "",
+    sale.cliente_telefone || sale.telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || ""
+  );
 }
 
 function orderDisplayClient(order = {}) {
@@ -5056,6 +5060,22 @@ function clientByWhatsapp(normalized, exceptId = "") {
   ));
 }
 
+function clientBySnapshot(name = "", phone = "", exceptId = "") {
+  const normalizedPhone = normalizeClientWhatsapp(phone);
+  if (normalizedPhone) {
+    const byPhone = clientByWhatsapp(normalizedPhone, exceptId);
+    if (byPhone) return byPhone;
+  }
+  const nameKey = normalizeText(name);
+  if (!isUsableClientNameKey(nameKey)) return null;
+  const matches = app.clients.filter((client) => (
+    String(client.id) !== String(exceptId || "")
+    && client.ativo !== false
+    && clientNameKey(client) === nameKey
+  ));
+  return matches.length === 1 ? matches[0] : null;
+}
+
 function selectedSaleClient() {
   return app.selectedSaleClientId ? clientById(app.selectedSaleClientId) : null;
 }
@@ -6006,25 +6026,59 @@ async function clearClientRelation(table, id) {
   if (result.error) throw result.error;
 }
 
+async function moveClientRelation(table, fromId, toId) {
+  const result = await supabaseClient
+    .from(table)
+    .update({ cliente_id: toId })
+    .eq("cliente_id", fromId);
+  if (isMissingClientIdColumnError(result.error)) return;
+  if (result.error) throw result.error;
+}
+
+function duplicateClientMergeTarget(client) {
+  const nameKey = clientNameKey(client);
+  if (!isUsableClientNameKey(nameKey)) return null;
+  const candidates = app.clients
+    .filter((row) => String(row.id) !== String(client.id) && row.ativo !== false && clientNameKey(row) === nameKey)
+    .sort((a, b) => new Date(b.updated_at || b.created_at || 0) - new Date(a.updated_at || a.created_at || 0));
+  return candidates[0] || null;
+}
+
 async function deleteClient(id) {
   const client = clientById(id);
   if (!client) return;
-  const confirmed = window.confirm(`Excluir o contato ${client.nome || "selecionado"} definitivamente?\n\nEssa acao apaga o cadastro do cliente da lista.`);
+  const mergeTarget = duplicateClientMergeTarget(client);
+  const confirmed = window.confirm(
+    mergeTarget
+      ? `Excluir o contato ${client.nome || "selecionado"} definitivamente?\n\nAs vendas e pedidos vinculados a este contato serao movidos para ${mergeTarget.nome || "o cadastro restante"} antes de apagar o numero errado.`
+      : `Excluir o contato ${client.nome || "selecionado"} definitivamente?\n\nEssa acao apaga o cadastro do cliente da lista.`
+  );
   if (!confirmed) return;
   try {
     await requireUserId();
-    await clearClientRelation(TABLES.sales, id);
-    await clearClientRelation(TABLES.orders, id);
-    const { error } = await supabaseClient
+    if (mergeTarget) {
+      await moveClientRelation(TABLES.sales, id, mergeTarget.id);
+      await moveClientRelation(TABLES.orders, id, mergeTarget.id);
+      app.sales = app.sales.map((sale) => String(sale.cliente_id || "") === String(id) ? { ...sale, cliente_id: mergeTarget.id } : sale);
+      app.orders = app.orders.map((order) => String(order.cliente_id || "") === String(id) ? { ...order, cliente_id: mergeTarget.id } : order);
+    } else {
+      await clearClientRelation(TABLES.sales, id);
+      await clearClientRelation(TABLES.orders, id);
+      app.sales = app.sales.map((sale) => String(sale.cliente_id || "") === String(id) ? { ...sale, cliente_id: null } : sale);
+      app.orders = app.orders.map((order) => String(order.cliente_id || "") === String(id) ? { ...order, cliente_id: null } : order);
+    }
+    const { data, error } = await supabaseClient
       .from(TABLES.clients)
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .select("id");
     if (error) throw error;
+    if (!data?.length) throw new Error("O Supabase nao confirmou a exclusao do contato. Verifique a policy de DELETE da tabela clientes.");
     app.clients = app.clients.filter((row) => String(row.id) !== String(id));
     if (String(app.selectedSaleClientId || "") === String(id)) clearSaleClientSelection();
     if (String(app.viewingClientId || "") === String(id) || String(app.editingClientId || "") === String(id)) closeClientModal();
     closeClientActionMenus();
-    showToast("Contato excluido com sucesso.", "success");
+    showToast(mergeTarget ? "Contato excluido e vendas movidas para o cadastro correto." : "Contato excluido com sucesso.", "success");
     renderClients();
   } catch (error) {
     console.error("Erro ao excluir cliente:", error);
