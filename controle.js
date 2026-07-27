@@ -710,8 +710,11 @@ function updatePendingBadges() {
 }
 
 function orderSearchText(order) {
+  const customer = orderDisplayClient(order);
   return [
     order.codigo,
+    customer.name,
+    customer.phone,
     order.cliente_nome,
     order.cliente_bairro,
     order.cliente_telefone,
@@ -743,14 +746,63 @@ function phoneDisplay(value = "") {
   return digits || "Sem WhatsApp";
 }
 
+function clientCurrentPhone(client = {}) {
+  return normalizeClientWhatsapp(client.whatsapp_normalizado || client.whatsapp || client.telefone || "");
+}
+
+function clientCurrentName(client = {}) {
+  return cleanClientName(client.nome || "");
+}
+
+function orderClientRecord(order = {}) {
+  return order?.cliente_id ? clientById(order.cliente_id) : null;
+}
+
+function saleClientRecord(sale = {}, linkedOrder = saleLinkedOrder(sale)) {
+  if (sale?.cliente_id) {
+    const client = clientById(sale.cliente_id);
+    if (client) return client;
+  }
+  if (linkedOrder?.cliente_id) return clientById(linkedOrder.cliente_id) || null;
+  return null;
+}
+
+function orderDisplayClient(order = {}) {
+  const client = orderClientRecord(order);
+  const snapshotPhone = normalizeClientWhatsapp(order.cliente_telefone || order.telefone || "");
+  return {
+    source: client ? "client" : "snapshot",
+    name: (client ? clientCurrentName(client) : "") || cleanClientName(order.cliente_nome || "") || "Nao informado",
+    phone: (client ? clientCurrentPhone(client) : "") || snapshotPhone,
+    bairro: (client ? clientBairroLabel(client) : "") || order.cliente_bairro || "",
+  };
+}
+
+function saleDisplayClient(sale = {}, linkedOrder = saleLinkedOrder(sale)) {
+  const client = saleClientRecord(sale, linkedOrder);
+  const snapshotPhone = normalizeClientWhatsapp(
+    sale.cliente_telefone || sale.telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || ""
+  );
+  return {
+    source: client ? "client" : "snapshot",
+    name: (client ? clientCurrentName(client) : "")
+      || cleanClientName(sale.cliente_nome || linkedOrder?.cliente_nome || "")
+      || "Nao informado",
+    phone: (client ? clientCurrentPhone(client) : "") || snapshotPhone,
+    bairro: (client ? clientBairroLabel(client) : "") || sale.cliente_bairro || linkedOrder?.cliente_bairro || "",
+  };
+}
+
 function orderPhone(order) {
-  return normalizePhone(order.cliente_telefone || order.telefone || "");
+  const customer = orderDisplayClient(order);
+  return normalizePhone(customer.phone || "");
 }
 
 function orderWhatsappUrl(order) {
   const phone = orderPhone(order);
   if (!phone) return "";
-  const text = `Ola, ${order.cliente_nome || "cliente"}! Estou entrando em contato sobre o pedido ${order.codigo || order.id} da Fumacinha.`;
+  const customer = orderDisplayClient(order);
+  const text = `Ola, ${customer.name || "cliente"}! Estou entrando em contato sobre o pedido ${order.codigo || order.id} da Fumacinha.`;
   return `https://api.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(text)}`;
 }
 
@@ -783,9 +835,9 @@ function clientRows(sales = analyticsSales("clients")) {
   const rank = new Map();
   sales.forEach((sale) => {
     const linkedOrder = saleLinkedOrder(sale);
-    const name = sale.cliente_nome || linkedOrder?.cliente_nome || "Cliente sem nome";
-    const rawPhone = sale.cliente_telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || "";
-    const phone = normalizePhone(rawPhone);
+    const customer = saleDisplayClient(sale, linkedOrder);
+    const name = customer.name || "Cliente sem nome";
+    const phone = normalizePhone(customer.phone || "");
     const key = phone || name.trim().toLowerCase();
     const current = rank.get(key) || {
       name,
@@ -833,8 +885,9 @@ function notifyNewOrder(order) {
   if (!id || app.notifiedOrderIds.has(id)) return;
   app.notifiedOrderIds.add(id);
   const receivedAt = new Date(order.created_at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const customer = orderDisplayClient(order);
   showToast(
-    `Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${order.cliente_nome || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
+    `Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${customer.name || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
     "order",
     { clickable: true, onClick: () => scrollToOrder(order.id) }
   );
@@ -1273,11 +1326,12 @@ async function loadAll() {
     showToast("Nao foi possivel carregar os produtos.", "error");
   }
 
-  const [salesResult, itemsResult, ordersResult, orderItemsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, couponsResult, siteConfigResult] = await Promise.allSettled([
+  const [salesResult, itemsResult, ordersResult, orderItemsResult, clientsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, couponsResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.orderItems).select("*").order("created_at", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.clients).select("*").order("updated_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.stockMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.expenses).select("*").order("data_despesa", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.deliverers).select("*").order("nome", { ascending: true }),
@@ -1311,6 +1365,7 @@ async function loadAll() {
   app.saleItems = readData(itemsResult, "itens de venda", app.saleItems);
   app.orders = readData(ordersResult, "pedidos", app.orders);
   app.orderItems = readData(orderItemsResult, "itens de pedido", app.orderItems);
+  app.clients = readData(clientsResult, "clientes", app.clients);
   app.stockMoves = readData(movesResult, "movimentacoes de estoque", app.stockMoves);
   app.expenses = readData(expensesResult, "despesas", app.expenses);
   app.deliverers = readData(deliverersResult, "entregadores", app.deliverers);
@@ -3256,6 +3311,7 @@ function renderPendingOrders() {
       const normalizedStatus = normalizeOrderStatus(order.status);
       const isPending = normalizedStatus === "aguardando confirmacao";
       const statusInfo = orderStatusInfo(order.status);
+      const customer = orderDisplayClient(order);
       const phoneUrl = orderWhatsappUrl(order);
       const createdAt = new Date(order.created_at || Date.now());
       const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
@@ -3269,7 +3325,7 @@ function renderPendingOrders() {
             <header class="pending-order-card-head">
               <div class="pending-order-identity">
                 <strong>${escapeHtml(order.codigo || `Pedido #${order.id}`)}</strong>
-                <span>${escapeHtml(order.cliente_nome || "Cliente")}</span>
+                <span>${escapeHtml(customer.name || "Cliente")}</span>
               </div>
               <div class="pending-order-value">
                 <strong>${value}</strong>
@@ -3503,6 +3559,7 @@ function renderSalesHistoryRow(row) {
     const code = order.codigo || `Pedido #${order.id}`;
     const productName = firstItem.produto_nome || products.title || "Pedido";
     const productVariation = firstItem.sabor || firstItem.variacao || "";
+    const customer = orderDisplayClient(order);
     return `
       <article class="history-row sale-history-line site-order-history" data-order-detail-row="${order.id}" tabindex="0" role="button" aria-label="Abrir detalhes do pedido ${escapeHtml(code)}">
         <img class="sale-history-thumb" src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async" onerror="this.src='./assets/fumacinha-logo.png'" />
@@ -3516,7 +3573,7 @@ function renderSalesHistoryRow(row) {
           <span class="sale-history-meta">
             <b>🕒${createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</b>
             <b>📦${products.quantity} ${products.quantity === 1 ? "un" : "un"}</b>
-            <b>👤${escapeHtml(order.cliente_nome || "Nao informado")}</b>
+            <b>👤${escapeHtml(customer.name || "Nao informado")}</b>
           </span>
         </div>
         <div class="sale-history-side">
@@ -3574,6 +3631,7 @@ function renderSalesHistoryRow(row) {
 function saleHistoryLineDetails(sale, products, linkedOrder) {
   const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
   const firstItem = saleDetailItems(sale)[0] || {};
+  const customer = saleDisplayClient(sale, linkedOrder);
   return {
     code: linkedOrder?.codigo || `Venda #${sale.id}`,
     origin: linkedOrder ? "Site" : "Manual",
@@ -3585,7 +3643,7 @@ function saleHistoryLineDetails(sale, products, linkedOrder) {
     image: firstItem.image || "./assets/fumacinha-logo.png",
     createdTime: createdAt.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
     routeTime: saleRouteTime(sale) || "--:--",
-    customer: sale.cliente_nome || linkedOrder?.cliente_nome || "Nao informado",
+    customer: customer.name || "Nao informado",
     payment: paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Pagamento",
   };
 }
@@ -3715,10 +3773,11 @@ function openSaleDetailPanel(sale, trigger = null) {
   const statusInfo = saleDetailStatus(sale);
   const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
   const linkedOrder = saleLinkedOrder(sale);
+  const customer = saleDisplayClient(sale, linkedOrder);
   const quantity = items.reduce((sum, item) => sum + toNumber(item.quantity), 0);
   const paymentDetails = paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Nao informado";
-  const customerPhone = linkedOrder ? orderPhone(linkedOrder) : (sale.cliente_telefone || sale.telefone || "");
-  const customerName = sale.cliente_nome || linkedOrder?.cliente_nome || "Nao informado";
+  const customerPhone = customer.phone || "";
+  const customerName = customer.name || "Nao informado";
   const total = saleGrandTotal(sale);
   saleDetailBody.innerHTML = `
     <header class="sale-detail-header ${statusInfo.className}">
@@ -3901,6 +3960,7 @@ function openOrderDrawer(order, items = []) {
   const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
   const subtotal = items.reduce((sum, item) => sum + toNumber(item.subtotal || (toNumber(item.valor_unitario) * toNumber(item.quantidade || 1))), 0);
   const total = toNumber(order.valor_produtos || subtotal);
+  const customer = orderDisplayClient(order);
   const phone = orderPhone(order) ? phoneDisplay(orderPhone(order)) : "Nao informado";
   orderDrawerBody.innerHTML = `
     <header class="order-drawer-header ${statusInfo.className}">
@@ -3922,7 +3982,7 @@ function openOrderDrawer(order, items = []) {
     <section class="order-drawer-card ${statusInfo.className}">
       <h3>Cliente</h3>
       <dl class="order-drawer-list">
-        <div><dt>Nome</dt><dd>${escapeHtml(order.cliente_nome || "Nao informado")}</dd></div>
+        <div><dt>Nome</dt><dd>${escapeHtml(customer.name || "Nao informado")}</dd></div>
         <div><dt>Telefone</dt><dd>${escapeHtml(phone)}</dd></div>
         <div><dt>Origem</dt><dd>${escapeHtml(order.origem || "Site")}</dd></div>
       </dl>
@@ -5075,8 +5135,8 @@ async function searchSaleClients(query = app.saleClientSearch) {
   }
 }
 
-async function findClientByWhatsappFromSupabase(normalized) {
-  const local = clientByWhatsapp(normalized);
+async function findClientByWhatsappFromSupabase(normalized, exceptId = "") {
+  const local = clientByWhatsapp(normalized, exceptId);
   if (local) return local;
   const { data, error } = await supabaseClient
     .from(TABLES.clients)
@@ -5087,6 +5147,7 @@ async function findClientByWhatsappFromSupabase(normalized) {
   if (data) {
     app.clients = [data, ...app.clients.filter((client) => String(client.id) !== String(data.id))];
   }
+  if (data && String(data.id) === String(exceptId || "")) return null;
   return data || null;
 }
 
@@ -5356,20 +5417,20 @@ function clientNameKey(client = {}) {
 
 function salePhoneKey(sale = {}) {
   const linkedOrder = saleLinkedOrder(sale);
-  return normalizeClientWhatsapp(sale.cliente_telefone || sale.telefone || linkedOrder?.cliente_telefone || linkedOrder?.telefone || "");
+  return normalizeClientWhatsapp(saleDisplayClient(sale, linkedOrder).phone || "");
 }
 
 function saleClientNameKey(sale = {}) {
   const linkedOrder = saleLinkedOrder(sale);
-  return normalizeText(sale.cliente_nome || linkedOrder?.cliente_nome || "");
+  return normalizeText(saleDisplayClient(sale, linkedOrder).name || "");
 }
 
 function orderPhoneKey(order = {}) {
-  return normalizeClientWhatsapp(order.cliente_telefone || order.telefone || "");
+  return normalizeClientWhatsapp(orderDisplayClient(order).phone || "");
 }
 
 function orderClientNameKey(order = {}) {
-  return normalizeText(order.cliente_nome || "");
+  return normalizeText(orderDisplayClient(order).name || "");
 }
 
 function isUsableClientNameKey(nameKey = "") {
@@ -5876,6 +5937,11 @@ async function saveClient(event) {
   renderClientModal();
   try {
     await requireUserId();
+    const remoteDuplicate = await findClientByWhatsappFromSupabase(whatsappNormalizado, id);
+    if (remoteDuplicate) {
+      app.clientSaving = false;
+      return renderClientModal(remoteDuplicate, id ? "Este WhatsApp já está cadastrado para outro cliente." : "");
+    }
     const payload = {
       nome,
       whatsapp: phoneDisplay(whatsappNormalizado),
@@ -7110,20 +7176,23 @@ function renderRoutes() {
   routesList.innerHTML = groups.map((group) => `
     <section class="route-group">
       <h3>${group.time}</h3>
-      ${group.sales.length ? group.sales.map((sale) => `
-        <article class="history-row route-sale">
-          <strong>${escapeHtml(sale.cliente_nome || "Cliente nao informado")}</strong>
-          <span>Entregador: ${escapeHtml(sale.entregador_nome || "Sem entregador")}</span>
-          <span>Produtos: ${escapeHtml(saleProductsLabel(sale))}</span>
-          <span>Valor: ${currency.format(saleGrandTotal(sale))} | Taxa: ${currency.format(saleDelivery(sale))}</span>
-          <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")}</span>
-          <label>Status
-            <select data-route-status="${sale.id}">
-              ${routeStatusOptions(sale.status_entrega || "Aguardando")}
-            </select>
-          </label>
-        </article>
-      `).join("") : "<p>Nenhum pedido nesta rota.</p>"}
+      ${group.sales.length ? group.sales.map((sale) => {
+        const customer = saleDisplayClient(sale);
+        return `
+          <article class="history-row route-sale">
+            <strong>${escapeHtml(customer.name || "Cliente nao informado")}</strong>
+            <span>Entregador: ${escapeHtml(sale.entregador_nome || "Sem entregador")}</span>
+            <span>Produtos: ${escapeHtml(saleProductsLabel(sale))}</span>
+            <span>Valor: ${currency.format(saleGrandTotal(sale))} | Taxa: ${currency.format(saleDelivery(sale))}</span>
+            <span>${escapeHtml(sale.forma_pagamento || "Pagamento nao informado")}</span>
+            <label>Status
+              <select data-route-status="${sale.id}">
+                ${routeStatusOptions(sale.status_entrega || "Aguardando")}
+              </select>
+            </label>
+          </article>
+        `;
+      }).join("") : "<p>Nenhum pedido nesta rota.</p>"}
     </section>
   `).join("");
 }
