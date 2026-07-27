@@ -1833,9 +1833,18 @@ function confirmedSiteOrdersInPeriod() {
   });
 }
 
+function confirmedSiteOrdersHistory() {
+  return app.orders.filter((order) => isConfirmedOrder(order));
+}
+
 function manualSalesInPeriod(sales = filteredSales(), confirmedOrders = confirmedSiteOrdersInPeriod()) {
   const siteSaleIds = new Set(confirmedOrders.map((order) => String(order.venda_id || "")).filter(Boolean));
   return sales.filter((sale) => !siteSaleIds.has(String(sale.id)));
+}
+
+function manualSalesHistory(confirmedOrders = confirmedSiteOrdersHistory()) {
+  const siteSaleIds = new Set(confirmedOrders.map((order) => String(order.venda_id || "")).filter(Boolean));
+  return app.sales.filter((sale) => !sale.cancelada && !siteSaleIds.has(String(sale.id)));
 }
 
 function confirmedSiteOrderRevenue(orders) {
@@ -2040,9 +2049,8 @@ function rankedProducts(sales = filteredSales()) {
 }
 
 function smartOrderSuggestions() {
-  const selected = filteredSales();
-  const confirmedSiteOrders = confirmedSiteOrdersInPeriod();
-  const manualSales = manualSalesInPeriod(selected, confirmedSiteOrders);
+  const confirmedSiteOrders = confirmedSiteOrdersHistory();
+  const manualSales = manualSalesHistory(confirmedSiteOrders);
   const saleIds = new Set(manualSales.map((sale) => String(sale.id)));
   const orderIds = new Set(confirmedSiteOrders.map((order) => String(order.id)));
   const productById = new Map(app.products.map((product) => [String(product.id), product]));
@@ -6139,7 +6147,7 @@ function renderSmartOrderSuggestions() {
         <article class="smart-order-row ${colorClass}">
           <div>
             <strong>${escapeHtml(row.name)}</strong>
-            <span>${escapeHtml(row.status)} | vendeu ${toNumber(row.quantity)} un no periodo | estoque ${stock} un</span>
+            <span>${escapeHtml(row.status)} | vendeu ${toNumber(row.quantity)} un no historico | estoque ${stock} un</span>
           </div>
           <em>${currency.format(row.total)}</em>
         </article>
