@@ -867,7 +867,7 @@
               </div>
               <button type="button" class="primary-action" data-coupon-new>+ Novo cupom</button>
             </div>
-            <p class="muted-text">Crie cupons de desconto para o checkout do site. Nesta versao, o desconto aplicado e sempre em valor fixo.</p>
+            <p class="muted-text">Crie cupons para o checkout do site com desconto fixo por pedido ou por unidade.</p>
             <div class="coupon-kpis" data-coupon-kpis></div>
             <p class="coupon-status-message" data-coupon-status></p>
             <div class="coupon-list" data-coupon-list></div>
@@ -905,6 +905,12 @@
               </div>
               <label>Valor minimo da compra
                 <input type="text" name="valor_minimo" inputmode="decimal" placeholder="Opcional" />
+              </label>
+              <label class="coupon-individual-toggle">
+                <input type="checkbox" name="desconto_individual" />
+                <span></span>
+                <strong>Desconto individual por unidade</strong>
+                <small>Ex.: R$ 10,00 x 3 unidades = R$ 30,00 de desconto.</small>
               </label>
               <div class="coupon-form-grid">
                 <label>Data de inicio

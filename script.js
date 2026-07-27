@@ -79,6 +79,7 @@ const state = {
     code: "",
     type: "valor",
     value: 0,
+    individual: false,
     discount: 0,
     total: 0,
     message: "",
@@ -1510,6 +1511,7 @@ function resetCoupon(message = "", status = "") {
     code: "",
     type: "valor",
     value: 0,
+    individual: false,
     discount: 0,
     total: 0,
     message,
@@ -1571,6 +1573,23 @@ function renderCouponState() {
   if (hasCoupon && normalTotal <= 0) resetCoupon();
 }
 
+async function validateCouponCheckout(code, subtotal, quantity) {
+  const args = {
+    p_codigo: code,
+    p_subtotal: subtotal,
+    p_quantidade: Math.max(1, Number(quantity || 1)),
+  };
+  const result = await supabaseClient.rpc("validar_cupom_checkout", args);
+  const message = String(result.error?.message || result.error?.details || "").toLowerCase();
+  if (result.error && message.includes("p_quantidade")) {
+    return supabaseClient.rpc("validar_cupom_checkout", {
+      p_codigo: code,
+      p_subtotal: subtotal,
+    });
+  }
+  return result;
+}
+
 async function applyCoupon() {
   if (!state.couponsAvailable) {
     resetCoupon();
@@ -1587,7 +1606,7 @@ async function applyCoupon() {
     resetCoupon("Digite seu cupom.", "error");
     return;
   }
-  const { normalTotal } = getCartSummary();
+  const { count, normalTotal } = getCartSummary();
   if (normalTotal <= 0) {
     resetCoupon("Adicione produtos antes de aplicar o cupom.", "error");
     return;
@@ -1597,10 +1616,7 @@ async function applyCoupon() {
   state.coupon.status = "loading";
   renderCouponState();
   try {
-    const { data, error } = await supabaseClient.rpc("validar_cupom_checkout", {
-      p_codigo: code,
-      p_subtotal: normalTotal,
-    });
+    const { data, error } = await validateCouponCheckout(code, normalTotal, count);
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.valido) {
@@ -1613,6 +1629,7 @@ async function applyCoupon() {
       code: row.codigo || code,
       type: row.tipo_desconto || "valor",
       value: Number(row.valor || 0),
+      individual: Boolean(row.desconto_individual),
       discount: Number(row.desconto || 0),
       total: Number(row.total || Math.max(0, normalTotal - Number(row.desconto || 0))),
       message: "Cupom aplicado com sucesso.",
@@ -1857,10 +1874,7 @@ async function savePendingSiteOrder(customer = {}) {
   if (!(await refreshStoreAvailability())) throw new Error(storeClosedText());
   let totals = getCheckoutTotals();
   if (state.coupon.id) {
-    const { data, error } = await supabaseClient.rpc("validar_cupom_checkout", {
-      p_codigo: state.coupon.code,
-      p_subtotal: totals.normalTotal,
-    });
+    const { data, error } = await validateCouponCheckout(state.coupon.code, totals.normalTotal, totals.count);
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row?.valido) {
@@ -1873,6 +1887,7 @@ async function savePendingSiteOrder(customer = {}) {
       code: row.codigo || state.coupon.code,
       type: row.tipo_desconto || "valor",
       value: Number(row.valor || 0),
+      individual: Boolean(row.desconto_individual),
       discount: Number(row.desconto || 0),
       total: Number(row.total || Math.max(0, totals.normalTotal - Number(row.desconto || 0))),
       message: "Cupom aplicado com sucesso.",

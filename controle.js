@@ -1533,6 +1533,7 @@ function renderCoupons() {
           <span class="coupon-code">${escapeHtml(coupon.codigo || "")}</span>
           ${coupon.nome_interno ? `<small>${escapeHtml(coupon.nome_interno)}</small>` : ""}
           <strong>${escapeHtml(currency.format(value))}</strong>
+          ${coupon.desconto_individual ? `<span class="coupon-mode-pill">Por unidade</span>` : ""}
           <span class="coupon-validity">Validade: ${escapeHtml(couponDateLabel(coupon.fim))}</span>
         </div>
         <div class="coupon-card-stats">
@@ -1562,6 +1563,7 @@ function openCouponModal(id = "") {
     couponForm.elements.tipo_desconto.value = coupon?.tipo_desconto || "valor";
     couponForm.elements.valor.value = coupon ? Number(coupon.valor || 0).toFixed(2).replace(".", ",") : "";
     couponForm.elements.valor_minimo.value = coupon?.valor_minimo ? Number(coupon.valor_minimo).toFixed(2).replace(".", ",") : "";
+    if (couponForm.elements.desconto_individual) couponForm.elements.desconto_individual.checked = Boolean(coupon?.desconto_individual);
     couponForm.elements.inicio.value = couponDateInputValue(coupon?.inicio);
     couponForm.elements.fim.value = couponDateInputValue(coupon?.fim);
     couponForm.elements.limite_uso.value = coupon?.limite_uso ?? "";
@@ -1606,6 +1608,7 @@ async function saveCoupon(event) {
       tipo_desconto: "valor",
       valor,
       valor_minimo: valorMinimo || 0,
+      desconto_individual: Boolean(form.elements.desconto_individual?.checked),
       inicio: form.elements.inicio.value ? `${form.elements.inicio.value}T00:00:00` : null,
       fim: form.elements.fim.value ? `${form.elements.fim.value}T23:59:59` : null,
       limite_uso: form.elements.limite_uso.value === "" ? null : Math.max(0, Number.parseInt(form.elements.limite_uso.value, 10)),

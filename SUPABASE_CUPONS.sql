@@ -11,6 +11,7 @@ create table if not exists public.cupons (
   codigo_normalizado text not null,
   tipo_desconto text not null default 'valor',
   valor numeric(12, 2) not null default 0,
+  desconto_individual boolean not null default false,
   valor_minimo numeric(12, 2) not null default 0,
   inicio timestamptz,
   fim timestamptz,
@@ -34,6 +35,7 @@ alter table public.cupons add column if not exists codigo text not null default 
 alter table public.cupons add column if not exists codigo_normalizado text not null default '';
 alter table public.cupons add column if not exists tipo_desconto text not null default 'valor';
 alter table public.cupons add column if not exists valor numeric(12, 2) not null default 0;
+alter table public.cupons add column if not exists desconto_individual boolean not null default false;
 alter table public.cupons add column if not exists valor_minimo numeric(12, 2) not null default 0;
 alter table public.cupons add column if not exists inicio timestamptz;
 alter table public.cupons add column if not exists fim timestamptz;
@@ -73,6 +75,7 @@ begin
   new.codigo_normalizado := public.normalizar_codigo_cupom(coalesce(new.codigo_normalizado, new.codigo));
   new.tipo_desconto := coalesce(nullif(new.tipo_desconto, ''), 'valor');
   new.valor := round(coalesce(new.valor, 0), 2);
+  new.desconto_individual := coalesce(new.desconto_individual, false);
   new.valor_minimo := round(coalesce(new.valor_minimo, 0), 2);
   new.updated_at := now();
   return new;
@@ -123,9 +126,12 @@ $$;
 
 create index if not exists pedidos_cupom_id_idx on public."PEDIDOS" (cupom_id);
 
+drop function if exists public.validar_cupom_checkout(text, numeric);
+
 create or replace function public.validar_cupom_checkout(
   p_codigo text,
-  p_subtotal numeric
+  p_subtotal numeric,
+  p_quantidade integer default 1
 )
 returns table (
   valido boolean,
@@ -134,6 +140,7 @@ returns table (
   codigo text,
   tipo_desconto text,
   valor numeric,
+  desconto_individual boolean,
   desconto numeric,
   total numeric
 )
@@ -144,14 +151,16 @@ as $$
 declare
   v_codigo text;
   v_subtotal numeric(12, 2);
+  v_quantidade integer;
   v_cupom public.cupons%rowtype;
   v_desconto numeric(12, 2);
 begin
   v_codigo := public.normalizar_codigo_cupom(p_codigo);
   v_subtotal := round(greatest(coalesce(p_subtotal, 0), 0), 2);
+  v_quantidade := greatest(coalesce(p_quantidade, 1), 1);
 
   if v_codigo = '' then
-    return query select false, 'Digite seu cupom.', null::uuid, null::text, null::text, 0::numeric, 0::numeric, v_subtotal;
+    return query select false, 'Digite seu cupom.', null::uuid, null::text, null::text, 0::numeric, false, 0::numeric, v_subtotal;
     return;
   end if;
 
@@ -162,42 +171,44 @@ begin
   limit 1;
 
   if not found then
-    return query select false, 'Cupom nao encontrado.', null::uuid, null::text, null::text, 0::numeric, 0::numeric, v_subtotal;
+    return query select false, 'Cupom nao encontrado.', null::uuid, null::text, null::text, 0::numeric, false, 0::numeric, v_subtotal;
     return;
   end if;
 
   if v_cupom.ativo is false then
-    return query select false, 'Cupom inativo.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, 0::numeric, v_subtotal;
+    return query select false, 'Cupom inativo.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_cupom.desconto_individual, 0::numeric, v_subtotal;
     return;
   end if;
 
   if v_cupom.inicio is not null and now() < v_cupom.inicio then
-    return query select false, 'Cupom ainda nao esta disponivel.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, 0::numeric, v_subtotal;
+    return query select false, 'Cupom ainda nao esta disponivel.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_cupom.desconto_individual, 0::numeric, v_subtotal;
     return;
   end if;
 
   if v_cupom.fim is not null and now() > v_cupom.fim then
-    return query select false, 'Cupom expirado.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, 0::numeric, v_subtotal;
+    return query select false, 'Cupom expirado.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_cupom.desconto_individual, 0::numeric, v_subtotal;
     return;
   end if;
 
   if v_cupom.limite_uso is not null and v_cupom.usos >= v_cupom.limite_uso then
-    return query select false, 'Cupom ja atingiu o limite de usos.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, 0::numeric, v_subtotal;
+    return query select false, 'Cupom ja atingiu o limite de usos.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_cupom.desconto_individual, 0::numeric, v_subtotal;
     return;
   end if;
 
   if v_cupom.valor_minimo > 0 and v_subtotal < v_cupom.valor_minimo then
-    return query select false, 'Compra nao atende ao valor minimo.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, 0::numeric, v_subtotal;
+    return query select false, 'Compra nao atende ao valor minimo.', null::uuid, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_cupom.desconto_individual, 0::numeric, v_subtotal;
     return;
   end if;
 
   if v_cupom.tipo_desconto = 'percentual' then
     v_desconto := round(v_subtotal * least(v_cupom.valor, 100) / 100, 2);
+  elsif v_cupom.desconto_individual then
+    v_desconto := round(least(v_cupom.valor * v_quantidade, v_subtotal), 2);
   else
     v_desconto := round(least(v_cupom.valor, v_subtotal), 2);
   end if;
 
-  return query select true, 'Cupom aplicado com sucesso.', v_cupom.id, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_desconto, round(v_subtotal - v_desconto, 2);
+  return query select true, 'Cupom aplicado com sucesso.', v_cupom.id, v_cupom.codigo, v_cupom.tipo_desconto, v_cupom.valor, v_cupom.desconto_individual, v_desconto, round(v_subtotal - v_desconto, 2);
 end;
 $$;
 
@@ -357,10 +368,10 @@ begin
 end;
 $$;
 
-revoke all on function public.validar_cupom_checkout(text, numeric) from public;
+revoke all on function public.validar_cupom_checkout(text, numeric, integer) from public;
 revoke all on function public.existe_cupom_ativo_checkout() from public;
 revoke all on function public.registrar_uso_cupom(uuid, numeric) from public;
-grant execute on function public.validar_cupom_checkout(text, numeric) to anon, authenticated;
+grant execute on function public.validar_cupom_checkout(text, numeric, integer) to anon, authenticated;
 grant execute on function public.existe_cupom_ativo_checkout() to anon, authenticated;
 grant execute on function public.registrar_uso_cupom(uuid, numeric) to anon, authenticated;
 grant execute on function public.registrar_pedido_site(jsonb, jsonb) to anon, authenticated;

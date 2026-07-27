@@ -4417,6 +4417,17 @@ body.modal-open {
   background: #fff1dc;
 }
 
+.coupon-mode-pill {
+  width: fit-content;
+  min-height: 26px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  color: #0f7a49;
+  background: rgba(25, 135, 84, 0.1);
+  font-size: 0.74rem;
+  font-weight: 950;
+}
+
 .coupon-actions {
   display: flex;
   gap: 8px;
@@ -4487,6 +4498,75 @@ body.modal-open {
 
 .coupon-form-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.coupon-individual-toggle {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "switch title"
+    "switch help";
+  align-items: center;
+  column-gap: 12px;
+  row-gap: 2px;
+  min-height: 58px;
+  padding: 12px;
+  border: 1px solid rgba(25, 135, 84, 0.18);
+  border-radius: 14px;
+  background: rgba(25, 135, 84, 0.055);
+  cursor: pointer;
+}
+
+.coupon-individual-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.coupon-individual-toggle span {
+  grid-area: switch;
+  position: relative;
+  width: 46px;
+  height: 28px;
+  border-radius: 999px;
+  background: #d8dde6;
+  transition: 180ms ease;
+}
+
+.coupon-individual-toggle span::after {
+  content: "";
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(17, 17, 17, 0.18);
+  transition: 180ms ease;
+}
+
+.coupon-individual-toggle input:checked + span {
+  background: var(--green);
+}
+
+.coupon-individual-toggle input:checked + span::after {
+  transform: translateX(18px);
+}
+
+.coupon-individual-toggle strong {
+  grid-area: title;
+  color: var(--black);
+  font-size: 0.92rem;
+  line-height: 1.15;
+}
+
+.coupon-individual-toggle small {
+  grid-area: help;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1.25;
 }
 
 .coupon-modal-actions {
