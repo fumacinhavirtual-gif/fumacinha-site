@@ -6145,7 +6145,7 @@ function renderSmartOrderSuggestions() {
         </article>
       `;
     }).join("")}</div>`
-    : `<p class="operational-alert-empty">Nenhuma sugestao de pedido agora. Produtos com pouco estoque, mas sem venda forte, foram ignorados.</p>`;
+    : `<p class="operational-alert-empty smart-order-empty">Nenhuma sugestao agora.</p>`;
 }
 
 function renderReports() {

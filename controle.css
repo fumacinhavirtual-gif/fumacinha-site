@@ -2157,6 +2157,31 @@ textarea {
   gap: 10px;
 }
 
+.smart-order-panel {
+  padding: 14px;
+}
+
+.smart-order-panel .home-section-head {
+  margin-bottom: 8px;
+}
+
+.smart-order-panel .muted-text {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.smart-order-empty {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  border-radius: 999px;
+  padding: 7px 11px;
+  background: rgba(25, 135, 84, 0.09);
+  font-size: 0.86rem;
+  line-height: 1.2;
+}
+
 .smart-order-row {
   display: flex;
   align-items: center;
@@ -8427,6 +8452,34 @@ body.modal-open {
   .smart-order-row {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .smart-order-panel {
+    border-radius: 18px;
+    padding: 12px;
+  }
+
+  .smart-order-panel .home-section-head {
+    margin-bottom: 6px;
+  }
+
+  .smart-order-panel .home-section-head h2 {
+    font-size: 1.05rem;
+    line-height: 1.15;
+  }
+
+  .smart-order-panel .eyebrow {
+    font-size: 0.7rem;
+  }
+
+  .smart-order-panel .muted-text {
+    margin-bottom: 8px;
+    font-size: 0.78rem;
+  }
+
+  .smart-order-empty {
+    padding: 6px 10px;
+    font-size: 0.78rem;
   }
 
   .stock-total-summary {
