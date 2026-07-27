@@ -1782,7 +1782,7 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["home", "sales", "stock", "history", "finance", "cash", "clients", "coupons"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["home", "sales", "orders", "stock", "history", "finance", "cash", "clients", "coupons"].includes(app.activeTab);
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
   $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
