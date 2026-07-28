@@ -3994,6 +3994,18 @@ function viewOrderDetails(orderId) {
   openOrderDrawer(order, items);
 }
 
+function orderDiscountValue(order = {}) {
+  const explicitDiscount = toNumber(order.cupom_desconto || order.desconto || 0);
+  if (explicitDiscount > 0) return explicitDiscount;
+  const subtotal = toNumber(order.valor_subtotal || 0);
+  const discountedTotal = toNumber(order.valor_total_com_desconto || order.valor_produtos || 0);
+  return subtotal > discountedTotal ? subtotal - discountedTotal : 0;
+}
+
+function orderPaidValue(order = {}) {
+  return toNumber(order.valor_pago_cliente || order.valor_total_com_desconto || order.valor_produtos || 0);
+}
+
 function orderStatusDescription(status = "") {
   const normalized = normalizeOrderStatus(status);
   if (normalized === "confirmado") return "Este pedido ja foi confirmado.";
@@ -4100,12 +4112,13 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
       valor_unitario: item.valor_unitario,
     });
   }).join("");
-  saleForm.elements.desconto.value = toNumber(order.desconto || 0).toFixed(2).replace(".", ",");
+  const orderDiscount = orderDiscountValue(order);
+  saleForm.elements.desconto.value = orderDiscount.toFixed(2).replace(".", ",");
   const breakdown = paymentBreakdownFromText(order.observacao_interna || "");
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || order.forma_pagamento || "Pix";
   if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
   setSplitPaymentFields(breakdown);
-  saleForm.elements.valor_recebido.value = toNumber(order.valor_pago_cliente || order.valor_produtos).toFixed(2).replace(".", ",");
+  saleForm.elements.valor_recebido.value = orderPaidValue(order).toFixed(2).replace(".", ",");
   saleForm.elements.teve_troco.value = order.teve_troco || toNumber(order.troco) > 0 ? "sim" : "nao";
   saleForm.elements.troco.value = toNumber(order.troco || 0) ? toNumber(order.troco).toFixed(2).replace(".", ",") : "";
   saleForm.elements.taxa_entrega.value = toNumber(order.taxa_entrega || 0).toFixed(2).replace(".", ",");
