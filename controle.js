@@ -2955,7 +2955,7 @@ function loadSaleForEdit(saleId) {
   app.currentSaleCouponCode = "";
   switchTab("sales");
   saleItemsRoot.innerHTML = items.map((item) => saleItemTemplate(item)).join("");
-  saleForm.elements.desconto.value = toNumber(sale.desconto).toFixed(2);
+  saleForm.elements.desconto.value = toNumber(sale.desconto).toFixed(2).replace(".", ",");
   const breakdown = salePaymentBreakdown(sale);
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || sale.forma_pagamento || "Pix";
   if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
