@@ -89,6 +89,7 @@ const app = {
   editingSaleId: null,
   editingOrderId: null,
   confirmingOrderId: null,
+  currentSaleCouponCode: "",
   orderStatusFilter: "pending",
   orderSearch: "",
   orderSort: "recent",
@@ -726,8 +727,8 @@ function sortedOrders(rows) {
   const sorted = [...rows];
   sorted.sort((a, b) => {
     if (app.orderSort === "oldest") return new Date(a.created_at || 0) - new Date(b.created_at || 0);
-    if (app.orderSort === "value-desc") return toNumber(b.valor_produtos) - toNumber(a.valor_produtos);
-    if (app.orderSort === "value-asc") return toNumber(a.valor_produtos) - toNumber(b.valor_produtos);
+    if (app.orderSort === "value-desc") return orderFinalValue(b) - orderFinalValue(a);
+    if (app.orderSort === "value-asc") return orderFinalValue(a) - orderFinalValue(b);
     return new Date(b.created_at || 0) - new Date(a.created_at || 0);
   });
   return sorted;
@@ -891,7 +892,7 @@ function notifyNewOrder(order) {
   const receivedAt = new Date(order.created_at || Date.now()).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   const customer = orderDisplayClient(order);
   showToast(
-    `Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${customer.name || "Cliente"}\n${currency.format(order.valor_produtos || 0)}\nRecebido as ${receivedAt}`,
+    `Novo pedido recebido\n${order.codigo || `Pedido #${order.id}`}\n${customer.name || "Cliente"}\n${currency.format(orderFinalValue(order))}\nRecebido as ${receivedAt}`,
     "order",
     { clickable: true, onClick: () => scrollToOrder(order.id) }
   );
@@ -1886,7 +1887,7 @@ function manualSalesHistory(confirmedOrders = confirmedSiteOrdersHistory()) {
 }
 
 function confirmedSiteOrderRevenue(orders) {
-  return orders.reduce((sum, order) => sum + toNumber(order.valor_produtos), 0);
+  return orders.reduce((sum, order) => sum + orderFinalValue(order), 0);
 }
 
 function renderDashboard() {
@@ -2541,15 +2542,25 @@ function updateSaleItemPreview(row, product) {
   `;
 }
 
-function currentProductTotal() {
-  const discount = parseMoney(saleForm?.elements.desconto?.value);
-  const subtotal = $$(".sale-item").reduce((sum, row) => {
+function currentSaleSubtotal() {
+  return $$(".sale-item").reduce((sum, row) => {
     return sum + toNumber(row.querySelector('[name="quantidade"]')?.value) * parseMoney(row.querySelector('[name="valor_unitario"]')?.value);
   }, 0);
+}
+
+function currentSaleDiscount(subtotal = currentSaleSubtotal()) {
+  return Math.min(Math.max(0, parseMoney(saleForm?.elements.desconto?.value)), Math.max(0, subtotal));
+}
+
+function currentProductTotal() {
+  const subtotal = currentSaleSubtotal();
+  const discount = currentSaleDiscount(subtotal);
   return Math.max(0, subtotal - discount);
 }
 
 function currentSaleDraft() {
+  const productsSubtotal = currentSaleSubtotal();
+  const discount = currentSaleDiscount(productsSubtotal);
   const productsValue = currentProductTotal();
   const payment = saleForm?.elements.forma_pagamento?.value || "Pix";
   const split = saleForm?.elements.pagamento_dividido?.checked || false;
@@ -2581,6 +2592,8 @@ function currentSaleDraft() {
     cardServiceFee,
     deliveryValue,
     totalSale,
+    productsSubtotal,
+    discount,
     routeDate: saleForm?.elements.data_entrega?.value || localDateValue(),
     routeTime: saleForm?.elements.horario_rota?.value || "11:00",
   };
@@ -2616,7 +2629,11 @@ function updateSaleTotal() {
   const changeInvalid = draft.cash && draft.hasChange && (!String(changeInput?.value || "").trim() || draft.changeValue < 0);
   const deliveryInvalid = draft.deliveryValue < 0;
 
-  setAllText("[data-sale-products]", currency.format(draft.productsValue));
+  const discountLabel = app.currentSaleCouponCode ? `Cupom ${app.currentSaleCouponCode}` : "Desconto";
+  setAllText("[data-sale-products]", currency.format(draft.productsSubtotal));
+  setAllText("[data-sale-discount-label]", discountLabel);
+  setAllText("[data-sale-discount]", `- ${currency.format(draft.discount)}`);
+  $$("[data-sale-discount-row]").forEach((element) => element.classList.toggle("hidden", draft.discount <= 0));
   setAllText("[data-sale-received]", currency.format(draft.paidValue));
   setAllText("[data-sale-delivery]", currency.format(Math.max(0, draft.deliveryValue)));
   setAllText("[data-sale-net-products]", currency.format(draft.productsValue));
@@ -2733,6 +2750,12 @@ function isMissingClientIdColumnError(error) {
   return message.includes("cliente_id") && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
 }
 
+function isMissingOrderCouponColumnError(error) {
+  const message = String(error?.message || error?.details || "").toLowerCase();
+  return ["valor_subtotal", "cupom_desconto", "valor_total_com_desconto", "cupom_codigo", "cupom_id"].some((field) => message.includes(field))
+    && (message.includes("column") || message.includes("schema cache") || message.includes("record"));
+}
+
 function removeProfitSnapshot(payload) {
   const { lucro_total, ...rest } = payload;
   return rest;
@@ -2745,6 +2768,16 @@ function removeProfitSnapshotFromItems(items) {
 function removeOptionalSaleColumns(payload) {
   const next = { ...payload };
   delete next.cliente_id;
+  return next;
+}
+
+function removeOptionalOrderColumns(payload) {
+  const next = removeOptionalSaleColumns(payload);
+  delete next.valor_subtotal;
+  delete next.cupom_id;
+  delete next.cupom_codigo;
+  delete next.cupom_desconto;
+  delete next.valor_total_com_desconto;
   return next;
 }
 
@@ -2769,17 +2802,22 @@ async function updateOrderWithClientFallback(payload, orderId, status = "") {
   let query = supabaseClient.from(TABLES.orders).update(payload).eq("id", orderId);
   if (status) query = query.eq("status", status);
   const result = await query;
-  if (!isMissingClientIdColumnError(result.error)) return result;
-  console.error("Coluna cliente_id ausente em PEDIDOS. Execute SUPABASE_CLIENTES_INTEGRACAO.sql para vincular clientes aos pedidos.", result.error);
-  const fallbackPayload = removeOptionalSaleColumns(payload);
+  if (!isMissingClientIdColumnError(result.error) && !isMissingOrderCouponColumnError(result.error)) return result;
+  if (isMissingClientIdColumnError(result.error)) {
+    console.error("Coluna cliente_id ausente em PEDIDOS. Execute SUPABASE_CLIENTES_INTEGRACAO.sql para vincular clientes aos pedidos.", result.error);
+  }
+  if (isMissingOrderCouponColumnError(result.error)) {
+    console.error("Colunas de cupom ausentes em PEDIDOS. Execute SUPABASE_CUPONS.sql para persistir subtotal, cupom e total com desconto.", result.error);
+  }
+  const fallbackPayload = removeOptionalOrderColumns(payload);
   query = supabaseClient.from(TABLES.orders).update(fallbackPayload).eq("id", orderId);
   if (status) query = query.eq("status", status);
   return query;
 }
 
 function buildSalePayload(items, seller, deliverer) {
-  const discount = parseMoney(saleForm.elements.desconto.value);
   const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+  const discount = currentSaleDiscount(subtotal);
   const draft = currentSaleDraft();
   const paymentChecked = saleForm.elements.pagamento_conferido?.value || "";
   setPaymentCheckMessage("");
@@ -2871,6 +2909,7 @@ function resetSaleForm() {
   app.editingSaleId = null;
   app.editingOrderId = null;
   app.confirmingOrderId = null;
+  app.currentSaleCouponCode = "";
   saleForm.reset();
   setPaymentCheckMessage("");
   if (saleConfirmationTimer) window.clearTimeout(saleConfirmationTimer);
@@ -2913,6 +2952,7 @@ function loadSaleForEdit(saleId) {
   const items = app.saleItems.filter((item) => String(item.venda_id) === String(saleId));
   if (!items.length) return setStatus("Venda sem itens para editar.", "error");
   app.editingSaleId = sale.id;
+  app.currentSaleCouponCode = "";
   switchTab("sales");
   saleItemsRoot.innerHTML = items.map((item) => saleItemTemplate(item)).join("");
   saleForm.elements.desconto.value = toNumber(sale.desconto).toFixed(2);
@@ -3330,7 +3370,7 @@ function orderStatusInfo(status = "") {
 function renderPendingOrderSummary() {
   if (!pendingSummary) return;
   const rows = pendingOrders();
-  const total = rows.reduce((sum, order) => sum + toNumber(order.valor_produtos), 0);
+  const total = rows.reduce((sum, order) => sum + orderFinalValue(order), 0);
   pendingSummary.innerHTML = `
     <section class="pending-orders-summary" aria-label="Resumo de pedidos pendentes">
       <article>
@@ -3367,7 +3407,8 @@ function renderPendingOrders() {
       const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
       const productText = items.map((item) => `${toNumber(item.quantidade || 1)}x ${escapeHtml(item.produto_nome || "Produto")}`).join(" | ") || "Sem itens";
       const phoneText = orderPhone(order) ? phoneDisplay(orderPhone(order)) : "Sem telefone";
-      const value = currency.format(order.valor_produtos || 0);
+      const discount = orderDiscountValue(order, items);
+      const value = currency.format(orderFinalValue(order, items));
       return `
         <article class="pending-order-card ${statusInfo.className}" data-order-row="${order.id}">
           <div class="pending-order-icon" aria-hidden="true">${statusInfo.icon}</div>
@@ -3379,7 +3420,7 @@ function renderPendingOrders() {
               </div>
               <div class="pending-order-value">
                 <strong>${value}</strong>
-                <span>${escapeHtml(order.origem || "Site")}</span>
+                <span>${discount > 0 ? `Cupom ${escapeHtml(order.cupom_codigo || "")}` : escapeHtml(order.origem || "Site")}</span>
               </div>
             </header>
             <span class="pending-order-status">${statusInfo.label}</span>
@@ -3627,7 +3668,7 @@ function renderSalesHistoryRow(row) {
           </span>
         </div>
         <div class="sale-history-side">
-          <strong>${currency.format(order.valor_produtos || 0)}</strong>
+          <strong>${currency.format(orderFinalValue(order))}</strong>
           <span>${escapeHtml(order.forma_pagamento || "Site")}</span>
         </div>
         <button type="button" class="sale-history-menu-button" data-history-menu-toggle="${escapeHtml(`order-${order.id}`)}" aria-label="Acoes do pedido ${escapeHtml(code)}">...</button>
@@ -3715,7 +3756,7 @@ function isHistoryRowCancelled(row) {
 
 function historyRowRevenue(row) {
   if (isHistoryRowCancelled(row)) return 0;
-  return row.type === "sale" ? saleTotal(row.sale) : toNumber(row.order.valor_produtos);
+  return row.type === "sale" ? saleTotal(row.sale) : orderFinalValue(row.order);
 }
 
 function saleDetailItems(sale) {
@@ -3828,6 +3869,9 @@ function openSaleDetailPanel(sale, trigger = null) {
   const paymentDetails = paymentBreakdownLabel(salePaymentBreakdown(sale)) || sale.forma_pagamento || "Nao informado";
   const customerPhone = customer.phone || "";
   const customerName = customer.name || "Nao informado";
+  const saleDiscount = toNumber(sale.desconto || linkedOrder?.cupom_desconto || 0);
+  const subtotalProducts = items.reduce((sum, item) => sum + toNumber(item.subtotal), 0) || saleProductsValue(sale) + saleDiscount;
+  const couponCode = String(linkedOrder?.cupom_codigo || "").trim();
   const total = saleGrandTotal(sale);
   saleDetailBody.innerHTML = `
     <header class="sale-detail-header ${statusInfo.className}">
@@ -3875,14 +3919,15 @@ function openSaleDetailPanel(sale, trigger = null) {
     <section class="sale-detail-card">
       <h3>Valores</h3>
       <div class="sale-detail-values">
-        ${saleDetailValueRow("Produtos", currency.format(saleProductsValue(sale)))}
+        ${saleDetailValueRow("Subtotal dos produtos", currency.format(subtotalProducts))}
+        ${couponCode ? saleDetailValueRow("Cupom utilizado", couponCode) : ""}
+        ${saleDiscount > 0 ? saleDetailValueRow(couponCode ? "Desconto do cupom" : "Desconto", currency.format(saleDiscount)) : ""}
         ${saleDetailValueRow("Entrega", currency.format(saleDelivery(sale)))}
         ${saleDetailValueRow("Valor pago", currency.format(saleDeliveredValue(sale)))}
-        ${saleDetailValueRow("Total", currency.format(total), "sale-values-total")}
+        ${saleDetailValueRow("Total final", currency.format(total), "sale-values-total")}
         <div class="sale-values-extra hidden" data-sale-values-extra>
-          ${saleDetailValueRow("Desconto", currency.format(toNumber(sale.desconto || 0)))}
           ${saleDetailValueRow("Comissao", currency.format(saleCommission(sale)))}
-          ${saleDetailValueRow("Liquido", currency.format(saleProductsValue(sale) - toNumber(sale.desconto || 0)))}
+          ${saleDetailValueRow("Liquido", currency.format(saleProductsValue(sale)))}
         </div>
         <button type="button" class="sale-values-toggle" data-sale-values-toggle aria-expanded="false">▼ Ver detalhamento</button>
       </div>
@@ -4015,6 +4060,17 @@ function orderPaidValue(order = {}) {
   return toNumber(order.valor_pago_cliente || order.valor_total_com_desconto || order.valor_produtos || 0);
 }
 
+function orderSubtotalValue(order = {}, items = orderItems(order.id)) {
+  return toNumber(order.valor_subtotal || 0) || orderItemsSubtotal(items) || toNumber(order.valor_produtos || 0);
+}
+
+function orderFinalValue(order = {}, items = orderItems(order.id)) {
+  const storedTotal = toNumber(order.valor_total_com_desconto || order.valor_produtos || 0);
+  if (storedTotal > 0 || order.valor_total_com_desconto === 0 || order.valor_produtos === 0) return storedTotal;
+  const subtotal = orderSubtotalValue(order, items);
+  return Math.max(0, subtotal - orderDiscountValue(order, items));
+}
+
 function orderStatusDescription(status = "") {
   const normalized = normalizeOrderStatus(status);
   if (normalized === "confirmado") return "Este pedido ja foi confirmado.";
@@ -4029,8 +4085,9 @@ function openOrderDrawer(order, items = []) {
   const statusInfo = orderStatusInfo(order.status);
   const createdAt = new Date(order.created_at || Date.now());
   const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
-  const subtotal = orderItemsSubtotal(items);
-  const total = toNumber(order.valor_produtos || subtotal);
+  const subtotal = orderSubtotalValue(order, items);
+  const discount = orderDiscountValue(order, items);
+  const total = orderFinalValue(order, items);
   const customer = orderDisplayClient(order);
   const phone = orderPhone(order) ? phoneDisplay(orderPhone(order)) : "Nao informado";
   orderDrawerBody.innerHTML = `
@@ -4075,6 +4132,7 @@ function openOrderDrawer(order, items = []) {
       </div>
       <div class="order-drawer-totals">
         <span>Subtotal <strong>${currency.format(subtotal || total)}</strong></span>
+        ${discount > 0 ? `<span>Cupom ${escapeHtml(order.cupom_codigo || "")} <strong>- ${currency.format(discount)}</strong></span>` : ""}
         <span>Total <strong>${currency.format(total)}</strong></span>
       </div>
     </section>
@@ -4122,6 +4180,7 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
     });
   }).join("");
   const orderDiscount = orderDiscountValue(order, items);
+  app.currentSaleCouponCode = orderDiscount > 0 ? String(order.cupom_codigo || "").trim() : "";
   saleForm.elements.desconto.value = orderDiscount.toFixed(2).replace(".", ",");
   const breakdown = paymentBreakdownFromText(order.observacao_interna || "");
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || order.forma_pagamento || "Pix";
@@ -4190,6 +4249,8 @@ async function saveOrderEdit(event) {
     const usuarioId = await requireUserId();
     const items = collectSaleItems({ allowEditing: true });
     const draft = currentSaleDraft();
+    const subtotal = items.reduce((sum, item) => sum + item.quantity * item.unitValue, 0);
+    const discount = currentSaleDiscount(subtotal);
     if (draft.paidValue < draft.productsValue + draft.cardServiceFee) {
       throw new Error(draft.cardServiceFee > 0 ? "Valor pago menor que produtos + R$ 1,00 da taxa do cartao." : "Valor pago menor que o valor dos produtos.");
     }
@@ -4210,8 +4271,11 @@ async function saveOrderEdit(event) {
       teve_troco: draft.cash && draft.hasChange,
       troco: draft.cash && draft.hasChange ? draft.changeValue : 0,
       taxa_entrega: Math.max(0, draft.deliveryValue),
-      desconto: parseMoney(saleForm.elements.desconto.value),
+      desconto: discount,
       valor_produtos: draft.productsValue,
+      valor_subtotal: subtotal,
+      cupom_desconto: discount,
+      valor_total_com_desconto: draft.productsValue,
       vendedora_id: saleForm.elements.vendedora_id.value || null,
       entregador_id: saleForm.elements.entregador_id.value || null,
       data_entrega: draft.routeDate,
@@ -5620,7 +5684,7 @@ function purchasePaymentMethods(purchase) {
 }
 
 function purchaseTotal(purchase) {
-  if (purchase?.type === "order") return toNumber(purchase.order.valor_produtos || 0);
+  if (purchase?.type === "order") return orderFinalValue(purchase.order);
   return saleGrandTotal(purchase?.sale || {});
 }
 

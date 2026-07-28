@@ -5029,6 +5029,10 @@ body.modal-open {
   white-space: nowrap;
 }
 
+.sale-summary-discount strong {
+  color: var(--green);
+}
+
 .sale-summary-total {
   margin-top: 8px;
   padding-top: 10px;
