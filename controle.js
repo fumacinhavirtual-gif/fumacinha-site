@@ -6427,11 +6427,13 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     debito: 0,
     credito: 0,
     outros: 0,
+    totalVendas: 0,
     dinheiroRecebido: 0,
     trocoDevolvido: 0,
     dinheiroLiquido: 0,
   };
   cashSalesForDate(dateKey).forEach((sale) => {
+    totals.totalVendas += saleGrandTotal(sale);
     const breakdown = salePaymentBreakdown(sale);
     if (breakdown.length) {
       breakdown.forEach((row) => {
@@ -6451,10 +6453,11 @@ function cashPaymentTotals(dateKey = app.cashDate) {
 
     const payment = normalizePayment(sale.forma_pagamento);
     const value = saleGrandTotal(sale);
+    const deliveredValue = saleDeliveredValue(sale);
     if (payment === "pix") totals.pix += value;
     else if (payment === "dinheiro") {
-      totals.dinheiro += value;
-      totals.dinheiroRecebido += saleDeliveredValue(sale);
+      totals.dinheiro += deliveredValue;
+      totals.dinheiroRecebido += deliveredValue;
       totals.trocoDevolvido += saleChangeValue(sale);
     } else if (payment === "debito") totals.debito += value;
     else if (payment === "credito") totals.credito += value;
@@ -6498,7 +6501,7 @@ function cashCalculate(dateKey = app.cashDate) {
   const change = changeTotalsForDate(dateKey);
   const activeSales = cashSalesForDate(dateKey);
   const cancelledSales = cashSalesForDate(dateKey, true).filter((sale) => sale.cancelada);
-  const totalVendas = payment.pix + payment.dinheiro + payment.debito + payment.credito + payment.outros;
+  const totalVendas = payment.totalVendas;
   const eletronicos = payment.pix + payment.debito + payment.credito + payment.outros;
   const trocoUsadoTotal = change.usado;
   const trocoRestante = Math.max(0, change.saldoFinal);
