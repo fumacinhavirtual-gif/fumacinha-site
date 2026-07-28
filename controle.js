@@ -4043,8 +4043,16 @@ function orderItemsSubtotal(items = []) {
   return items.reduce((sum, item) => {
     const storedSubtotal = toNumber(item.subtotal);
     if (storedSubtotal > 0) return sum + storedSubtotal;
-    return sum + (toNumber(item.valor_unitario) * Math.max(1, toNumber(item.quantidade || 1)));
+    const product = app.products.find((productRow) => String(productRow.id) === String(item.produto_id));
+    const unitValue = toNumber(item.valor_unitario || item.preco_unitario || product?.preco || product?.valor || 0);
+    return sum + (unitValue * Math.max(1, toNumber(item.quantidade || 1)));
   }, 0);
+}
+
+function inferOrderDiscountFromPaid(order = {}, subtotal = 0) {
+  const paidValue = orderPaidValue(order);
+  if (subtotal > 0 && paidValue > 0 && subtotal > paidValue) return subtotal - paidValue;
+  return 0;
 }
 
 function orderDiscountValue(order = {}, items = []) {
@@ -4180,8 +4188,11 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
     });
   }).join("");
   const orderDiscount = orderDiscountValue(order, items);
-  app.currentSaleCouponCode = orderDiscount > 0 ? String(order.cupom_codigo || "").trim() : "";
-  saleForm.elements.desconto.value = orderDiscount.toFixed(2).replace(".", ",");
+  const formSubtotal = currentSaleSubtotal();
+  const inferredDiscount = inferOrderDiscountFromPaid(order, formSubtotal);
+  const finalOrderDiscount = Math.max(orderDiscount, inferredDiscount);
+  app.currentSaleCouponCode = finalOrderDiscount > 0 ? String(order.cupom_codigo || "").trim() : "";
+  saleForm.elements.desconto.value = finalOrderDiscount.toFixed(2).replace(".", ",");
   const breakdown = paymentBreakdownFromText(order.observacao_interna || "");
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || order.forma_pagamento || "Pix";
   if (saleForm.elements.pagamento_conferido) saleForm.elements.pagamento_conferido.value = "";
