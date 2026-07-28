@@ -3994,11 +3994,20 @@ function viewOrderDetails(orderId) {
   openOrderDrawer(order, items);
 }
 
-function orderDiscountValue(order = {}) {
+function orderItemsSubtotal(items = []) {
+  return items.reduce((sum, item) => {
+    const storedSubtotal = toNumber(item.subtotal);
+    if (storedSubtotal > 0) return sum + storedSubtotal;
+    return sum + (toNumber(item.valor_unitario) * Math.max(1, toNumber(item.quantidade || 1)));
+  }, 0);
+}
+
+function orderDiscountValue(order = {}, items = []) {
   const explicitDiscount = toNumber(order.cupom_desconto || order.desconto || 0);
   if (explicitDiscount > 0) return explicitDiscount;
-  const subtotal = toNumber(order.valor_subtotal || 0);
-  const discountedTotal = toNumber(order.valor_total_com_desconto || order.valor_produtos || 0);
+  const subtotal = toNumber(order.valor_subtotal || 0) || orderItemsSubtotal(items);
+  const paidValue = orderPaidValue(order);
+  const discountedTotal = paidValue || toNumber(order.valor_total_com_desconto || order.valor_produtos || 0);
   return subtotal > discountedTotal ? subtotal - discountedTotal : 0;
 }
 
@@ -4020,7 +4029,7 @@ function openOrderDrawer(order, items = []) {
   const statusInfo = orderStatusInfo(order.status);
   const createdAt = new Date(order.created_at || Date.now());
   const quantity = items.reduce((sum, item) => sum + toNumber(item.quantidade || 1), 0);
-  const subtotal = items.reduce((sum, item) => sum + toNumber(item.subtotal || (toNumber(item.valor_unitario) * toNumber(item.quantidade || 1))), 0);
+  const subtotal = orderItemsSubtotal(items);
   const total = toNumber(order.valor_produtos || subtotal);
   const customer = orderDisplayClient(order);
   const phone = orderPhone(order) ? phoneDisplay(orderPhone(order)) : "Nao informado";
@@ -4112,7 +4121,7 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
       valor_unitario: item.valor_unitario,
     });
   }).join("");
-  const orderDiscount = orderDiscountValue(order);
+  const orderDiscount = orderDiscountValue(order, items);
   saleForm.elements.desconto.value = orderDiscount.toFixed(2).replace(".", ",");
   const breakdown = paymentBreakdownFromText(order.observacao_interna || "");
   saleForm.elements.forma_pagamento.value = breakdown[0]?.forma || order.forma_pagamento || "Pix";
