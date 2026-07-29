@@ -158,6 +158,7 @@ const app = {
   costUpdateSaving: false,
   financeDetailType: "revenue",
   financeDetailGrain: "day",
+  financeDetailRange: null,
   user: null,
 };
 
@@ -5266,30 +5267,94 @@ function groupSalesByDay(sales = []) {
   }));
 }
 
+function cloneRange(range) {
+  return { start: new Date(range.start), end: new Date(range.end) };
+}
+
+function addDays(date, amount) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + amount);
+  return next;
+}
+
+function financeCurrentRange() {
+  if (app.financePeriodMode === "month") {
+    const start = monthStartFromKey(app.financeMonth);
+    const isCurrentMonth = app.financeMonth === monthKey();
+    return { start, end: isCurrentMonth ? endOfDay(new Date()) : monthEndFromKey(app.financeMonth) };
+  }
+  return periodRange(app.financeQuickPeriod || app.period);
+}
+
+function financeDetailPeriodKind() {
+  if (app.financePeriodMode === "month") return "month";
+  const period = app.financeQuickPeriod || app.period;
+  if (period === "today" || period === "yesterday") return "day";
+  if (period === "week" || period === "last7" || period === "lastWeek") return "week";
+  if (period === "month" || period === "lastMonth") return "month";
+  if (period === "year") return "year";
+  return "custom";
+}
+
+function financeDetailRangeLabel(range = financeCurrentRange()) {
+  const kind = financeDetailPeriodKind();
+  if (kind === "month") return monthLabel(monthKey(range.start));
+  if (kind === "year") return `Ano ${range.start.getFullYear()}`;
+  if (kind === "week") return `Semana ${dateShortLabel(range.start)} a ${dateShortLabel(range.end)}`;
+  if (kind === "day") {
+    const label = range.start.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "long", year: "numeric" });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }
+  return `${formatDateBR(localDateValue(range.start))} a ${formatDateBR(localDateValue(range.end))}`;
+}
+
+function financeDetailRangePrefix() {
+  const kind = financeDetailPeriodKind();
+  if (kind === "month") return "Mes";
+  if (kind === "week") return "Semana";
+  if (kind === "day") return "Dia";
+  if (kind === "year") return "Ano";
+  return "Periodo";
+}
+
+function shiftFinanceDetailRange(direction) {
+  const current = app.financeDetailRange ? cloneRange(app.financeDetailRange) : financeCurrentRange();
+  const kind = financeDetailPeriodKind();
+  if (kind === "month") {
+    const start = new Date(current.start.getFullYear(), current.start.getMonth() + direction, 1);
+    app.financeDetailRange = { start, end: monthEndFromKey(monthKey(start)) };
+  } else if (kind === "year") {
+    const start = new Date(current.start.getFullYear() + direction, 0, 1);
+    app.financeDetailRange = { start, end: endOfDay(new Date(start.getFullYear(), 11, 31)) };
+  } else if (kind === "week") {
+    app.financeDetailRange = { start: startOfDay(addDays(current.start, direction * 7)), end: endOfDay(addDays(current.end, direction * 7)) };
+  } else if (kind === "day") {
+    app.financeDetailRange = { start: startOfDay(addDays(current.start, direction)), end: endOfDay(addDays(current.end, direction)) };
+  } else {
+    const days = Math.max(1, Math.round((current.end - current.start) / 86400000) + 1);
+    app.financeDetailRange = { start: startOfDay(addDays(current.start, direction * days)), end: endOfDay(addDays(current.end, direction * days)) };
+  }
+  renderFinanceDetail();
+}
+
 function financeGrainKey(date, grain = "day") {
   const value = new Date(date);
-  if (grain === "hour") return `${localDateValue(value)} ${String(value.getHours()).padStart(2, "0")}:00`;
-  if (grain === "week") {
-    const range = currentWeekRange(value);
-    return `${localDateValue(range.start)}|${localDateValue(range.end)}`;
-  }
-  if (grain === "month") return monthKey(value);
-  if (grain === "year") return String(value.getFullYear());
+  if (grain === "hour") return String(value.getHours()).padStart(2, "0");
+  if (grain === "weekday") return String(value.getDay());
   return localDateValue(value);
 }
 
 function financeGrainLabel(key, grain = "day") {
-  if (grain === "hour") {
-    const [date, hour] = key.split(" ");
-    return `${formatDateBR(date)} ${hour.slice(0, 2)}h`;
-  }
-  if (grain === "week") {
-    const [start, end] = key.split("|");
-    return `${dateShortLabel(`${start}T12:00:00`)} a ${dateShortLabel(`${end}T12:00:00`)}`;
-  }
-  if (grain === "month") return monthLabel(key);
-  if (grain === "year") return key;
+  if (grain === "hour") return `${key}:00`;
+  if (grain === "weekday") return ["Domingo", "Segunda", "Terca", "Quarta", "Quinta", "Sexta", "Sabado"][Number(key)] || key;
   return formatDateBR(key);
+}
+
+function financeTablePeriodLabel(row) {
+  if (app.financeDetailGrain === "day") {
+    return financeDetailPeriodKind() === "month" ? String(row.date.getDate()).padStart(2, "0") : dateShortLabel(row.date);
+  }
+  return row.label;
 }
 
 function groupSalesByFinanceGrain(sales = [], grain = "day") {
@@ -5306,7 +5371,11 @@ function groupSalesByFinanceGrain(sales = [], grain = "day") {
     if (date < row.date) row.date = date;
     groups.set(key, row);
   });
-  return [...groups.values()].sort((a, b) => a.date - b.date).map((row) => ({
+  const sorter = (a, b) => {
+    if (grain === "hour" || grain === "weekday") return Number(a.key) - Number(b.key);
+    return a.date - b.date;
+  };
+  return [...groups.values()].sort(sorter).map((row) => ({
     ...row,
     ticket: row.quantity ? row.revenue / row.quantity : 0,
     margin: row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0,
@@ -5387,12 +5456,10 @@ function renderFinanceExpenseSummary(context) {
 
 function financeDetailConfig(type = "revenue") {
   const configs = {
-    revenue: { title: "Faturamento", value: "revenue", columns: ["Data", "Faturamento", "Vendas", "Ticket medio"] },
-    profit: { title: "Lucro", value: "profit", columns: ["Data", "Faturamento", "Custo", "Lucro", "Margem"] },
-    sales: { title: "Vendas", value: "quantity", columns: ["Data", "Vendas", "Faturamento", "Ticket medio"] },
-    ticket: { title: "Ticket medio", value: "ticket", columns: ["Data", "Ticket medio", "Vendas", "Faturamento"] },
-    margin: { title: "Margem de lucro", value: "margin", columns: ["Data", "Margem", "Faturamento", "Lucro"] },
-    cost: { title: "Custo dos produtos vendidos", value: "cost", columns: ["Data", "Custo", "Faturamento", "Lucro"] },
+    revenue: { title: "Faturamento", value: "revenue", columns: ["Dia", "Faturamento", "Vendas", "Ticket medio"] },
+    profit: { title: "Lucro", value: "profit", columns: ["Dia", "Faturamento", "Custo", "Lucro", "Margem"] },
+    sales: { title: "Vendas", value: "quantity", columns: ["Dia", "Faturamento", "Vendas", "Ticket medio"] },
+    ticket: { title: "Ticket medio", value: "ticket", columns: ["Dia", "Ticket medio", "Vendas", "Faturamento"] },
   };
   return configs[type] || configs.revenue;
 }
@@ -5408,7 +5475,7 @@ function financeDetailValue(row, key) {
 
 function financeDetailCell(row, column, type) {
   const normalized = normalizePayment(column);
-  if (normalized === "data") return row.label || dateShortLabel(row.date);
+  if (normalized === "data" || normalized === "dia") return financeTablePeriodLabel(row);
   if (normalized.includes("vendas")) return String(row.quantity);
   if (normalized.includes("ticket")) return currency.format(row.ticket);
   if (normalized.includes("faturamento")) return currency.format(row.revenue);
@@ -5418,45 +5485,100 @@ function financeDetailCell(row, column, type) {
   return formatFinanceMetric(financeDetailValue(row, type));
 }
 
-function openFinanceDetail(type = "revenue", grain = app.financeDetailGrain || "day") {
-  if (!financeDetailShell || !financeDetailBody) return;
+function financeDetailRowClass(row, rows, type) {
+  if (type !== "sales" || !rows.length) return "";
+  const values = rows.filter((item) => item.quantity > 0).map((item) => item.quantity);
+  if (!values.length) return "";
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  if (max !== min && row.quantity === max) return "finance-row-best";
+  if (max !== min && row.quantity === min) return "finance-row-worst";
+  return "";
+}
+
+function financeDetailChart(rows, type) {
+  const config = financeDetailConfig(type);
+  if (!rows.length) return `<p>Sem vendas para gerar grafico.</p>`;
+  const width = 320;
+  const height = 150;
+  const padding = 16;
+  const values = rows.map((row) => financeDetailValue(row, config.value));
+  const minValue = Math.min(0, ...values);
+  const maxValue = Math.max(0, ...values);
+  const range = maxValue - minValue || 1;
+  const points = rows.map((row, index) => {
+    const x = rows.length === 1 ? width / 2 : padding + (index / (rows.length - 1)) * (width - padding * 2);
+    const y = height - padding - ((financeDetailValue(row, config.value) - minValue) / range) * (height - padding * 2);
+    return { x, y, row };
+  });
+  const line = points.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" ");
+  const area = `${padding},${height - padding} ${line} ${width - padding},${height - padding}`;
+  const labels = points.filter((_, index) => rows.length <= 7 || index === 0 || index === rows.length - 1);
+  return `
+    <svg class="finance-detail-line-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
+      <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" class="finance-chart-axis"></line>
+      <polyline points="${area}" class="finance-chart-area"></polyline>
+      <polyline points="${line}" class="finance-chart-line"></polyline>
+      ${points.map((point) => `<circle cx="${point.x.toFixed(2)}" cy="${point.y.toFixed(2)}" r="3.5" class="finance-chart-dot"></circle>`).join("")}
+    </svg>
+    <div class="finance-detail-chart-labels">
+      ${labels.map((point) => `<span>${escapeHtml(financeTablePeriodLabel(point.row))}</span>`).join("")}
+    </div>
+  `;
+}
+
+function financeDetailTableRows(rows, config, type) {
+  if (!rows.length) return `<tr><td colspan="${config.columns.length}">Sem dados no periodo.</td></tr>`;
+  return rows.map((row) => {
+    const rowClass = financeDetailRowClass(row, rows, type);
+    return `<tr class="${rowClass}">${config.columns.map((column) => `<td>${escapeHtml(financeDetailCell(row, column, config.value))}</td>`).join("")}</tr>`;
+  }).join("");
+}
+
+function renderFinanceDetail() {
+  if (!financeDetailBody) return;
+  const type = ["revenue", "profit", "sales", "ticket"].includes(app.financeDetailType) ? app.financeDetailType : "revenue";
+  const grain = ["hour", "day", "weekday"].includes(app.financeDetailGrain) ? app.financeDetailGrain : "day";
   app.financeDetailType = type;
   app.financeDetailGrain = grain;
   const config = financeDetailConfig(type);
-  const context = financeCurrentAndPrevious();
-  const rows = groupSalesByFinanceGrain(context.currentSales, grain);
-  const max = Math.max(...rows.map((row) => Math.abs(financeDetailValue(row, config.value))), 1);
-  const total = context.current;
-  const table = rows.length
-    ? rows.map((row) => `<tr>${config.columns.map((column) => `<td>${escapeHtml(financeDetailCell(row, column, config.value))}</td>`).join("")}</tr>`).join("")
-    : `<tr><td colspan="${config.columns.length}">Sem dados no periodo.</td></tr>`;
+  const range = app.financeDetailRange ? cloneRange(app.financeDetailRange) : financeCurrentRange();
+  const sales = salesInRange(range);
+  const rows = groupSalesByFinanceGrain(sales, grain);
+  const total = realizedSalesSummary(sales);
+  const table = financeDetailTableRows(rows, config, type);
+  const missingCostWarning = type === "profit" && total.hasMissingCost
+    ? `<p class="finance-cost-warning">Algumas vendas antigas nao possuem custo registrado e podem deixar o lucro historico impreciso.</p>`
+    : "";
   financeDetailBody.innerHTML = `
-    <header class="finance-detail-header">
-      <p class="eyebrow">Financeiro</p>
-      <h2>${escapeHtml(config.title)}</h2>
-      <span>${escapeHtml(financeRangeLabel(context.currentRange))}</span>
+    <header class="finance-detail-screen-head">
+      <button class="finance-detail-back" type="button" data-finance-detail-close aria-label="Voltar">‹</button>
+      <div>
+        <p class="eyebrow">Financeiro</p>
+        <h2>${escapeHtml(config.title)}</h2>
+      </div>
     </header>
+    <div class="finance-detail-period">
+      <button type="button" data-finance-detail-prev aria-label="Periodo anterior">‹</button>
+      <strong>${escapeHtml(financeDetailRangePrefix())}: ${escapeHtml(financeDetailRangeLabel(range))}</strong>
+      <button type="button" data-finance-detail-next aria-label="Proximo periodo">›</button>
+    </div>
     <div class="finance-detail-tabs" aria-label="Agrupamento do grafico">
       ${[
         ["hour", "Hora"],
         ["day", "Dia"],
-        ["week", "Semana"],
-        ["month", "Mes"],
-        ["year", "Ano"],
-      ].map(([value, label]) => `<button type="button" class="${grain === value ? "active" : ""}" data-finance-grain="${value}">${label}</button>`).join("")}
+        ["weekday", "Dia da semana"],
+      ].map(([value, label]) => `<button type="button" class="${grain === value ? "active" : ""}" data-finance-detail-tab="${value}">${label}</button>`).join("")}
     </div>
-    <div class="finance-detail-chart">
-      ${rows.length ? rows.map((row) => {
-        const value = Math.max(0, financeDetailValue(row, config.value));
-        const height = Math.max(8, (value / max) * 100);
-        return `<span style="height:${height.toFixed(2)}%" title="${escapeHtml(row.label || dateShortLabel(row.date))}"></span>`;
-      }).join("") : `<p>Sem vendas para gerar grafico.</p>`}
-    </div>
+    <section class="finance-detail-chart">
+      ${financeDetailChart(rows, type)}
+    </section>
+    ${missingCostWarning}
     <div class="finance-detail-metrics">
       <article><span>Faturamento</span><strong>${escapeHtml(currency.format(total.totalSold))}</strong></article>
-      <article><span>Custo</span><strong>${escapeHtml(currency.format(total.soldCost))}</strong></article>
+      <article><span>Vendas</span><strong>${total.quantity}</strong></article>
+      <article><span>Ticket medio</span><strong>${escapeHtml(currency.format(total.ticket))}</strong></article>
       <article><span>Lucro</span><strong>${escapeHtml(currency.format(total.realizedProfit))}</strong></article>
-      <article><span>Margem</span><strong>${total.margin.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</strong></article>
     </div>
     <div class="finance-detail-table-wrap">
       <table class="finance-detail-table">
@@ -5465,11 +5587,19 @@ function openFinanceDetail(type = "revenue", grain = app.financeDetailGrain || "
       </table>
     </div>
   `;
+}
+
+function openFinanceDetail(type = "revenue", grain = null) {
+  if (!financeDetailShell || !financeDetailBody) return;
+  app.financeDetailType = type;
+  app.financeDetailRange = cloneRange(financeCurrentRange());
+  app.financeDetailGrain = grain || (financeDetailPeriodKind() === "day" ? "hour" : "day");
+  renderFinanceDetail();
   financeDetailShell.classList.remove("hidden");
   financeDetailShell.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
   requestAnimationFrame(() => financeDetailShell.classList.add("open"));
-  financeDetailShell.querySelector(".finance-detail-close")?.focus();
+  financeDetailShell.querySelector("[data-finance-detail-close]")?.focus();
 }
 
 function closeFinanceDetail() {
@@ -8051,9 +8181,18 @@ document.addEventListener("click", async (event) => {
     closeFinanceDetail();
     return;
   }
-  const financeGrain = event.target.closest("[data-finance-grain]");
+  if (event.target.closest("[data-finance-detail-prev]")) {
+    shiftFinanceDetailRange(-1);
+    return;
+  }
+  if (event.target.closest("[data-finance-detail-next]")) {
+    shiftFinanceDetailRange(1);
+    return;
+  }
+  const financeGrain = event.target.closest("[data-finance-detail-tab]");
   if (financeGrain) {
-    openFinanceDetail(app.financeDetailType, financeGrain.dataset.financeGrain);
+    app.financeDetailGrain = financeGrain.dataset.financeDetailTab;
+    renderFinanceDetail();
     return;
   }
   if (event.target.closest("[data-refresh]")) loadAll();
