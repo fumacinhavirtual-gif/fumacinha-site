@@ -39,7 +39,7 @@ const CONFERENCE_PASSWORD_KEY = "fumacinha:conferencePassword";
 const DEFAULT_CONFERENCE_PASSWORD = "1234";
 const ANALYTICS_PERIOD_LABELS = {
   today: "Hoje",
-  last7: "Ultimos 7 dias",
+  last7: "Esta semana",
   month: "Este mes",
   lastMonth: "Mes passado",
   year: "Ano atual",
@@ -457,6 +457,16 @@ function endOfDay(date) {
   return next;
 }
 
+function currentWeekRange(date = new Date()) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const daysSinceMonday = day === 0 ? 6 : day - 1;
+  start.setDate(start.getDate() - daysSinceMonday);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: startOfDay(start), end: endOfDay(end) };
+}
+
 function periodRange(period = app.period) {
   const now = new Date();
   if (period === "yesterday") {
@@ -464,22 +474,17 @@ function periodRange(period = app.period) {
     day.setDate(day.getDate() - 1);
     return { start: startOfDay(day), end: endOfDay(day) };
   }
-  if (period === "week") {
-    const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay());
-    return { start: startOfDay(start), end: endOfDay(now) };
+  if (period === "week" || period === "last7") {
+    return currentWeekRange(now);
   }
   if (period === "lastWeek") {
     const start = new Date(now);
-    start.setDate(now.getDate() - now.getDay() - 7);
+    const day = start.getDay();
+    const daysSinceMonday = day === 0 ? 6 : day - 1;
+    start.setDate(now.getDate() - daysSinceMonday - 7);
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
     return { start: startOfDay(start), end: endOfDay(end) };
-  }
-  if (period === "last7") {
-    const start = new Date(now);
-    start.setDate(start.getDate() - 6);
-    return { start: startOfDay(start), end: endOfDay(now) };
   }
   if (period === "month") {
     return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: endOfDay(now) };
@@ -577,7 +582,7 @@ function financePeriodTitle() {
     yesterday: "Ontem",
     week: "Esta semana",
     lastWeek: "Semana passada",
-    last7: "Ultimos 7 dias",
+    last7: "Esta semana",
     month: "Mes atual",
     lastMonth: "Mes passado",
     year: `Ano atual - ${new Date().getFullYear()}`,
@@ -3495,7 +3500,7 @@ function historyPeriodLabel() {
   const labels = {
     today: `Hoje, ${now.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
     yesterday: `Ontem, ${yesterday.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" })}`,
-    last7: "Ultimos 7 dias",
+    last7: "Esta semana",
     month: monthLabel(monthKey()),
     lastMonth: monthLabel(monthKey(new Date(now.getFullYear(), now.getMonth() - 1, 1))),
     year: `Ano atual - ${now.getFullYear()}`,
@@ -3508,7 +3513,7 @@ function historyPeriodBadge() {
   const labels = {
     today: "Hoje",
     yesterday: "Ontem",
-    last7: "7 dias",
+    last7: "Semana",
     month: "Mes atual",
     lastMonth: "Mes passado",
     year: "Ano atual",
@@ -3524,7 +3529,7 @@ function updateHistoryPeriodOptions() {
   const optionLabels = {
     today: "Hoje",
     yesterday: "Ontem",
-    last7: "Ultimos 7 dias",
+    last7: "Esta semana",
     month: `📅 ${monthLabel(monthKey())}`,
     lastMonth: monthLabel(monthKey(lastMonth)),
     year: `Ano atual - ${now.getFullYear()}`,
