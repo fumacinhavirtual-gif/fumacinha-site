@@ -160,7 +160,6 @@ const app = {
 };
 
 let sideTouchStartX = null;
-let saleDetailTouchStartY = null;
 let lastSaleDetailTrigger = null;
 let pendingConfirmAction = null;
 
@@ -3973,7 +3972,7 @@ function openSaleDetailPanel(sale, trigger = null) {
   saleDetailShell.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
   requestAnimationFrame(() => saleDetailShell.classList.add("open"));
-  saleDetailShell.querySelector("[data-sale-detail-close]")?.focus();
+  saleDetailShell.querySelector(".sale-detail-close")?.focus();
 }
 
 function closeSaleDetailPanel() {
@@ -7515,26 +7514,6 @@ sideMenu?.addEventListener(
   { passive: true },
 );
 
-saleDetailShell?.addEventListener(
-  "touchstart",
-  (event) => {
-    if (!event.target.closest(".sale-detail-panel")) return;
-    saleDetailTouchStartY = event.touches?.[0]?.clientY ?? null;
-  },
-  { passive: true },
-);
-
-saleDetailShell?.addEventListener(
-  "touchend",
-  (event) => {
-    if (saleDetailTouchStartY === null) return;
-    const endY = event.changedTouches?.[0]?.clientY ?? saleDetailTouchStartY;
-    if (endY - saleDetailTouchStartY > 70) closeSaleDetailPanel();
-    saleDetailTouchStartY = null;
-  },
-  { passive: true },
-);
-
 window.addEventListener("offline", showConnectionStatus);
 window.addEventListener("online", () => {
   setStatus("Internet voltou. Toque em Atualizar para carregar os dados.", "success");
@@ -7559,7 +7538,7 @@ document.addEventListener("click", async (event) => {
     if (action) await action();
     return;
   }
-  if (event.target.closest("[data-sale-detail-close]")) {
+  if (event.target.closest(".sale-detail-close")) {
     closeSaleDetailPanel();
     return;
   }
@@ -7574,7 +7553,7 @@ document.addEventListener("click", async (event) => {
     }
     return;
   }
-  if (event.target.closest("[data-order-drawer-close]")) {
+  if (event.target.closest(".order-drawer-close")) {
     closeOrderDrawer();
     return;
   }
