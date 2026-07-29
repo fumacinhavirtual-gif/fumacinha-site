@@ -9239,9 +9239,36 @@ body.modal-open {
   }
 
   .coupon-kpis article {
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    grid-template-rows: auto auto;
     min-height: 76px;
     padding: 10px;
     border-radius: 16px;
+    column-gap: 9px;
+    row-gap: 2px;
+    align-items: center;
+  }
+
+  .coupon-kpis article > span {
+    grid-row: 1 / span 2;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+  }
+
+  .coupon-kpis strong {
+    min-width: 0;
+    font-size: 1.08rem;
+    line-height: 1.05;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .coupon-kpis small {
+    min-width: 0;
+    font-size: 0.72rem;
+    line-height: 1.12;
   }
 
   .coupon-card {
