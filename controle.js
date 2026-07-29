@@ -156,6 +156,8 @@ const app = {
   costUpdateSelectedProducts: new Set(),
   costUpdatePendingCost: null,
   costUpdateSaving: false,
+  financeDetailType: "revenue",
+  financeDetailGrain: "day",
   user: null,
 };
 
@@ -296,6 +298,8 @@ const couponModalShell = $("[data-coupon-modal-shell]");
 const couponModalTitle = $("[data-coupon-modal-title]");
 const couponForm = $("[data-coupon-form]");
 const couponFormError = $("[data-coupon-form-error]");
+const financeDetailShell = $("[data-finance-detail-shell]");
+const financeDetailBody = $("[data-finance-detail-body]");
 let toastTimer = null;
 let saleConfirmationTimer = null;
 let clientSearchTimer = null;
@@ -5089,8 +5093,12 @@ function stockFinancialSummary() {
     const costValue = productCost(product) * stock;
     summary.cost += costValue;
     summary.saleValue += saleValue;
+    summary.units += stock;
+    summary.products += 1;
+    if (stock <= 5) summary.lowStock += 1;
+    if (stock <= 0) summary.outStock += 1;
     return summary;
-  }, { cost: 0, saleValue: 0 });
+  }, { cost: 0, saleValue: 0, units: 0, products: 0, lowStock: 0, outStock: 0 });
 }
 
 function realizedSalesSummary(sales = filteredSales()) {
@@ -5112,17 +5120,384 @@ function realizedSalesSummary(sales = filteredSales()) {
   };
 }
 
+function previousEquivalentRange(range = periodRange()) {
+  const duration = Math.max(1, range.end.getTime() - range.start.getTime() + 1);
+  const end = new Date(range.start.getTime() - 1);
+  const start = new Date(end.getTime() - duration + 1);
+  return { start, end };
+}
+
+function salesInRange(range) {
+  return app.sales.filter((sale) => {
+    if (sale.cancelada) return false;
+    const date = saleDate(sale);
+    return date >= range.start && date <= range.end;
+  });
+}
+
+function expensesInRange(range) {
+  return app.expenses.filter((expense) => {
+    const date = new Date(`${expense.data_despesa || dateValue()}T12:00:00`);
+    return date >= range.start && date <= range.end;
+  });
+}
+
+function financeSalesMetrics(sales = []) {
+  const base = realizedSalesSummary(sales);
+  return {
+    ...base,
+    expenses: 0,
+  };
+}
+
+function financeExpensesMetrics(expenses = []) {
+  const total = expenses.reduce((sum, expense) => sum + toNumber(expense.valor), 0);
+  const biggest = expenses.reduce((max, expense) => Math.max(max, toNumber(expense.valor)), 0);
+  const byCategory = expenses.reduce((acc, expense) => {
+    const key = expense.categoria || "Sem categoria";
+    acc[key] = (acc[key] || 0) + toNumber(expense.valor);
+    return acc;
+  }, {});
+  const topCategory = Object.entries(byCategory).sort((a, b) => b[1] - a[1])[0] || ["Sem despesas", 0];
+  return {
+    total,
+    quantity: expenses.length,
+    biggest,
+    average: expenses.length ? total / expenses.length : 0,
+    topCategory,
+    byCategory,
+  };
+}
+
+function financeComparisonValue(current, previous, type = "money") {
+  const diff = current - previous;
+  const percent = previous !== 0 ? (diff / Math.abs(previous)) * 100 : (current > 0 ? 100 : 0);
+  const direction = diff > 0.009 ? "up" : diff < -0.009 ? "down" : "flat";
+  return { current, previous, diff, percent, direction, type };
+}
+
+function financeCurrentAndPrevious() {
+  const currentRange = periodRange();
+  const previousRange = previousEquivalentRange(currentRange);
+  const currentSales = salesInRange(currentRange);
+  const previousSales = salesInRange(previousRange);
+  const currentExpenses = expensesInRange(currentRange);
+  const previousExpenses = expensesInRange(previousRange);
+  const current = financeSalesMetrics(currentSales);
+  const previous = financeSalesMetrics(previousSales);
+  const currentExpenseMetrics = financeExpensesMetrics(currentExpenses);
+  const previousExpenseMetrics = financeExpensesMetrics(previousExpenses);
+  current.expenses = currentExpenseMetrics.total;
+  previous.expenses = previousExpenseMetrics.total;
+  return {
+    currentRange,
+    previousRange,
+    currentSales,
+    previousSales,
+    currentExpenses,
+    previousExpenses,
+    current,
+    previous,
+    currentExpenseMetrics,
+    previousExpenseMetrics,
+  };
+}
+
+function dateShortLabel(date) {
+  return new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+}
+
+function financeRangeLabel(range) {
+  return `${dateShortLabel(range.start)} a ${dateShortLabel(range.end)}`;
+}
+
+function formatFinanceMetric(value, type = "money") {
+  if (type === "count") return String(Math.round(value));
+  if (type === "percent") return `${toNumber(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  if (type === "points") return `${toNumber(value).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} p.p.`;
+  return currency.format(value);
+}
+
+function renderFinanceComparisons(context) {
+  const root = $("[data-finance-comparisons]");
+  const label = $("[data-finance-compare-label]");
+  if (label) label.textContent = `${financeRangeLabel(context.currentRange)} x ${financeRangeLabel(context.previousRange)}`;
+  if (!root) return;
+  const rows = [
+    ["Faturamento", financeComparisonValue(context.current.totalSold, context.previous.totalSold, "money")],
+    ["Lucro", financeComparisonValue(context.current.realizedProfit, context.previous.realizedProfit, "money")],
+    ["Vendas", financeComparisonValue(context.current.quantity, context.previous.quantity, "count")],
+    ["Ticket medio", financeComparisonValue(context.current.ticket, context.previous.ticket, "money")],
+    ["Margem de lucro", financeComparisonValue(context.current.margin, context.previous.margin, "points")],
+    ["Despesas", financeComparisonValue(context.current.expenses, context.previous.expenses, "money")],
+  ];
+  root.innerHTML = rows.map(([labelText, item]) => {
+    const icon = item.direction === "up" ? "▲" : item.direction === "down" ? "▼" : "•";
+    const diffLabel = item.type === "points"
+      ? `${item.diff >= 0 ? "+" : ""}${formatFinanceMetric(item.diff, "points")}`
+      : `${item.diff >= 0 ? "+" : ""}${formatFinanceMetric(item.diff, item.type)}`;
+    return `
+      <article class="finance-comparison-card ${item.direction}">
+        <span>${escapeHtml(labelText)}</span>
+        <strong>${escapeHtml(formatFinanceMetric(item.current, item.type === "points" ? "percent" : item.type))}</strong>
+        <small>Anterior: ${escapeHtml(formatFinanceMetric(item.previous, item.type === "points" ? "percent" : item.type))}</small>
+        <em>${icon} ${escapeHtml(diffLabel)} | ${item.percent >= 0 ? "+" : ""}${item.percent.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</em>
+      </article>
+    `;
+  }).join("");
+}
+
+function groupSalesByDay(sales = []) {
+  const groups = new Map();
+  sales.forEach((sale) => {
+    const key = localDateValue(saleDate(sale));
+    const row = groups.get(key) || { key, date: new Date(`${key}T12:00:00`), sales: [], revenue: 0, cost: 0, profit: 0, quantity: 0 };
+    row.sales.push(sale);
+    row.revenue += saleProductsValue(sale);
+    row.cost += saleCost(sale);
+    row.profit = row.revenue - row.cost;
+    row.quantity += 1;
+    groups.set(key, row);
+  });
+  return [...groups.values()].sort((a, b) => a.date - b.date).map((row) => ({
+    ...row,
+    ticket: row.quantity ? row.revenue / row.quantity : 0,
+    margin: row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0,
+  }));
+}
+
+function financeGrainKey(date, grain = "day") {
+  const value = new Date(date);
+  if (grain === "hour") return `${localDateValue(value)} ${String(value.getHours()).padStart(2, "0")}:00`;
+  if (grain === "week") {
+    const range = currentWeekRange(value);
+    return `${localDateValue(range.start)}|${localDateValue(range.end)}`;
+  }
+  if (grain === "month") return monthKey(value);
+  if (grain === "year") return String(value.getFullYear());
+  return localDateValue(value);
+}
+
+function financeGrainLabel(key, grain = "day") {
+  if (grain === "hour") {
+    const [date, hour] = key.split(" ");
+    return `${formatDateBR(date)} ${hour.slice(0, 2)}h`;
+  }
+  if (grain === "week") {
+    const [start, end] = key.split("|");
+    return `${dateShortLabel(`${start}T12:00:00`)} a ${dateShortLabel(`${end}T12:00:00`)}`;
+  }
+  if (grain === "month") return monthLabel(key);
+  if (grain === "year") return key;
+  return formatDateBR(key);
+}
+
+function groupSalesByFinanceGrain(sales = [], grain = "day") {
+  const groups = new Map();
+  sales.forEach((sale) => {
+    const date = saleDate(sale);
+    const key = financeGrainKey(date, grain);
+    const row = groups.get(key) || { key, label: financeGrainLabel(key, grain), date, sales: [], revenue: 0, cost: 0, profit: 0, quantity: 0 };
+    row.sales.push(sale);
+    row.revenue += saleProductsValue(sale);
+    row.cost += saleCost(sale);
+    row.profit = row.revenue - row.cost;
+    row.quantity += 1;
+    if (date < row.date) row.date = date;
+    groups.set(key, row);
+  });
+  return [...groups.values()].sort((a, b) => a.date - b.date).map((row) => ({
+    ...row,
+    ticket: row.quantity ? row.revenue / row.quantity : 0,
+    margin: row.revenue > 0 ? (row.profit / row.revenue) * 100 : 0,
+  }));
+}
+
+function renderFinancePerformance(context) {
+  const root = $("[data-finance-performance]");
+  if (!root) return;
+  const days = groupSalesByDay(context.currentSales);
+  if (!days.length) {
+    root.innerHTML = `<p class="empty-state">Sem vendas no periodo para analisar desempenho.</p>`;
+    return;
+  }
+  const bestRevenue = [...days].sort((a, b) => b.revenue - a.revenue)[0];
+  const worstRevenue = [...days].filter((day) => day.revenue > 0).sort((a, b) => a.revenue - b.revenue)[0] || bestRevenue;
+  const mostSales = [...days].sort((a, b) => b.quantity - a.quantity)[0];
+  const bestProfit = [...days].sort((a, b) => b.profit - a.profit)[0];
+  const bestTicket = [...days].sort((a, b) => b.ticket - a.ticket)[0];
+  const avgRevenue = context.current.totalSold / days.length;
+  const avgSales = context.current.quantity / days.length;
+  const avgProfitSale = context.current.quantity ? context.current.realizedProfit / context.current.quantity : 0;
+  const rows = [
+    ["Melhor dia em faturamento", `${dateShortLabel(bestRevenue.date)} - ${currency.format(bestRevenue.revenue)}`],
+    ["Pior dia em faturamento", `${dateShortLabel(worstRevenue.date)} - ${currency.format(worstRevenue.revenue)}`],
+    ["Dia com mais vendas", `${dateShortLabel(mostSales.date)} - ${mostSales.quantity} vendas`],
+    ["Dia com maior lucro", `${dateShortLabel(bestProfit.date)} - ${currency.format(bestProfit.profit)}`],
+    ["Maior ticket medio", `${dateShortLabel(bestTicket.date)} - ${currency.format(bestTicket.ticket)}`],
+    ["Media diaria de faturamento", currency.format(avgRevenue)],
+    ["Media diaria de vendas", avgSales.toLocaleString("pt-BR", { maximumFractionDigits: 1 })],
+    ["Lucro medio por venda", currency.format(avgProfitSale)],
+  ];
+  root.innerHTML = rows.map(([label, value]) => `<article><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></article>`).join("");
+}
+
+function renderFinanceAutoSummary(context) {
+  const root = $("[data-finance-auto-summary]");
+  if (!root) return;
+  const revenue = financeComparisonValue(context.current.totalSold, context.previous.totalSold, "money");
+  const profit = financeComparisonValue(context.current.realizedProfit, context.previous.realizedProfit, "money");
+  const sales = financeComparisonValue(context.current.quantity, context.previous.quantity, "count");
+  const ticket = financeComparisonValue(context.current.ticket, context.previous.ticket, "money");
+  const days = groupSalesByDay(context.currentSales);
+  const best = [...days].sort((a, b) => b.revenue - a.revenue)[0];
+  const phrases = [
+    `O faturamento ${revenue.diff >= 0 ? "cresceu" : "caiu"} ${Math.abs(revenue.percent).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}% em relacao ao periodo anterior.`,
+    `O lucro ${profit.diff >= 0 ? "aumentou" : "diminuiu"} ${currency.format(Math.abs(profit.diff))}.`,
+    `Foram realizadas ${Math.abs(sales.diff)} ${Math.abs(sales.diff) === 1 ? "venda" : "vendas"} ${sales.diff >= 0 ? "a mais" : "a menos"}.`,
+    `O ticket medio ${ticket.diff >= 0 ? "aumentou" : "caiu"} ${currency.format(Math.abs(ticket.diff))}.`,
+    best ? `O melhor dia foi ${dateShortLabel(best.date)}, com ${currency.format(best.revenue)} em vendas.` : "Nao houve vendas no periodo selecionado.",
+  ];
+  root.innerHTML = phrases.map((phrase) => `<p>${escapeHtml(phrase)}</p>`).join("");
+}
+
+function renderFinanceExpenseSummary(context) {
+  const root = $("[data-finance-expense-summary]");
+  if (!root) return;
+  const current = context.currentExpenseMetrics;
+  const previous = context.previousExpenseMetrics;
+  const comparison = financeComparisonValue(current.total, previous.total, "money");
+  const icon = comparison.direction === "up" ? "▲" : comparison.direction === "down" ? "▼" : "•";
+  const categories = Object.entries(current.byCategory)
+    .sort((a, b) => b[1] - a[1])
+    .map(([category, total]) => `<span><b>${escapeHtml(category)}</b>${escapeHtml(currency.format(total))}</span>`)
+    .join("");
+  root.innerHTML = `
+    <div class="finance-expense-cards">
+      <article><span>Total de despesas</span><strong>${escapeHtml(currency.format(current.total))}</strong></article>
+      <article><span>Quantidade</span><strong>${current.quantity}</strong></article>
+      <article><span>Maior despesa</span><strong>${escapeHtml(currency.format(current.biggest))}</strong></article>
+      <article><span>Categoria maior gasto</span><strong>${escapeHtml(current.topCategory[0])}</strong><small>${escapeHtml(currency.format(current.topCategory[1]))}</small></article>
+      <article><span>Media por despesa</span><strong>${escapeHtml(currency.format(current.average))}</strong></article>
+      <article class="${comparison.direction}"><span>Comparacao anterior</span><strong>${icon} ${comparison.percent >= 0 ? "+" : ""}${comparison.percent.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</strong></article>
+    </div>
+    <div class="finance-expense-categories">${categories || "<p>Sem despesas agrupadas por categoria.</p>"}</div>
+  `;
+}
+
+function financeDetailConfig(type = "revenue") {
+  const configs = {
+    revenue: { title: "Faturamento", value: "revenue", columns: ["Data", "Faturamento", "Vendas", "Ticket medio"] },
+    profit: { title: "Lucro", value: "profit", columns: ["Data", "Faturamento", "Custo", "Lucro", "Margem"] },
+    sales: { title: "Vendas", value: "quantity", columns: ["Data", "Vendas", "Faturamento", "Ticket medio"] },
+    ticket: { title: "Ticket medio", value: "ticket", columns: ["Data", "Ticket medio", "Vendas", "Faturamento"] },
+    margin: { title: "Margem de lucro", value: "margin", columns: ["Data", "Margem", "Faturamento", "Lucro"] },
+    cost: { title: "Custo dos produtos vendidos", value: "cost", columns: ["Data", "Custo", "Faturamento", "Lucro"] },
+  };
+  return configs[type] || configs.revenue;
+}
+
+function financeDetailValue(row, key) {
+  if (key === "quantity") return row.quantity;
+  if (key === "ticket") return row.ticket;
+  if (key === "margin") return row.margin;
+  if (key === "cost") return row.cost;
+  if (key === "profit") return row.profit;
+  return row.revenue;
+}
+
+function financeDetailCell(row, column, type) {
+  const normalized = normalizePayment(column);
+  if (normalized === "data") return row.label || dateShortLabel(row.date);
+  if (normalized.includes("vendas")) return String(row.quantity);
+  if (normalized.includes("ticket")) return currency.format(row.ticket);
+  if (normalized.includes("faturamento")) return currency.format(row.revenue);
+  if (normalized.includes("custo")) return currency.format(row.cost);
+  if (normalized.includes("lucro")) return currency.format(row.profit);
+  if (normalized.includes("margem")) return `${row.margin.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+  return formatFinanceMetric(financeDetailValue(row, type));
+}
+
+function openFinanceDetail(type = "revenue", grain = app.financeDetailGrain || "day") {
+  if (!financeDetailShell || !financeDetailBody) return;
+  app.financeDetailType = type;
+  app.financeDetailGrain = grain;
+  const config = financeDetailConfig(type);
+  const context = financeCurrentAndPrevious();
+  const rows = groupSalesByFinanceGrain(context.currentSales, grain);
+  const max = Math.max(...rows.map((row) => Math.abs(financeDetailValue(row, config.value))), 1);
+  const total = context.current;
+  const table = rows.length
+    ? rows.map((row) => `<tr>${config.columns.map((column) => `<td>${escapeHtml(financeDetailCell(row, column, config.value))}</td>`).join("")}</tr>`).join("")
+    : `<tr><td colspan="${config.columns.length}">Sem dados no periodo.</td></tr>`;
+  financeDetailBody.innerHTML = `
+    <header class="finance-detail-header">
+      <p class="eyebrow">Financeiro</p>
+      <h2>${escapeHtml(config.title)}</h2>
+      <span>${escapeHtml(financeRangeLabel(context.currentRange))}</span>
+    </header>
+    <div class="finance-detail-tabs" aria-label="Agrupamento do grafico">
+      ${[
+        ["hour", "Hora"],
+        ["day", "Dia"],
+        ["week", "Semana"],
+        ["month", "Mes"],
+        ["year", "Ano"],
+      ].map(([value, label]) => `<button type="button" class="${grain === value ? "active" : ""}" data-finance-grain="${value}">${label}</button>`).join("")}
+    </div>
+    <div class="finance-detail-chart">
+      ${rows.length ? rows.map((row) => {
+        const value = Math.max(0, financeDetailValue(row, config.value));
+        const height = Math.max(8, (value / max) * 100);
+        return `<span style="height:${height.toFixed(2)}%" title="${escapeHtml(row.label || dateShortLabel(row.date))}"></span>`;
+      }).join("") : `<p>Sem vendas para gerar grafico.</p>`}
+    </div>
+    <div class="finance-detail-metrics">
+      <article><span>Faturamento</span><strong>${escapeHtml(currency.format(total.totalSold))}</strong></article>
+      <article><span>Custo</span><strong>${escapeHtml(currency.format(total.soldCost))}</strong></article>
+      <article><span>Lucro</span><strong>${escapeHtml(currency.format(total.realizedProfit))}</strong></article>
+      <article><span>Margem</span><strong>${total.margin.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%</strong></article>
+    </div>
+    <div class="finance-detail-table-wrap">
+      <table class="finance-detail-table">
+        <thead><tr>${config.columns.map((column) => `<th>${escapeHtml(column)}</th>`).join("")}</tr></thead>
+        <tbody>${table}</tbody>
+      </table>
+    </div>
+  `;
+  financeDetailShell.classList.remove("hidden");
+  financeDetailShell.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+  requestAnimationFrame(() => financeDetailShell.classList.add("open"));
+  financeDetailShell.querySelector(".finance-detail-close")?.focus();
+}
+
+function closeFinanceDetail() {
+  if (!financeDetailShell) return;
+  financeDetailShell.classList.remove("open");
+  financeDetailShell.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
+  window.setTimeout(() => {
+    if (!financeDetailShell.classList.contains("open")) financeDetailShell.classList.add("hidden");
+  }, 240);
+}
+
 function setTextIfExists(selector, value) {
   const element = $(selector);
   if (element) element.textContent = value;
 }
 
 function renderFinance() {
+  const context = financeCurrentAndPrevious();
   const stockSummary = stockFinancialSummary();
-  const salesSummary = realizedSalesSummary();
+  const salesSummary = context.current;
   setTextIfExists("[data-finance-stock-cost]", currency.format(stockSummary.cost));
   setTextIfExists("[data-finance-stock-sale]", currency.format(stockSummary.saleValue));
   setTextIfExists("[data-finance-stock-profit]", currency.format(stockSummary.saleValue - stockSummary.cost));
+  setTextIfExists("[data-finance-stock-units]", stockSummary.units.toLocaleString("pt-BR"));
+  setTextIfExists("[data-finance-product-count]", stockSummary.products.toLocaleString("pt-BR"));
+  setTextIfExists("[data-finance-low-stock]", stockSummary.lowStock.toLocaleString("pt-BR"));
+  setTextIfExists("[data-finance-out-stock]", stockSummary.outStock.toLocaleString("pt-BR"));
   setTextIfExists("[data-finance-total-sold]", currency.format(salesSummary.totalSold));
   setTextIfExists("[data-finance-sold-cost]", currency.format(salesSummary.soldCost));
   setTextIfExists("[data-finance-realized-profit]", currency.format(salesSummary.realizedProfit));
@@ -5130,6 +5505,10 @@ function renderFinance() {
   setTextIfExists("[data-finance-sales-quantity]", String(salesSummary.quantity));
   setTextIfExists("[data-finance-ticket]", currency.format(salesSummary.ticket));
   $("[data-finance-cost-warning]")?.classList.toggle("hidden", !salesSummary.hasMissingCost);
+  renderFinanceComparisons(context);
+  renderFinanceAutoSummary(context);
+  renderFinancePerformance(context);
+  renderFinanceExpenseSummary(context);
   renderTopClients();
   renderExpenses();
 }
@@ -6314,27 +6693,71 @@ function renderReports() {
     app.products.filter((product) => toNumber(product.estoque) <= 5).map((product) => ({ label: product.nome, quantity: `${product.estoque} un`, total: undefined })),
     "Nenhum produto com estoque baixo."
   );
-  const paymentRows = Object.entries(
-    paymentSales.reduce((acc, sale) => {
-      const breakdown = salePaymentBreakdown(sale);
-      if (breakdown.length) {
-        breakdown.forEach((payment) => {
-          const key = payment.forma || "Nao informado";
-          acc[key] = (acc[key] || 0) + toNumber(payment.valor);
-        });
-      } else {
-        const key = sale.forma_pagamento || "Nao informado";
-        acc[key] = (acc[key] || 0) + saleTotal(sale);
-      }
-      return acc;
-    }, {})
-  ).map(([label, total]) => ({ label, total }));
-  renderList("[data-report-payments]", paymentRows, "Sem formas de pagamento no periodo.");
+  renderPaymentReport(paymentSales);
   renderList("[data-report-profit-product]", ranked.map((row) => ({ label: row.label, total: row.profit })), "Sem lucro por produto.");
   const stockTotal = app.products.reduce((sum, product) => sum + toNumber(product.estoque) * productCost(product), 0);
   renderList("[data-report-stock-value]", [{ label: "Valor em custo no estoque", total: stockTotal }], "Sem produtos em estoque.");
   renderDelivererReport(delivererSales);
   renderCommissionReport(commissionSales);
+}
+
+function paymentDisplayName(method = "") {
+  const normalized = normalizePayment(method);
+  if (normalized === "pix") return "Pix";
+  if (normalized === "dinheiro") return "Dinheiro";
+  if (normalized === "debito") return "Debito";
+  if (normalized === "credito") return "Credito";
+  if (normalized === "misto" || normalized === "dividido") return "Pagamento dividido";
+  return method || "Nao informado";
+}
+
+function renderPaymentReport(sales) {
+  const root = $("[data-report-payments]");
+  if (!root) return;
+  const groups = new Map();
+  sales.forEach((sale) => {
+    const breakdown = salePaymentBreakdown(sale);
+    if (breakdown.length) {
+      const mixed = groups.get("Pagamento dividido") || { label: "Pagamento dividido", total: 0, quantity: 0 };
+      mixed.quantity += 1;
+      mixed.total += saleProductsValue(sale);
+      groups.set("Pagamento dividido", mixed);
+      breakdown.forEach((payment) => {
+        const label = paymentDisplayName(payment.forma);
+        const current = groups.get(label) || { label, total: 0, quantity: 0 };
+        current.total += toNumber(payment.valor);
+        current.quantity += 1;
+        groups.set(label, current);
+      });
+      return;
+    }
+    const label = paymentDisplayName(sale.forma_pagamento);
+    const current = groups.get(label) || { label, total: 0, quantity: 0 };
+    current.total += saleProductsValue(sale);
+    current.quantity += 1;
+    groups.set(label, current);
+  });
+  const total = [...groups.values()].reduce((sum, row) => sum + row.total, 0);
+  const rows = [...groups.values()].sort((a, b) => b.total - a.total);
+  root.innerHTML = rows.length ? `
+    <div class="finance-payment-chart">
+      ${rows.map((row) => {
+        const percent = total > 0 ? (row.total / total) * 100 : 0;
+        return `<span style="width:${percent.toFixed(2)}%" title="${escapeHtml(row.label)}"></span>`;
+      }).join("")}
+    </div>
+    <div class="finance-payment-list">
+      ${rows.map((row) => {
+        const percent = total > 0 ? (row.total / total) * 100 : 0;
+        return `
+          <article>
+            <div><strong>${escapeHtml(row.label)}</strong><span>${row.quantity} ${row.quantity === 1 ? "venda" : "vendas"}</span></div>
+            <div><b>${escapeHtml(currency.format(row.total))}</b><small>${percent.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%</small></div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  ` : `<p class="empty-state">Sem formas de pagamento no periodo.</p>`;
 }
 
 function renderDelivererReport(sales) {
@@ -6346,11 +6769,15 @@ function renderDelivererReport(sales) {
     current.total += saleDelivery(sale);
     groups.set(name, current);
   });
-  renderList(
-    "[data-report-deliverers]",
-    [...groups.values()].filter((row) => row.total > 0).map((row) => ({ label: row.label, quantity: `${row.quantity} entregas`, total: row.total })),
-    "Sem taxas de entrega no periodo."
-  );
+  const root = $("[data-report-deliverers]");
+  if (!root) return;
+  const rows = [...groups.values()].filter((row) => row.total > 0).sort((a, b) => b.total - a.total);
+  root.innerHTML = rows.length ? `<div class="finance-compact-list">${rows.map((row) => `
+    <article>
+      <div><strong>${escapeHtml(row.label)}</strong><span>${row.quantity} ${row.quantity === 1 ? "entrega" : "entregas"}</span></div>
+      <div><b>${escapeHtml(currency.format(row.total))}</b><small>Media ${escapeHtml(currency.format(row.quantity ? row.total / row.quantity : 0))}</small></div>
+    </article>
+  `).join("")}</div>` : `<p class="empty-state">Sem taxas de entrega no periodo.</p>`;
 }
 
 function renderCommissionReport(sales) {
@@ -6370,15 +6797,22 @@ function renderCommissionReport(sales) {
     current.total += saleCommission(sale);
     groups.set(name, current);
   });
-  renderList(
-    "[data-report-commissions]",
-    [...groups.values()].map((row) => ({
-      label: `${row.label} - ${row.quantity} vendas (${row.pix} Pix, ${row.cash} dinheiro, ${row.debit} debito, ${row.credit} credito)`,
-      quantity: `Base ${currency.format(row.base)} | Cartao ${currency.format(row.card)}`,
-      total: row.total,
-    })),
-    "Sem comissoes no periodo."
-  );
+  const root = $("[data-report-commissions]");
+  if (!root) return;
+  const rows = [...groups.values()].sort((a, b) => b.total - a.total);
+  root.innerHTML = rows.length ? `<div class="finance-commission-list">${rows.map((row) => `
+    <article>
+      <header><strong>${escapeHtml(row.label)}</strong><b>${escapeHtml(currency.format(row.total))}</b></header>
+      <div class="finance-commission-tags">
+        <span>${row.quantity} vendas</span>
+        <span>${row.pix} Pix</span>
+        <span>${row.cash} dinheiro</span>
+        <span>${row.debit} debito</span>
+        <span>${row.credit} credito</span>
+      </div>
+      <footer><span>Base ${escapeHtml(currency.format(row.base))}</span><span>Cartao ${escapeHtml(currency.format(row.card))}</span></footer>
+    </article>
+  `).join("")}</div>` : `<p class="empty-state">Sem comissoes no periodo.</p>`;
 }
 
 function filteredTeam(rows, search) {
@@ -7608,6 +8042,20 @@ document.addEventListener("click", async (event) => {
   const financeQuick = event.target.closest("[data-finance-quick]");
   if (financeQuick) applyFinanceQuickPeriod(financeQuick.dataset.financeQuick);
   if (event.target.closest("[data-finance-filter-apply]")) applyFinanceCustomDates();
+  const financeDetailButton = event.target.closest("[data-finance-detail]");
+  if (financeDetailButton) {
+    openFinanceDetail(financeDetailButton.dataset.financeDetail);
+    return;
+  }
+  if (event.target.closest("[data-finance-detail-close]")) {
+    closeFinanceDetail();
+    return;
+  }
+  const financeGrain = event.target.closest("[data-finance-grain]");
+  if (financeGrain) {
+    openFinanceDetail(app.financeDetailType, financeGrain.dataset.financeGrain);
+    return;
+  }
   if (event.target.closest("[data-refresh]")) loadAll();
   if (event.target.closest("[data-store-status-toggle]")) toggleStoreStatus();
   if (event.target.closest("[data-store-message-save]")) saveClosedStoreMessage();
@@ -8206,7 +8654,13 @@ document.addEventListener("change", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Enter") {
+  if (event.key === "Enter" || event.key === " ") {
+    const financeCard = event.target.closest?.("[data-finance-detail]");
+    if (financeCard) {
+      event.preventDefault();
+      openFinanceDetail(financeCard.dataset.financeDetail);
+      return;
+    }
     const saleRow = event.target.closest?.("[data-sale-detail-row]");
     if (saleRow) {
       event.preventDefault();
@@ -8221,6 +8675,10 @@ document.addEventListener("keydown", (event) => {
     }
   }
   if (event.key !== "Escape") return;
+  if (financeDetailShell?.classList.contains("open")) {
+    closeFinanceDetail();
+    return;
+  }
   if (saleProductSheet?.classList.contains("open")) {
     closeSaleProductPicker();
     return;
