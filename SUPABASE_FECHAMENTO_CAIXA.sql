@@ -17,6 +17,7 @@ create table if not exists public."FECHAMENTOS_CAIXA" (
   troco_usado numeric(12, 2) not null default 0,
   troco_restante numeric(12, 2) not null default 0,
   vendas_pix numeric(12, 2) not null default 0,
+  vendas_qr_code_pix numeric(12, 2) not null default 0,
   vendas_dinheiro numeric(12, 2) not null default 0,
   vendas_debito numeric(12, 2) not null default 0,
   vendas_credito numeric(12, 2) not null default 0,
@@ -47,6 +48,7 @@ alter table public."FECHAMENTOS_CAIXA" add column if not exists troco_inicial nu
 alter table public."FECHAMENTOS_CAIXA" add column if not exists troco_usado numeric(12, 2) not null default 0;
 alter table public."FECHAMENTOS_CAIXA" add column if not exists troco_restante numeric(12, 2) not null default 0;
 alter table public."FECHAMENTOS_CAIXA" add column if not exists vendas_pix numeric(12, 2) not null default 0;
+alter table public."FECHAMENTOS_CAIXA" add column if not exists vendas_qr_code_pix numeric(12, 2) not null default 0;
 alter table public."FECHAMENTOS_CAIXA" add column if not exists vendas_dinheiro numeric(12, 2) not null default 0;
 alter table public."FECHAMENTOS_CAIXA" add column if not exists vendas_debito numeric(12, 2) not null default 0;
 alter table public."FECHAMENTOS_CAIXA" add column if not exists vendas_credito numeric(12, 2) not null default 0;

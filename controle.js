@@ -1059,8 +1059,12 @@ function isCashPayment(payment) {
 }
 
 function isPixPayment(payment) {
+  return normalizePayment(payment) === "pix";
+}
+
+function isQrCodePixPayment(payment) {
   const normalized = normalizePayment(payment);
-  return normalized === "pix" || normalized === "qr code pix" || normalized === "qrcode pix";
+  return normalized === "qr code pix" || normalized === "qrcode pix";
 }
 
 function isCardPayment(payment) {
@@ -6841,7 +6845,7 @@ function renderReports() {
 function paymentDisplayName(method = "") {
   const normalized = normalizePayment(method);
   if (normalized === "pix") return "Pix";
-  if (isPixPayment(method) && normalized !== "pix") return "QR Code Pix";
+  if (isQrCodePixPayment(method)) return "QR Code Pix";
   if (normalized === "dinheiro") return "Dinheiro";
   if (normalized === "debito") return "Debito";
   if (normalized === "credito") return "Credito";
@@ -6924,9 +6928,10 @@ function renderCommissionReport(sales) {
     const name = sale.vendedora_nome || personNameById(app.sellers, sale.vendedora_id) || "Sem vendedora";
     const methods = salePaymentMethods(sale).map(normalizePayment);
     const isCard = methods.some((method) => method === "debito" || method === "credito");
-    const current = groups.get(name) || { label: name, quantity: 0, pix: 0, cash: 0, debit: 0, credit: 0, base: 0, card: 0, total: 0 };
+    const current = groups.get(name) || { label: name, quantity: 0, pix: 0, qrPix: 0, cash: 0, debit: 0, credit: 0, base: 0, card: 0, total: 0 };
     current.quantity += 1;
     current.pix += methods.some((method) => isPixPayment(method)) ? 1 : 0;
+    current.qrPix += methods.some((method) => isQrCodePixPayment(method)) ? 1 : 0;
     current.cash += methods.includes("dinheiro") ? 1 : 0;
     current.debit += methods.includes("debito") ? 1 : 0;
     current.credit += methods.includes("credito") ? 1 : 0;
@@ -6944,6 +6949,7 @@ function renderCommissionReport(sales) {
       <div class="finance-commission-tags">
         <span>${row.quantity} vendas</span>
         <span>${row.pix} Pix</span>
+        <span>${row.qrPix} QR Code Pix</span>
         <span>${row.cash} dinheiro</span>
         <span>${row.debit} debito</span>
         <span>${row.credit} credito</span>
@@ -7096,6 +7102,7 @@ function changeTotalsForDate(dateKey = app.cashDate) {
 function cashPaymentTotals(dateKey = app.cashDate) {
   const totals = {
     pix: 0,
+    qrCodePix: 0,
     dinheiro: 0,
     debito: 0,
     credito: 0,
@@ -7113,6 +7120,7 @@ function cashPaymentTotals(dateKey = app.cashDate) {
         const payment = normalizePayment(row.forma);
         const value = toNumber(row.valor);
         if (isPixPayment(payment)) totals.pix += value;
+        else if (isQrCodePixPayment(payment)) totals.qrCodePix += value;
         else if (payment === "dinheiro") {
           totals.dinheiro += value;
           totals.dinheiroRecebido += value;
@@ -7128,6 +7136,7 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     const value = saleGrandTotal(sale);
     const deliveredValue = saleDeliveredValue(sale);
     if (isPixPayment(payment)) totals.pix += value;
+    else if (isQrCodePixPayment(payment)) totals.qrCodePix += value;
     else if (payment === "dinheiro") {
       totals.dinheiro += deliveredValue;
       totals.dinheiroRecebido += deliveredValue;
@@ -7175,7 +7184,7 @@ function cashCalculate(dateKey = app.cashDate) {
   const activeSales = cashSalesForDate(dateKey);
   const cancelledSales = cashSalesForDate(dateKey, true).filter((sale) => sale.cancelada);
   const totalVendas = payment.totalVendas;
-  const eletronicos = payment.pix + payment.debito + payment.credito + payment.outros;
+  const eletronicos = payment.pix + payment.qrCodePix + payment.debito + payment.credito + payment.outros;
   const trocoUsadoTotal = change.usado;
   const trocoRestante = Math.max(0, change.saldoFinal);
   const dinheiroEsperado = form.trocoInicial + payment.dinheiroRecebido - payment.trocoDevolvido + form.reforcos - form.sangrias - form.retiradas - form.pagamentosCaixa;
@@ -7669,6 +7678,7 @@ function updateCashPreview() {
     summary.innerHTML = `
       <strong>Resumo do dia</strong>
       <span>Pix: ${currency.format(values.pix)}</span>
+      <span>QR Code Pix: ${currency.format(values.qrCodePix)}</span>
       <span>Dinheiro: ${currency.format(values.dinheiro)}</span>
       <span>Credito: ${currency.format(values.credito)}</span>
       <span>Debito: ${currency.format(values.debito)}</span>
@@ -7719,11 +7729,12 @@ function renderCashHistory() {
   const payments = cashPaymentTotals(selectedDate);
   const values = {
     pix: toNumber(closing?.vendas_pix ?? payments.pix),
+    qrCodePix: toNumber(closing?.vendas_qr_code_pix ?? payments.qrCodePix),
     dinheiro: toNumber(closing?.vendas_dinheiro ?? payments.dinheiro),
     debito: toNumber(closing?.vendas_debito ?? payments.debito),
     credito: toNumber(closing?.vendas_credito ?? payments.credito),
     outros: toNumber(closing?.vendas_outros ?? payments.outros),
-    total: toNumber(closing?.total_vendas ?? (payments.pix + payments.dinheiro + payments.debito + payments.credito + payments.outros)),
+    total: toNumber(closing?.total_vendas ?? (payments.pix + payments.qrCodePix + payments.dinheiro + payments.debito + payments.credito + payments.outros)),
     esperado: toNumber(closing?.dinheiro_esperado ?? 0),
     contado: toNumber(closing?.dinheiro_contado ?? 0),
     diferenca: toNumber(closing?.diferenca ?? 0),
@@ -7742,6 +7753,7 @@ function renderCashHistory() {
       </div>
       <div class="cash-history-payments">
         <article><span>Pix</span><strong>${currency.format(values.pix)}</strong></article>
+        <article><span>QR Code Pix</span><strong>${currency.format(values.qrCodePix)}</strong></article>
         <article><span>Dinheiro</span><strong>${currency.format(values.dinheiro)}</strong></article>
         <article><span>Credito</span><strong>${currency.format(values.credito)}</strong></article>
         <article><span>Debito</span><strong>${currency.format(values.debito)}</strong></article>
@@ -7770,6 +7782,7 @@ function renderCashClosing() {
   const values = cashCalculate();
   const closing = cashClosingForDate();
   $("[data-cash-pix]").textContent = currency.format(values.pix);
+  $("[data-cash-qrcode-pix]").textContent = currency.format(values.qrCodePix);
   $("[data-cash-money]").textContent = currency.format(values.dinheiro);
   $("[data-cash-debit]").textContent = currency.format(values.debito);
   $("[data-cash-credit]").textContent = currency.format(values.credito);
@@ -7814,6 +7827,7 @@ function cashPayload(status = "fechado") {
     troco_usado: values.trocoUsado,
     troco_restante: values.trocoRestante,
     vendas_pix: values.pix,
+    vendas_qr_code_pix: values.qrCodePix,
     vendas_dinheiro: values.dinheiro,
     vendas_debito: values.debito,
     vendas_credito: values.credito,
@@ -7857,7 +7871,12 @@ async function closeCash(event) {
     await requireUserId();
     await saveExchangeRows(exchangeRows);
     const payload = cashPayload("fechado");
-    const { data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(payload, { onConflict: "data_caixa" }).select("*").single();
+    let { data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(payload, { onConflict: "data_caixa" }).select("*").single();
+    if (error && String(error.message || "").includes("vendas_qr_code_pix")) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.vendas_qr_code_pix;
+      ({ data, error } = await supabaseClient.from(TABLES.cashClosings).upsert(fallbackPayload, { onConflict: "data_caixa" }).select("*").single());
+    }
     if (error) throw error;
     app.cashClosings = [data, ...app.cashClosings.filter((closing) => closing.data_caixa !== data.data_caixa)];
     app.cashEditing = false;
