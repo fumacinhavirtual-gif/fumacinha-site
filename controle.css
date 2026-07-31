@@ -2318,6 +2318,17 @@ textarea {
   font-weight: 900;
 }
 
+.cash-grid small,
+.cash-history-payments small {
+  display: block;
+  margin: -3px 0 6px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .kpi-grid strong,
 .finance-grid strong,
 .sale-summary-grid strong,

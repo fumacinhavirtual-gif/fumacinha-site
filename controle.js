@@ -7107,6 +7107,12 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     debito: 0,
     credito: 0,
     outros: 0,
+    pixCount: 0,
+    qrCodePixCount: 0,
+    dinheiroCount: 0,
+    debitoCount: 0,
+    creditoCount: 0,
+    outrosCount: 0,
     totalVendas: 0,
     dinheiroRecebido: 0,
     trocoDevolvido: 0,
@@ -7119,14 +7125,27 @@ function cashPaymentTotals(dateKey = app.cashDate) {
       breakdown.forEach((row) => {
         const payment = normalizePayment(row.forma);
         const value = toNumber(row.valor);
-        if (isPixPayment(payment)) totals.pix += value;
-        else if (isQrCodePixPayment(payment)) totals.qrCodePix += value;
+        if (isPixPayment(payment)) {
+          totals.pix += value;
+          totals.pixCount += 1;
+        } else if (isQrCodePixPayment(payment)) {
+          totals.qrCodePix += value;
+          totals.qrCodePixCount += 1;
+        }
         else if (payment === "dinheiro") {
           totals.dinheiro += value;
+          totals.dinheiroCount += 1;
           totals.dinheiroRecebido += value;
-        } else if (payment === "debito") totals.debito += value;
-        else if (payment === "credito") totals.credito += value;
-        else totals.outros += value;
+        } else if (payment === "debito") {
+          totals.debito += value;
+          totals.debitoCount += 1;
+        } else if (payment === "credito") {
+          totals.credito += value;
+          totals.creditoCount += 1;
+        } else {
+          totals.outros += value;
+          totals.outrosCount += 1;
+        }
       });
       totals.trocoDevolvido += saleChangeValue(sale);
       return;
@@ -7135,18 +7154,36 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     const payment = normalizePayment(sale.forma_pagamento);
     const value = saleGrandTotal(sale);
     const deliveredValue = saleDeliveredValue(sale);
-    if (isPixPayment(payment)) totals.pix += value;
-    else if (isQrCodePixPayment(payment)) totals.qrCodePix += value;
+    if (isPixPayment(payment)) {
+      totals.pix += value;
+      totals.pixCount += 1;
+    } else if (isQrCodePixPayment(payment)) {
+      totals.qrCodePix += value;
+      totals.qrCodePixCount += 1;
+    }
     else if (payment === "dinheiro") {
       totals.dinheiro += deliveredValue;
+      totals.dinheiroCount += 1;
       totals.dinheiroRecebido += deliveredValue;
       totals.trocoDevolvido += saleChangeValue(sale);
-    } else if (payment === "debito") totals.debito += value;
-    else if (payment === "credito") totals.credito += value;
-    else totals.outros += value;
+    } else if (payment === "debito") {
+      totals.debito += value;
+      totals.debitoCount += 1;
+    } else if (payment === "credito") {
+      totals.credito += value;
+      totals.creditoCount += 1;
+    } else {
+      totals.outros += value;
+      totals.outrosCount += 1;
+    }
   });
   totals.dinheiroLiquido = totals.dinheiroRecebido - totals.trocoDevolvido;
   return totals;
+}
+
+function cashReceivedLabel(count = 0) {
+  const total = Number(count) || 0;
+  return `${total} ${total === 1 ? "recebido" : "recebidos"}`;
 }
 
 function cashMovementTotals(dateKey = app.cashDate) {
@@ -7734,6 +7771,12 @@ function renderCashHistory() {
     debito: toNumber(closing?.vendas_debito ?? payments.debito),
     credito: toNumber(closing?.vendas_credito ?? payments.credito),
     outros: toNumber(closing?.vendas_outros ?? payments.outros),
+    pixCount: payments.pixCount,
+    qrCodePixCount: payments.qrCodePixCount,
+    dinheiroCount: payments.dinheiroCount,
+    debitoCount: payments.debitoCount,
+    creditoCount: payments.creditoCount,
+    outrosCount: payments.outrosCount,
     total: toNumber(closing?.total_vendas ?? (payments.pix + payments.qrCodePix + payments.dinheiro + payments.debito + payments.credito + payments.outros)),
     esperado: toNumber(closing?.dinheiro_esperado ?? 0),
     contado: toNumber(closing?.dinheiro_contado ?? 0),
@@ -7752,12 +7795,12 @@ function renderCashHistory() {
         <small>${closing ? escapeHtml(closing.status || "Fechado") : "Sem fechamento"}</small>
       </div>
       <div class="cash-history-payments">
-        <article><span>Pix</span><strong>${currency.format(values.pix)}</strong></article>
-        <article><span>QR Code Pix</span><strong>${currency.format(values.qrCodePix)}</strong></article>
-        <article><span>Dinheiro</span><strong>${currency.format(values.dinheiro)}</strong></article>
-        <article><span>Credito</span><strong>${currency.format(values.credito)}</strong></article>
-        <article><span>Debito</span><strong>${currency.format(values.debito)}</strong></article>
-        <article><span>Outros</span><strong>${currency.format(values.outros)}</strong></article>
+        <article><span>Pix</span><small>${cashReceivedLabel(values.pixCount)}</small><strong>${currency.format(values.pix)}</strong></article>
+        <article><span>QR Code Pix</span><small>${cashReceivedLabel(values.qrCodePixCount)}</small><strong>${currency.format(values.qrCodePix)}</strong></article>
+        <article><span>Dinheiro</span><small>${cashReceivedLabel(values.dinheiroCount)}</small><strong>${currency.format(values.dinheiro)}</strong></article>
+        <article><span>Credito</span><small>${cashReceivedLabel(values.creditoCount)}</small><strong>${currency.format(values.credito)}</strong></article>
+        <article><span>Debito</span><small>${cashReceivedLabel(values.debitoCount)}</small><strong>${currency.format(values.debito)}</strong></article>
+        <article><span>Outros</span><small>${cashReceivedLabel(values.outrosCount)}</small><strong>${currency.format(values.outros)}</strong></article>
         <article><span>Vendas</span><strong>${values.quantidade}</strong></article>
       </div>
       <div class="cash-history-total-row">
@@ -7781,11 +7824,17 @@ function renderCashClosing() {
   populateCashForm();
   const values = cashCalculate();
   const closing = cashClosingForDate();
+  $("[data-cash-pix-count]").textContent = cashReceivedLabel(values.pixCount);
   $("[data-cash-pix]").textContent = currency.format(values.pix);
+  $("[data-cash-qrcode-pix-count]").textContent = cashReceivedLabel(values.qrCodePixCount);
   $("[data-cash-qrcode-pix]").textContent = currency.format(values.qrCodePix);
+  $("[data-cash-money-count]").textContent = cashReceivedLabel(values.dinheiroCount);
   $("[data-cash-money]").textContent = currency.format(values.dinheiro);
+  $("[data-cash-debit-count]").textContent = cashReceivedLabel(values.debitoCount);
   $("[data-cash-debit]").textContent = currency.format(values.debito);
+  $("[data-cash-credit-count]").textContent = cashReceivedLabel(values.creditoCount);
   $("[data-cash-credit]").textContent = currency.format(values.credito);
+  $("[data-cash-other-count]").textContent = cashReceivedLabel(values.outrosCount);
   $("[data-cash-other]").textContent = currency.format(values.outros);
   $("[data-cash-total]").textContent = currency.format(values.totalVendas);
   $("[data-cash-electronic]").textContent = currency.format(values.eletronicos);
