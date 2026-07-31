@@ -1058,6 +1058,11 @@ function isCashPayment(payment) {
   return normalizePayment(payment) === "dinheiro";
 }
 
+function isPixPayment(payment) {
+  const normalized = normalizePayment(payment);
+  return normalized === "pix" || normalized === "qr code pix" || normalized === "qrcode pix";
+}
+
 function isCardPayment(payment) {
   const normalized = normalizePayment(payment);
   return normalized === "debito" || normalized === "credito";
@@ -1282,6 +1287,7 @@ function splitPaymentPanelMarkup() {
         Forma 1
         <select name="pagamento_1_forma">
           <option value="Pix">Pix</option>
+          <option value="QR Code Pix">QR Code Pix</option>
           <option value="Dinheiro">Dinheiro</option>
           <option value="Debito">Debito</option>
           <option value="Credito">Credito</option>
@@ -1293,6 +1299,7 @@ function splitPaymentPanelMarkup() {
         Forma 2
         <select name="pagamento_2_forma">
           <option value="Pix">Pix</option>
+          <option value="QR Code Pix">QR Code Pix</option>
           <option value="Dinheiro">Dinheiro</option>
           <option value="Debito">Debito</option>
           <option value="Credito">Credito</option>
@@ -6834,6 +6841,7 @@ function renderReports() {
 function paymentDisplayName(method = "") {
   const normalized = normalizePayment(method);
   if (normalized === "pix") return "Pix";
+  if (isPixPayment(method) && normalized !== "pix") return "QR Code Pix";
   if (normalized === "dinheiro") return "Dinheiro";
   if (normalized === "debito") return "Debito";
   if (normalized === "credito") return "Credito";
@@ -6918,7 +6926,7 @@ function renderCommissionReport(sales) {
     const isCard = methods.some((method) => method === "debito" || method === "credito");
     const current = groups.get(name) || { label: name, quantity: 0, pix: 0, cash: 0, debit: 0, credit: 0, base: 0, card: 0, total: 0 };
     current.quantity += 1;
-    current.pix += methods.includes("pix") ? 1 : 0;
+    current.pix += methods.some((method) => isPixPayment(method)) ? 1 : 0;
     current.cash += methods.includes("dinheiro") ? 1 : 0;
     current.debit += methods.includes("debito") ? 1 : 0;
     current.credit += methods.includes("credito") ? 1 : 0;
@@ -7104,7 +7112,7 @@ function cashPaymentTotals(dateKey = app.cashDate) {
       breakdown.forEach((row) => {
         const payment = normalizePayment(row.forma);
         const value = toNumber(row.valor);
-        if (payment === "pix") totals.pix += value;
+        if (isPixPayment(payment)) totals.pix += value;
         else if (payment === "dinheiro") {
           totals.dinheiro += value;
           totals.dinheiroRecebido += value;
@@ -7119,7 +7127,7 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     const payment = normalizePayment(sale.forma_pagamento);
     const value = saleGrandTotal(sale);
     const deliveredValue = saleDeliveredValue(sale);
-    if (payment === "pix") totals.pix += value;
+    if (isPixPayment(payment)) totals.pix += value;
     else if (payment === "dinheiro") {
       totals.dinheiro += deliveredValue;
       totals.dinheiroRecebido += deliveredValue;
