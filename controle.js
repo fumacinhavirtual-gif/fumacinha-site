@@ -1439,7 +1439,6 @@ async function loadAll() {
     showToast("Alguns dados nao carregaram. Produtos foram mantidos separados.", "error");
     setStatus(`Erro ao carregar: ${loadErrors[0]}`, "error");
   } else {
-    showToast("Controle atualizado.", "success");
     setStatus("", "");
   }
   renderAll();
