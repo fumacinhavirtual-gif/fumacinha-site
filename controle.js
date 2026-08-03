@@ -159,6 +159,8 @@ const app = {
   financeDetailType: "revenue",
   financeDetailGrain: "day",
   financeDetailRange: null,
+  clientMetricsCache: new Map(),
+  clientMetricsSignature: "",
   user: null,
 };
 
@@ -911,6 +913,7 @@ async function fetchOrderItemsFor(orderId) {
   const { data, error } = await supabaseClient.from(TABLES.orderItems).select("*").eq("pedido_id", orderId).order("created_at", { ascending: true });
   if (error) throw error;
   app.orderItems = [...app.orderItems.filter((item) => String(item.pedido_id) !== String(orderId)), ...(data || [])];
+  invalidateClientMetricsCache();
 }
 
 async function handleRealtimeOrder(order, shouldNotify = true) {
@@ -919,9 +922,12 @@ async function handleRealtimeOrder(order, shouldNotify = true) {
   const existed = app.orders.some((current) => String(current.id) === id);
   app.orders = [order, ...app.orders.filter((current) => String(current.id) !== id)];
   await fetchOrderItemsFor(order.id).catch(() => {});
-  renderPendingOrders();
-  renderDashboard();
-  renderFinance();
+  invalidateClientMetricsCache();
+  updatePendingBadges();
+  if (app.activeTab === "orders") renderPendingOrders();
+  if (app.activeTab === "home") renderDashboard();
+  if (app.activeTab === "finance") renderFinance();
+  if (app.activeTab === "clients") renderClients();
   if (!existed && shouldNotify && !app.seenOrderIds.has(id)) notifyNewOrder(order);
   app.seenOrderIds.add(id);
 }
@@ -940,9 +946,12 @@ async function pollOrdersLight() {
     notifyNewOrder(order);
     app.seenOrderIds.add(String(order.id));
   });
-  renderPendingOrders();
-  renderDashboard();
-  renderFinance();
+  invalidateClientMetricsCache();
+  updatePendingBadges();
+  if (app.activeTab === "orders") renderPendingOrders();
+  if (app.activeTab === "home") renderDashboard();
+  if (app.activeTab === "finance") renderFinance();
+  if (app.activeTab === "clients") renderClients();
 }
 
 function setupOrdersRealtime() {
@@ -1391,6 +1400,7 @@ async function loadAll() {
   app.orders = readData(ordersResult, "pedidos", app.orders);
   app.orderItems = readData(orderItemsResult, "itens de pedido", app.orderItems);
   app.clients = readData(clientsResult, "clientes", app.clients);
+  invalidateClientMetricsCache();
   app.stockMoves = readData(movesResult, "movimentacoes de estoque", app.stockMoves);
   app.expenses = readData(expensesResult, "despesas", app.expenses);
   app.deliverers = readData(deliverersResult, "entregadores", app.deliverers);
@@ -1446,22 +1456,56 @@ function renderSafely(label, callback) {
 function renderAll() {
   renderSafely("periodos", renderPeriods);
   renderSafely("filtros analiticos", renderAnalyticsFilters);
-  renderSafely("equipe", renderPeopleOptions);
-  renderSafely("dashboard", renderDashboard);
-  renderSafely("filtros de venda", renderSaleProductFilters);
-  renderSafely("cliente da venda", renderSaleClientPanel);
-  renderSafely("itens da venda", renderSaleItems);
-  renderSafely("precos da venda", updateSaleItemPrices);
-  renderSafely("total da venda", updateSaleTotal);
-  renderSafely("pedidos pendentes", renderPendingOrders);
-  renderSafely("historico de vendas", renderSalesHistory);
-  renderSafely("estoque", renderStock);
-  renderSafely("financeiro", renderFinance);
-  renderSafely("relatorios", renderReports);
-  renderSafely("conferencia", renderCashClosing);
-  renderSafely("rotas", renderRoutes);
-  renderSafely("cupons", renderCoupons);
-  renderSafely("status da loja", renderStoreStatus);
+  renderSafely("badges de pedidos", updatePendingBadges);
+
+  const tab = app.activeTab || "home";
+  if (tab === "home") {
+    renderSafely("dashboard", renderDashboard);
+    return;
+  }
+  if (tab === "sales") {
+    renderSafely("filtros de venda", renderSaleProductFilters);
+    renderSafely("cliente da venda", renderSaleClientPanel);
+    renderSafely("itens da venda", renderSaleItems);
+    renderSafely("precos da venda", updateSaleItemPrices);
+    renderSafely("total da venda", updateSaleTotal);
+    return;
+  }
+  if (tab === "orders") {
+    renderSafely("pedidos pendentes", renderPendingOrders);
+    return;
+  }
+  if (tab === "history") {
+    renderSafely("historico de vendas", renderSalesHistory);
+    return;
+  }
+  if (tab === "stock") {
+    renderSafely("estoque", renderStock);
+    return;
+  }
+  if (tab === "finance") {
+    renderSafely("financeiro", renderFinance);
+    renderSafely("relatorios", renderReports);
+    return;
+  }
+  if (tab === "cash") {
+    renderSafely("conferencia", renderCashClosing);
+    return;
+  }
+  if (tab === "coupons") {
+    renderSafely("cupons", renderCoupons);
+    return;
+  }
+  if (tab === "clients") {
+    renderSafely("clientes", renderClients);
+    return;
+  }
+  if (tab === "more") {
+    renderSafely("equipe", renderPeopleOptions);
+    renderSafely("relatorios", renderReports);
+    renderSafely("rotas", renderRoutes);
+    renderSafely("status da loja", renderStoreStatus);
+  }
 }
 
 function renderAnalyticsFilters() {
@@ -5655,6 +5699,7 @@ function renderFinance() {
 }
 
 function renderTopClients() {
+  if (!topClientsRoot) return;
   renderClients();
 }
 
@@ -5811,6 +5856,7 @@ async function searchSaleClients(query = app.saleClientSearch) {
       ...(data || []),
       ...app.clients.filter((client) => !(data || []).some((row) => String(row.id) === String(client.id))),
     ];
+    invalidateClientMetricsCache();
     app.saleClientLoading = false;
     renderSaleClientPanel();
   } catch (error) {
@@ -5833,6 +5879,7 @@ async function findClientByWhatsappFromSupabase(normalized, exceptId = "") {
   if (error) throw error;
   if (data) {
     app.clients = [data, ...app.clients.filter((client) => String(client.id) !== String(data.id))];
+    invalidateClientMetricsCache();
   }
   if (data && String(data.id) === String(exceptId || "")) return null;
   return data || null;
@@ -6041,6 +6088,7 @@ async function saveSaleClientQuick(event) {
     const { data, error } = await supabaseClient.from(TABLES.clients).insert(payload).select("*").single();
     if (error) throw error;
     app.clients = [data, ...app.clients.filter((client) => String(client.id) !== String(data.id))];
+    invalidateClientMetricsCache();
     selectSaleClient(data.id);
     if (bairro && saleForm?.elements.bairro) saleForm.elements.bairro.value = bairro;
     closeSaleClientQuick();
@@ -6243,7 +6291,7 @@ function clientFavoriteProducts(purchases) {
   return [...rows.values()].sort((a, b) => b.quantity - a.quantity);
 }
 
-function clientMetrics(client) {
+function computeClientMetrics(client) {
   const purchases = clientPurchases(client);
   const sales = purchases.filter((purchase) => purchase.type === "sale").map((purchase) => purchase.sale);
   const totalSpent = purchases.reduce((sum, purchase) => sum + purchaseTotal(purchase), 0);
@@ -6269,6 +6317,39 @@ function clientMetrics(client) {
     isVip: totalSpent >= 1000,
     isRecurring: purchaseCount >= 2,
   };
+}
+
+function clientMetricsDataSignature() {
+  return [
+    app.clients.length,
+    app.sales.length,
+    app.orders.length,
+    app.saleItems.length,
+    app.orderItems.length,
+  ].join(":");
+}
+
+function clientMetricsCacheKey(client = {}) {
+  return String(client.id || clientPhoneKey(client) || clientNameKey(client) || "");
+}
+
+function invalidateClientMetricsCache() {
+  app.clientMetricsSignature = "";
+  app.clientMetricsCache = new Map();
+}
+
+function clientMetrics(client) {
+  const signature = clientMetricsDataSignature();
+  if (app.clientMetricsSignature !== signature) {
+    app.clientMetricsSignature = signature;
+    app.clientMetricsCache = new Map();
+  }
+  const key = clientMetricsCacheKey(client);
+  if (!key) return computeClientMetrics(client);
+  if (app.clientMetricsCache.has(key)) return app.clientMetricsCache.get(key);
+  const metrics = computeClientMetrics(client);
+  app.clientMetricsCache.set(key, metrics);
+  return metrics;
 }
 
 function clientDateShort(date) {
@@ -6389,6 +6470,7 @@ async function loadClientsForDirectory() {
       .limit(500);
     if (error) throw error;
     app.clients = data || [];
+    invalidateClientMetricsCache();
   } catch (error) {
     console.error("Erro ao carregar clientes:", error);
     app.clientsError = error.message || "Nao foi possivel carregar os clientes.";
@@ -6645,6 +6727,7 @@ async function saveClient(event) {
     app.clients = id
       ? app.clients.map((client) => String(client.id) === String(id) ? data : client)
       : [data, ...app.clients];
+    invalidateClientMetricsCache();
     showToast(id ? "Cliente atualizado com sucesso." : "Cliente cadastrado com sucesso.", "success");
     closeClientModal();
     renderClients();
@@ -6675,6 +6758,7 @@ async function toggleClientStatus(id) {
       .single();
     if (error) throw error;
     app.clients = app.clients.map((row) => String(row.id) === String(id) ? data : row);
+    invalidateClientMetricsCache();
     showToast(activate ? "Cliente reativado com sucesso." : "Cliente inativado com sucesso.", "success");
     if (app.clientModalMode === "view" && String(app.viewingClientId) === String(id)) renderClientModal();
     renderClients();
@@ -6728,11 +6812,13 @@ async function deleteClient(id) {
       await moveClientRelation(TABLES.orders, id, mergeTarget.id);
       app.sales = app.sales.map((sale) => String(sale.cliente_id || "") === String(id) ? { ...sale, cliente_id: mergeTarget.id } : sale);
       app.orders = app.orders.map((order) => String(order.cliente_id || "") === String(id) ? { ...order, cliente_id: mergeTarget.id } : order);
+      invalidateClientMetricsCache();
     } else {
       await clearClientRelation(TABLES.sales, id);
       await clearClientRelation(TABLES.orders, id);
       app.sales = app.sales.map((sale) => String(sale.cliente_id || "") === String(id) ? { ...sale, cliente_id: null } : sale);
       app.orders = app.orders.map((order) => String(order.cliente_id || "") === String(id) ? { ...order, cliente_id: null } : order);
+      invalidateClientMetricsCache();
     }
     const { data, error } = await supabaseClient
       .from(TABLES.clients)
@@ -6742,6 +6828,7 @@ async function deleteClient(id) {
     if (error) throw error;
     if (!data?.length) throw new Error("O Supabase nao confirmou a exclusao do contato. Verifique a policy de DELETE da tabela clientes.");
     app.clients = app.clients.filter((row) => String(row.id) !== String(id));
+    invalidateClientMetricsCache();
     if (String(app.selectedSaleClientId || "") === String(id)) clearSaleClientSelection();
     if (String(app.viewingClientId || "") === String(id) || String(app.editingClientId || "") === String(id)) closeClientModal();
     closeClientActionMenus();
@@ -8056,16 +8143,8 @@ function switchTab(tab) {
   app.activeTab = tab;
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
   $$("[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
-  renderPeriods();
-  if (tab === "finance") {
-    renderFinance();
-    renderReports();
-  }
-  if (tab === "clients") {
-    renderTopClients();
-    if (!app.clients.length && !app.clientsError) loadClientsForDirectory();
-  }
-  if (tab === "coupons") renderCoupons();
+  renderAll();
+  if (tab === "clients" && !app.clients.length && !app.clientsError) loadClientsForDirectory();
 }
 
 function openSideMenu() {
