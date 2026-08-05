@@ -45,6 +45,7 @@ const ANALYTICS_PERIOD_LABELS = {
   year: "Ano atual",
   custom: "Personalizado",
 };
+const FINANCE_ANALYTICS_KEYS = new Set(["payments", "deliverers", "sellers"]);
 const app = {
   products: [],
   sales: [],
@@ -570,6 +571,12 @@ function setGlobalCustomRange(startDate, endDate) {
   app.period = "custom";
 }
 
+function useCustomRangeForFinanceReports() {
+  FINANCE_ANALYTICS_KEYS.forEach((key) => {
+    app.analyticsPeriods[key] = "custom";
+  });
+}
+
 function applyFinanceMonth(key = monthKey()) {
   app.financePeriodMode = "month";
   app.financeMonth = key;
@@ -667,6 +674,7 @@ function applyFinanceCustomDates() {
   setGlobalCustomRange(start, end);
   app.financePeriodMode = "quick";
   app.financeQuickPeriod = "custom";
+  useCustomRangeForFinanceReports();
   if (status) status.textContent = "";
   closeFinanceFilter();
   renderAll();
@@ -8789,10 +8797,13 @@ document.addEventListener("change", (event) => {
     const key = event.target.dataset.analyticsPeriod;
     app.analyticsPeriods[key] = event.target.value || "month";
     if (key === "topProducts") app.homeTopProductsExpanded = false;
+    if (FINANCE_ANALYTICS_KEYS.has(key) && event.target.value === "custom") {
+      openFinanceFilter();
+    }
     renderAnalyticsFilters();
-    renderDashboard();
-    renderReports();
-    renderTopClients();
+    if (key === "topProducts") renderDashboard();
+    if (FINANCE_ANALYTICS_KEYS.has(key)) renderReports();
+    if (key === "clients") renderTopClients();
   }
   if (event.target.matches("[data-period-preset]")) {
     app.period = event.target.value === "custom" ? "custom" : event.target.value;
