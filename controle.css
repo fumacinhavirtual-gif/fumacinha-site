@@ -855,7 +855,7 @@ button.sale-section-header {
   align-items: center;
   gap: 10px;
   width: 100%;
-  min-height: 82px;
+  min-height: 84px;
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 9px;
@@ -889,13 +889,11 @@ button.sale-section-header {
 }
 
 .sale-picker-product strong {
-  display: -webkit-box;
-  overflow: hidden;
+  display: block;
   color: var(--black);
   font-size: 0.82rem;
   line-height: 1.18;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  overflow-wrap: anywhere;
 }
 
 .sale-picker-product small {
@@ -939,6 +937,39 @@ button.sale-section-header {
   color: #b91c1c;
   background: #fee2e2;
   font-size: 0.66rem;
+}
+
+@media (max-width: 680px) {
+  .sale-picker-product {
+    grid-template-columns: 48px minmax(0, 1fr) auto 32px;
+    gap: 7px;
+    min-height: 86px;
+    padding: 8px;
+  }
+
+  .sale-picker-product img {
+    width: 48px;
+    height: 54px;
+    border-radius: 11px;
+  }
+
+  .sale-picker-product strong {
+    font-size: clamp(0.7rem, 3vw, 0.8rem);
+    line-height: 1.12;
+  }
+
+  .sale-picker-product small {
+    font-size: 0.66rem;
+  }
+
+  .sale-picker-product b {
+    font-size: 0.72rem;
+  }
+
+  .sale-picker-product i {
+    width: 32px;
+    height: 32px;
+  }
 }
 
 .sale-picker-empty {
