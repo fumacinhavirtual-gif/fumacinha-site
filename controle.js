@@ -1471,6 +1471,7 @@ function renderAll() {
     return;
   }
   if (tab === "sales") {
+    renderSafely("equipe da venda", renderPeopleOptions);
     renderSafely("filtros de venda", renderSaleProductFilters);
     renderSafely("cliente da venda", renderSaleClientPanel);
     renderSafely("itens da venda", renderSaleItems);
@@ -3080,6 +3081,8 @@ async function registerSale(event) {
   setStatus(confirmingOrderId ? "Confirmando pedido..." : "Registrando venda...", "loading");
   try {
     const usuarioId = await requireUserId();
+    refreshManualSaleDateIfNeeded();
+    if (!saleForm.elements.vendedora_id.value && app.sellers.length) renderPeopleOptions();
     const seller = app.sellers.find((item) => String(item.id) === String(saleForm.elements.vendedora_id.value));
     if (!seller) throw new Error("Informe a vendedora.");
     const deliverer = app.deliverers.find((item) => String(item.id) === String(saleForm.elements.entregador_id.value)) || null;
@@ -8074,6 +8077,15 @@ function setSuggestedDeliveryRoute() {
   const suggestion = nextRouteSuggestion();
   saleForm.elements.data_entrega.value = suggestion.date;
   saleForm.elements.horario_rota.value = suggestion.time;
+}
+
+function refreshManualSaleDateIfNeeded() {
+  if (!saleForm?.elements.data_entrega || app.editingSaleId || app.editingOrderId || app.confirmingOrderId) return;
+  const currentDate = saleForm.elements.data_entrega.value;
+  const today = localDateValue();
+  if (!currentDate || currentDate < today) {
+    saleForm.elements.data_entrega.value = today;
+  }
 }
 
 function saleRouteDate(sale) {
