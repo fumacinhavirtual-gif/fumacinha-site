@@ -30,6 +30,7 @@ const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+const PRODUCT_UPLOAD_IMAGE_PRESET = { maxWidth: 900, maxHeight: 1200, quality: 0.82 };
 const PRODUCT_SELECT_FIELDS = "id,nome,preco,imagem,categoria,descricao,estoque,ativo,destaque_home,ocultar_home,custo,grupo_custo_id,custo_manual";
 const PRODUCT_SELECT_FALLBACK_FIELDS = "id,nome,preco,imagem,categoria,estoque,ativo,custo";
 const LAST_SELLER_KEY = "fumacinha:lastSellerId";
@@ -4713,6 +4714,36 @@ function stockProductImagePath(file) {
   return `produtos/${Date.now()}-${random}.${safeExtension || "jpg"}`;
 }
 
+async function optimizeProductImageForUpload(file) {
+  if (!file || !/^image\/(jpeg|png|webp)$/i.test(file.type)) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(
+      1,
+      PRODUCT_UPLOAD_IMAGE_PRESET.maxWidth / bitmap.width,
+      PRODUCT_UPLOAD_IMAGE_PRESET.maxHeight / bitmap.height
+    );
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: true });
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", PRODUCT_UPLOAD_IMAGE_PRESET.quality));
+    if (!blob || blob.size >= file.size) return file;
+
+    const originalName = file.name.replace(/\.[^.]+$/, "") || "produto";
+    return new File([blob], `${originalName}.webp`, { type: "image/webp", lastModified: Date.now() });
+  } catch (error) {
+    console.warn("Nao foi possivel otimizar a foto do produto antes do envio.", error);
+    return file;
+  }
+}
+
 function updateStockProductImagePreview(source = "") {
   const value = source || stockProductForm?.elements.imagem?.value.trim() || "";
   const hasImage = Boolean(value);
@@ -4794,11 +4825,12 @@ async function uploadStockProductImage() {
   if (!file) return stockProductForm?.elements.imagem?.value.trim() || "";
   const validation = validateStockProductImageFile(file);
   if (validation) throw new Error(validation);
-  const path = stockProductImagePath(file);
-  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const optimizedFile = await optimizeProductImageForUpload(file);
+  const path = stockProductImagePath(optimizedFile);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, optimizedFile, {
+    cacheControl: "31536000",
     upsert: false,
-    contentType: file.type,
+    contentType: optimizedFile.type,
   });
   if (error) throw error;
   const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);
@@ -4810,11 +4842,12 @@ async function uploadStockEditImage() {
   if (!file) return "";
   const validation = validateStockProductImageFile(file);
   if (validation) throw new Error(validation);
-  const path = stockProductImagePath(file);
-  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const optimizedFile = await optimizeProductImageForUpload(file);
+  const path = stockProductImagePath(optimizedFile);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, optimizedFile, {
+    cacheControl: "31536000",
     upsert: false,
-    contentType: file.type,
+    contentType: optimizedFile.type,
   });
   if (error) throw error;
   const { data } = supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).getPublicUrl(path);

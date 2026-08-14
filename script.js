@@ -9,6 +9,13 @@ const BENEFITS_TABLE_NAME = "BENEFICIOS_LOJA";
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const IMAGE_UPLOAD_PRESETS = {
+  produtos: { maxWidth: 900, maxHeight: 1200, quality: 0.82 },
+  banners: { maxWidth: 1600, maxHeight: 900, quality: 0.84 },
+  logo: { maxWidth: 512, maxHeight: 512, quality: 0.86 },
+  beneficios: { maxWidth: 720, maxHeight: 720, quality: 0.84 },
+  default: { maxWidth: 1200, maxHeight: 1200, quality: 0.82 },
+};
 const LOW_STOCK_DEFAULT_LIMIT = 5;
 const ADMIN_ACCESS_PARAM = "admin";
 const ADMIN_ACCESS_SECRET = "fumacinha";
@@ -2563,17 +2570,50 @@ function uniqueStorageImagePath(file, folder = "produtos") {
   return `${folder}/${Date.now()}-${random}.${safeExtension || "jpg"}`;
 }
 
+async function optimizeImageForUpload(file, preset = IMAGE_UPLOAD_PRESETS.default) {
+  if (!file || file.type === "image/svg+xml") return file;
+  if (!/^image\/(jpeg|png|webp)$/i.test(file.type)) return file;
+
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(
+      1,
+      Number(preset.maxWidth || 1200) / bitmap.width,
+      Number(preset.maxHeight || 1200) / bitmap.height
+    );
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { alpha: true });
+    context.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close?.();
+
+    const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/webp", Number(preset.quality || 0.82)));
+    if (!blob || blob.size >= file.size) return file;
+
+    const originalName = file.name.replace(/\.[^.]+$/, "") || "imagem";
+    return new File([blob], `${originalName}.webp`, { type: "image/webp", lastModified: Date.now() });
+  } catch (error) {
+    console.warn("Nao foi possivel otimizar a imagem antes do envio.", error);
+    return file;
+  }
+}
+
 async function uploadImageFileToStorage(file, folder, statusElement) {
   const validation = validateProductImageFile(file);
   if (validation) throw new Error(validation);
   if (!supabaseClient) throw new Error("Configure o Supabase para enviar imagens.");
 
+  if (statusElement) statusElement.textContent = "Otimizando imagem...";
+  const optimizedFile = await optimizeImageForUpload(file, IMAGE_UPLOAD_PRESETS[folder] || IMAGE_UPLOAD_PRESETS.default);
   if (statusElement) statusElement.textContent = "Enviando imagem...";
-  const path = uniqueStorageImagePath(file, folder);
-  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const path = uniqueStorageImagePath(optimizedFile, folder);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, optimizedFile, {
+    cacheControl: "31536000",
     upsert: false,
-    contentType: file.type,
+    contentType: optimizedFile.type,
   });
   if (error) throw error;
 
@@ -2586,12 +2626,14 @@ async function uploadBenefitImageFile(file, statusElement) {
   if (validation) throw new Error(validation);
   if (!supabaseClient) throw new Error("Configure o Supabase para enviar imagens.");
 
+  if (statusElement) statusElement.textContent = "Otimizando imagem...";
+  const optimizedFile = await optimizeImageForUpload(file, IMAGE_UPLOAD_PRESETS.beneficios);
   if (statusElement) statusElement.textContent = "Enviando imagem...";
-  const path = uniqueStorageImagePath(file, "beneficios");
-  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const path = uniqueStorageImagePath(optimizedFile, "beneficios");
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, optimizedFile, {
+    cacheControl: "31536000",
     upsert: false,
-    contentType: file.type,
+    contentType: optimizedFile.type,
   });
   if (error) throw error;
 
@@ -2615,12 +2657,14 @@ async function uploadSelectedProductImage() {
   if (validation) throw new Error(validation);
   if (!supabaseClient) throw new Error("Configure o Supabase para enviar imagens.");
 
+  if (productUploadStatus) productUploadStatus.textContent = "Otimizando imagem...";
+  const optimizedFile = await optimizeImageForUpload(file, IMAGE_UPLOAD_PRESETS.produtos);
   if (productUploadStatus) productUploadStatus.textContent = "Enviando imagem...";
-  const path = uniqueProductImagePath(file);
-  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const path = uniqueProductImagePath(optimizedFile);
+  const { error } = await supabaseClient.storage.from(PRODUCT_IMAGE_BUCKET).upload(path, optimizedFile, {
+    cacheControl: "31536000",
     upsert: false,
-    contentType: file.type,
+    contentType: optimizedFile.type,
   });
   if (error) throw error;
 
