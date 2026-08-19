@@ -2040,6 +2040,7 @@ function renderDashboard() {
   const topProducts = dashboardRankedProducts(topProductsManualSales, topProductsConfirmedOrders);
   renderTopProductsRanking(topProducts.slice(0, app.homeTopProductsExpanded ? 20 : 5));
   updateHomeTopProductsMoreButton(topProducts.length);
+  renderSmartOrderSuggestions();
 }
 
 function dashboardRankedProducts(manualSales, confirmedOrders) {
