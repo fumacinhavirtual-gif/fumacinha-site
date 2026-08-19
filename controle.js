@@ -2168,7 +2168,7 @@ function smartOrderSuggestions() {
   const saleIds = new Set(manualSales.map((sale) => String(sale.id)));
   const orderIds = new Set(confirmedSiteOrders.map((order) => String(order.id)));
   const searchableName = (value = "") => normalizeText(value).replace(/[^a-z0-9]+/g, " ").trim();
-  const products = app.products.filter((product) => product && product.ativo !== false && !product.deleted_at);
+  const products = app.products.filter((product) => product && !product.deleted_at);
   const productById = new Map(products.map((product) => [String(product.id), product]));
   const productByName = new Map(products.map((product) => [searchableName(product.nome), product]));
   const sold = new Map();
@@ -2211,7 +2211,7 @@ function smartOrderSuggestions() {
     .filter((item) => orderIds.has(String(item.pedido_id)))
     .forEach((item) => addSold(item, item.produto_id, item.produto_nome, item.quantidade, item.subtotal || item.valor_total));
 
-  return [...sold.values()]
+  const rows = [...sold.values()]
     .filter((row) => {
       const stock = toNumber(row.stock);
       const soldQty = toNumber(row.quantity);
@@ -2243,6 +2243,34 @@ function smartOrderSuggestions() {
       return { ...row, priority, status, suggestedQuantity };
     })
     .sort((a, b) => a.priority - b.priority || b.quantity - a.quantity || a.stock - b.stock || b.total - a.total)
+    .slice(0, 20);
+
+  if (rows.length) return rows;
+
+  return products
+    .filter((product) => {
+      const stock = toNumber(product.estoque);
+      return stock >= 0 && stock <= SMART_ORDER_LOW_STOCK_LIMIT;
+    })
+    .map((product) => {
+      const stock = toNumber(product.estoque);
+      const suggestedQuantity = Math.max(1, SMART_ORDER_TARGET_STOCK - stock);
+      const priority = stock === 0 ? 1 : stock <= 2 ? 2 : stock <= 3 ? 3 : 4;
+      const status = stock === 0 ? "Acabou" : stock <= 2 ? "Repor urgente" : stock <= 3 ? "Estoque critico" : "Esgotando";
+      return {
+        product,
+        name: product.nome || "Produto",
+        quantity: 0,
+        total: toNumber(product.preco) * suggestedQuantity,
+        stock,
+        price: toNumber(product.preco),
+        priority,
+        status,
+        suggestedQuantity,
+        fallback: true,
+      };
+    })
+    .sort((a, b) => a.priority - b.priority || a.stock - b.stock || a.name.localeCompare(b.name))
     .slice(0, 20);
 }
 
@@ -6960,7 +6988,7 @@ function renderSmartOrderSuggestions() {
         <article class="smart-order-row ${colorClass}">
           <div>
             <strong>${escapeHtml(row.name)}</strong>
-            <span>${escapeHtml(row.status)} | vendeu ${toNumber(row.quantity)} un no historico | estoque ${stock} un</span>
+            <span>${escapeHtml(row.status)} | ${row.fallback ? "estoque baixo atual" : `vendeu ${toNumber(row.quantity)} un no historico`} | estoque ${stock} un</span>
             <small>Sugestao: repor ${toNumber(row.suggestedQuantity)} un para voltar a ${SMART_ORDER_TARGET_STOCK} un</small>
           </div>
           <em>${currency.format(row.total)}</em>
