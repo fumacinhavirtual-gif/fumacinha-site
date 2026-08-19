@@ -2728,6 +2728,13 @@ textarea {
   font-weight: 850;
 }
 
+.smart-order-row small {
+  color: var(--green);
+  font-size: 0.78rem;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
 .smart-order-row em {
   flex: 0 0 auto;
   color: var(--green);

@@ -27,6 +27,8 @@ const currency = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "
 const COMMISSION_BASE = 0.5;
 const COMMISSION_CARD_EXTRA = 1;
 const ROUTE_TIMES = ["11:00", "13:00", "15:00", "17:00", "19:00", "21:00"];
+const SMART_ORDER_LOW_STOCK_LIMIT = 5;
+const SMART_ORDER_TARGET_STOCK = 10;
 const PRODUCT_IMAGE_BUCKET = "fumacinha-produtos";
 const MAX_PRODUCT_IMAGE_SIZE = 5 * 1024 * 1024;
 const PRODUCT_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
@@ -1370,10 +1372,10 @@ async function loadAll() {
   }
 
   const [salesResult, itemsResult, ordersResult, orderItemsResult, clientsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, couponsResult, siteConfigResult] = await Promise.allSettled([
-    supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(500),
-    supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(1000),
-    supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(500),
-    supabaseClient.from(TABLES.orderItems).select("*").order("created_at", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(1500),
+    supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(3000),
+    supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(1500),
+    supabaseClient.from(TABLES.orderItems).select("*").order("created_at", { ascending: false }).limit(3000),
     supabaseClient.from(TABLES.clients).select("*").order("updated_at", { ascending: false }).limit(1000),
     supabaseClient.from(TABLES.stockMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.expenses).select("*").order("data_despesa", { ascending: false }).limit(500),
@@ -2165,24 +2167,39 @@ function smartOrderSuggestions() {
   const manualSales = manualSalesHistory(confirmedSiteOrders);
   const saleIds = new Set(manualSales.map((sale) => String(sale.id)));
   const orderIds = new Set(confirmedSiteOrders.map((order) => String(order.id)));
-  const productById = new Map(app.products.map((product) => [String(product.id), product]));
-  const productByName = new Map(app.products.map((product) => [String(product.nome || "").trim().toLowerCase(), product]));
+  const searchableName = (value = "") => normalizeText(value).replace(/[^a-z0-9]+/g, " ").trim();
+  const products = app.products.filter((product) => product && product.ativo !== false && !product.deleted_at);
+  const productById = new Map(products.map((product) => [String(product.id), product]));
+  const productByName = new Map(products.map((product) => [searchableName(product.nome), product]));
   const sold = new Map();
+  const resolveProduct = (productId, productName) => {
+    const byId = productById.get(String(productId || ""));
+    if (byId) return byId;
+    const normalizedName = searchableName(productName);
+    if (!normalizedName) return null;
+    if (productByName.has(normalizedName)) return productByName.get(normalizedName);
+    return products.find((product) => {
+      const currentName = searchableName(product.nome);
+      return currentName && (currentName.includes(normalizedName) || normalizedName.includes(currentName));
+    }) || null;
+  };
 
   const addSold = (item, productId, productName, quantity, total) => {
-    const normalizedName = String(productName || "").trim().toLowerCase();
-    const product = productById.get(String(productId)) || productByName.get(normalizedName);
-    const key = product ? `product:${product.id}` : `name:${normalizedName || productId}`;
+    const product = resolveProduct(productId, productName);
+    if (!product) return;
+    const key = `product:${product.id}`;
     const current = sold.get(key) || {
       product,
-      name: product?.nome || productName || "Produto",
+      name: product.nome || productName || "Produto",
       quantity: 0,
       total: 0,
-      stock: toNumber(product?.estoque),
+      stock: toNumber(product.estoque),
+      price: toNumber(product.preco),
     };
     current.quantity += toNumber(quantity);
     current.total += toNumber(total);
-    current.stock = toNumber(current.product?.estoque);
+    current.stock = toNumber(product.estoque);
+    current.price = toNumber(product.preco);
     sold.set(key, current);
   };
 
@@ -2198,28 +2215,35 @@ function smartOrderSuggestions() {
     .filter((row) => {
       const stock = toNumber(row.stock);
       const soldQty = toNumber(row.quantity);
+      if (stock < 0 || stock > SMART_ORDER_LOW_STOCK_LIMIT) return false;
       if (stock === 0) return soldQty >= 1;
-      if (stock >= 1 && stock <= 3) return soldQty >= 2;
-      if (stock >= 4 && stock <= 5) return soldQty >= 3;
+      if (stock <= 2) return soldQty >= 1;
+      if (stock <= 3) return soldQty >= 2;
+      if (stock <= SMART_ORDER_LOW_STOCK_LIMIT) return soldQty >= 3;
       return false;
     })
     .map((row) => {
       const stock = toNumber(row.stock);
       let priority = 3;
       let status = "Acompanhar";
+      const suggestedQuantity = Math.max(1, SMART_ORDER_TARGET_STOCK - stock);
       if (stock === 0) {
         priority = 1;
         status = "Acabou e vendeu";
-      } else if (stock <= 3) {
+      } else if (stock <= 2) {
         priority = 2;
         status = "Repor urgente";
+      } else if (stock <= 3) {
+        priority = 3;
+        status = "Estoque critico";
       } else {
+        priority = 4;
         status = "Esgotando";
       }
-      return { ...row, priority, status };
+      return { ...row, priority, status, suggestedQuantity };
     })
-    .sort((a, b) => a.priority - b.priority || b.quantity - a.quantity || a.stock - b.stock)
-    .slice(0, 12);
+    .sort((a, b) => a.priority - b.priority || b.quantity - a.quantity || a.stock - b.stock || b.total - a.total)
+    .slice(0, 20);
 }
 
 function renderList(selector, rows, emptyText) {
@@ -6937,6 +6961,7 @@ function renderSmartOrderSuggestions() {
           <div>
             <strong>${escapeHtml(row.name)}</strong>
             <span>${escapeHtml(row.status)} | vendeu ${toNumber(row.quantity)} un no historico | estoque ${stock} un</span>
+            <small>Sugestao: repor ${toNumber(row.suggestedQuantity)} un para voltar a ${SMART_ORDER_TARGET_STOCK} un</small>
           </div>
           <em>${currency.format(row.total)}</em>
         </article>
