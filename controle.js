@@ -1470,7 +1470,9 @@ function renderAll() {
 
   const tab = app.activeTab || "home";
   if (tab === "home") {
+    renderSafely("sugestao inteligente", renderSmartOrderSuggestions);
     renderSafely("dashboard", renderDashboard);
+    renderSafely("sugestao inteligente", renderSmartOrderSuggestions);
     return;
   }
   if (tab === "sales") {
@@ -2212,7 +2214,9 @@ function smartOrderSuggestions() {
     .filter((item) => orderIds.has(String(item.pedido_id)))
     .forEach((item) => addSold(item, item.produto_id, item.produto_nome, item.quantidade, item.subtotal || item.valor_total));
 
-  const rows = [...sold.values()]
+  const soldRows = [...sold.values()];
+  const rowsBeforeFilter = soldRows.length;
+  const rowsAfterHistoryFilter = soldRows
     .filter((row) => {
       const stock = toNumber(row.stock);
       const soldQty = toNumber(row.quantity);
@@ -2243,12 +2247,9 @@ function smartOrderSuggestions() {
       }
       return { ...row, priority, status, suggestedQuantity };
     })
-    .sort((a, b) => a.priority - b.priority || b.quantity - a.quantity || a.stock - b.stock || b.total - a.total)
-    .slice(0, 20);
+    .sort((a, b) => a.priority - b.priority || b.quantity - a.quantity || a.stock - b.stock || b.total - a.total);
 
-  if (rows.length) return rows;
-
-  return products
+  const fallbackRows = rowsAfterHistoryFilter.length ? [] : products
     .filter((product) => {
       const stock = toNumber(product.estoque);
       return stock >= 0 && stock <= SMART_ORDER_LOW_STOCK_LIMIT;
@@ -2271,8 +2272,30 @@ function smartOrderSuggestions() {
         fallback: true,
       };
     })
-    .sort((a, b) => a.priority - b.priority || a.stock - b.stock || a.name.localeCompare(b.name))
-    .slice(0, 20);
+    .sort((a, b) => a.priority - b.priority || a.stock - b.stock || a.name.localeCompare(b.name));
+
+  const finalRows = (rowsAfterHistoryFilter.length ? rowsAfterHistoryFilter : fallbackRows).slice(0, 20);
+  app.smartOrderDiagnostics = {
+    vendasCarregadas: app.sales.length,
+    vendasManuaisConsideradas: manualSales.length,
+    pedidosCarregados: app.orders.length,
+    pedidosSiteConfirmados: confirmedSiteOrders.length,
+    itensVendidosCarregados: app.saleItems.length + app.orderItems.length,
+    itensVendaManualConsiderados: app.saleItems.filter((item) => saleIds.has(String(item.venda_id))).length,
+    itensPedidoSiteConsiderados: app.orderItems.filter((item) => orderIds.has(String(item.pedido_id))).length,
+    produtosCarregados: app.products.length,
+    produtosAnalisados: products.length,
+    produtosComEstoque: products.filter((product) => toNumber(product.estoque) > 0).length,
+    produtosBaixoEstoque: products.filter((product) => {
+      const stock = toNumber(product.estoque);
+      return stock >= 0 && stock <= SMART_ORDER_LOW_STOCK_LIMIT;
+    }).length,
+    resultadoAntesDosFiltros: rowsBeforeFilter,
+    resultadoDepoisDoFiltroHistorico: rowsAfterHistoryFilter.length,
+    fallbackEstoqueBaixo: fallbackRows.length,
+    sugestoesFinais: finalRows.length,
+  };
+  return finalRows;
 }
 
 function renderList(selector, rows, emptyText) {
@@ -6979,8 +7002,15 @@ function renderExpenses() {
 
 function renderSmartOrderSuggestions() {
   const root = $("[data-smart-order-suggestions]");
-  if (!root) return;
+  if (!root) {
+    console.warn("[Sugestao pedidos] elemento data-smart-order-suggestions nao encontrado.");
+    return;
+  }
   const rows = smartOrderSuggestions();
+  console.info("[Sugestao pedidos] diagnostico", {
+    elementoEncontrado: true,
+    ...app.smartOrderDiagnostics,
+  });
   root.innerHTML = rows.length
     ? `<div class="smart-order-list">${rows.map((row) => {
       const stock = toNumber(row.stock);
@@ -6996,7 +7026,12 @@ function renderSmartOrderSuggestions() {
         </article>
       `;
     }).join("")}</div>`
-    : `<p class="operational-alert-empty smart-order-empty">Nenhuma sugestao agora.</p>`;
+    : `
+      <div class="smart-order-empty-state">
+        <strong>Nenhuma reposicao necessaria no momento.</strong>
+        <span>Os produtos analisados estao com estoque suficiente de acordo com o historico de vendas.</span>
+      </div>
+    `;
 }
 
 function renderReports() {
