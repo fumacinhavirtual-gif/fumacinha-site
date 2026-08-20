@@ -2175,6 +2175,30 @@ function smartOrderSuggestions() {
   const productById = new Map(products.map((product) => [String(product.id), product]));
   const productByName = new Map(products.map((product) => [searchableName(product.nome), product]));
   const sold = new Map();
+  const unmatchedItems = [];
+  const saleItemsInHistory = app.saleItems.filter((item) => saleIds.has(String(item.venda_id)));
+  const orderItemsInHistory = app.orderItems.filter((item) => orderIds.has(String(item.pedido_id)));
+  const saleIdsWithItems = new Set(saleItemsInHistory.map((item) => String(item.venda_id)));
+  const orderIdsWithItems = new Set(orderItemsInHistory.map((item) => String(item.pedido_id)));
+  const saleSnapshots = manualSales.filter((sale) => !saleIdsWithItems.has(String(sale.id)) && (sale.produto_id || sale.nome_produto));
+  const orderSnapshots = confirmedSiteOrders.filter((order) => !orderIdsWithItems.has(String(order.id)) && (order.produto_id || order.produto_nome || order.nome_produto));
+  const itemProductId = (item = {}) => item.produto_id || item.product_id || item.id_produto || item.productId || item.product?.id || "";
+  const itemProductName = (item = {}) => (
+    item.nome_produto
+    || item.produto_nome
+    || item.product_name
+    || item.nome
+    || item.produto
+    || item.descricao_produto
+    || item.product?.nome
+    || ""
+  );
+  const itemQuantity = (item = {}) => Math.max(1, toNumber(item.quantidade || item.qtd || item.quantity || item.unidades || 1));
+  const itemTotal = (item = {}, product = null) => {
+    const direct = toNumber(item.valor_total || item.subtotal || item.total || item.valor || item.valor_produtos);
+    if (direct > 0) return direct;
+    return itemQuantity(item) * toNumber(item.valor_unitario || item.preco_unitario || item.preco || product?.preco || 0);
+  };
   const resolveProduct = (productId, productName) => {
     const byId = productById.get(String(productId || ""));
     if (byId) return byId;
@@ -2189,7 +2213,13 @@ function smartOrderSuggestions() {
 
   const addSold = (item, productId, productName, quantity, total) => {
     const product = resolveProduct(productId, productName);
-    if (!product) return;
+    if (!product) {
+      unmatchedItems.push({
+        id: productId || "",
+        name: productName || "",
+      });
+      return;
+    }
     const key = `product:${product.id}`;
     const current = sold.get(key) || {
       product,
@@ -2206,13 +2236,31 @@ function smartOrderSuggestions() {
     sold.set(key, current);
   };
 
-  app.saleItems
-    .filter((item) => saleIds.has(String(item.venda_id)))
-    .forEach((item) => addSold(item, item.produto_id, item.nome_produto, item.quantidade, item.valor_total));
+  saleItemsInHistory
+    .forEach((item) => {
+      const product = resolveProduct(itemProductId(item), itemProductName(item));
+      addSold(item, itemProductId(item), itemProductName(item), itemQuantity(item), itemTotal(item, product));
+    });
 
-  app.orderItems
-    .filter((item) => orderIds.has(String(item.pedido_id)))
-    .forEach((item) => addSold(item, item.produto_id, item.produto_nome, item.quantidade, item.subtotal || item.valor_total));
+  orderItemsInHistory
+    .forEach((item) => {
+      const product = resolveProduct(itemProductId(item), itemProductName(item));
+      addSold(item, itemProductId(item), itemProductName(item), itemQuantity(item), itemTotal(item, product));
+    });
+
+  saleSnapshots.forEach((sale) => {
+    const productId = sale.produto_id || "";
+    const productName = sale.nome_produto || sale.produto_nome || "";
+    const product = resolveProduct(productId, productName);
+    addSold(sale, productId, productName, itemQuantity(sale), itemTotal(sale, product));
+  });
+
+  orderSnapshots.forEach((order) => {
+    const productId = order.produto_id || "";
+    const productName = order.produto_nome || order.nome_produto || order.codigo || "";
+    const product = resolveProduct(productId, productName);
+    addSold(order, productId, productName, itemQuantity(order), itemTotal(order, product));
+  });
 
   const soldRows = [...sold.values()];
   const rowsBeforeFilter = soldRows.length;
@@ -2281,8 +2329,12 @@ function smartOrderSuggestions() {
     pedidosCarregados: app.orders.length,
     pedidosSiteConfirmados: confirmedSiteOrders.length,
     itensVendidosCarregados: app.saleItems.length + app.orderItems.length,
-    itensVendaManualConsiderados: app.saleItems.filter((item) => saleIds.has(String(item.venda_id))).length,
-    itensPedidoSiteConsiderados: app.orderItems.filter((item) => orderIds.has(String(item.pedido_id))).length,
+    itensVendaManualConsiderados: saleItemsInHistory.length,
+    itensPedidoSiteConsiderados: orderItemsInHistory.length,
+    vendasAntigasSemItensUsadas: saleSnapshots.length,
+    pedidosSemItensUsados: orderSnapshots.length,
+    itensSemProdutoCorrespondente: unmatchedItems.length,
+    exemplosSemProduto: unmatchedItems.slice(0, 3),
     produtosCarregados: app.products.length,
     produtosAnalisados: products.length,
     produtosComEstoque: products.filter((product) => toNumber(product.estoque) > 0).length,
@@ -2292,6 +2344,7 @@ function smartOrderSuggestions() {
     }).length,
     resultadoAntesDosFiltros: rowsBeforeFilter,
     resultadoDepoisDoFiltroHistorico: rowsAfterHistoryFilter.length,
+    eliminadosPeloFiltro: Math.max(0, rowsBeforeFilter - rowsAfterHistoryFilter.length),
     fallbackEstoqueBaixo: fallbackRows.length,
     sugestoesFinais: finalRows.length,
   };
@@ -7011,7 +7064,31 @@ function renderSmartOrderSuggestions() {
     elementoEncontrado: true,
     ...app.smartOrderDiagnostics,
   });
-  root.innerHTML = rows.length
+  const diagnostics = app.smartOrderDiagnostics || {};
+  const diagnosticsRows = [
+    ["Vendas carregadas", diagnostics.vendasCarregadas],
+    ["Itens vendidos", diagnostics.itensVendidosCarregados],
+    ["Pedidos carregados", diagnostics.pedidosCarregados],
+    ["Produtos carregados", diagnostics.produtosCarregados],
+    ["Produtos analisados", diagnostics.produtosAnalisados],
+    ["Produtos com baixo estoque", diagnostics.produtosBaixoEstoque],
+    ["Itens sem produto", diagnostics.itensSemProdutoCorrespondente],
+    ["Eliminados pelo filtro", diagnostics.eliminadosPeloFiltro],
+    ["Sugestoes finais", diagnostics.sugestoesFinais],
+  ];
+  const missingExamples = Array.isArray(diagnostics.exemplosSemProduto) && diagnostics.exemplosSemProduto.length
+    ? `<small>Sem correspondencia: ${diagnostics.exemplosSemProduto.map((item) => escapeHtml(item.name || item.id || "item sem nome")).join(" | ")}</small>`
+    : "";
+  const diagnosticsHtml = `
+    <div class="smart-order-diagnostics">
+      <strong>Diagnostico</strong>
+      <div>
+        ${diagnosticsRows.map(([label, value]) => `<span>${escapeHtml(label)}: <b>${toNumber(value)}</b></span>`).join("")}
+      </div>
+      ${missingExamples}
+    </div>
+  `;
+  const suggestionsHtml = rows.length
     ? `<div class="smart-order-list">${rows.map((row) => {
       const stock = toNumber(row.stock);
       const colorClass = stockColorClass(stock);
@@ -7032,6 +7109,7 @@ function renderSmartOrderSuggestions() {
         <span>Os produtos analisados estao com estoque suficiente de acordo com o historico de vendas.</span>
       </div>
     `;
+  root.innerHTML = `${diagnosticsHtml}${suggestionsHtml}`;
 }
 
 function renderReports() {
