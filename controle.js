@@ -1896,13 +1896,14 @@ async function saveClosedStoreMessage() {
 
 function renderPeriods() {
   const shouldHidePeriodFilters = ["home", "sales", "orders", "stock", "history", "finance", "cash", "clients", "coupons"].includes(app.activeTab);
+  const shouldShowHomeCustomPeriod = app.activeTab === "home" && app.period === "custom";
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
-  $("[data-custom-period]")?.classList.toggle("hidden", shouldHidePeriodFilters || app.period !== "custom");
+  $("[data-custom-period]")?.classList.toggle("hidden", (shouldHidePeriodFilters && !shouldShowHomeCustomPeriod) || app.period !== "custom");
   const preset = $("[data-period-preset]");
   if (preset) preset.value = ["last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "custom";
   const homePeriod = $("[data-home-period]");
-  if (homePeriod) homePeriod.value = ["today", "yesterday", "last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "today";
+  if (homePeriod) homePeriod.value = ["today", "yesterday", "last7", "month", "lastMonth", "year", "custom"].includes(app.period) ? app.period : "today";
   renderFinancePeriodControls();
 }
 
