@@ -1580,8 +1580,24 @@ textarea {
 }
 
 .custom-period {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(120px, 0.85fr) repeat(2, minmax(0, 1fr));
+  align-items: end;
   margin-bottom: 12px;
+}
+
+.custom-period label {
+  min-width: 0;
+}
+
+.custom-period select,
+.custom-period input {
+  width: 100%;
+  min-width: 0;
+}
+
+.custom-period input[type="date"] {
+  padding-inline: 10px;
+  font-size: 0.88rem;
 }
 
 .finance-period-panel {
