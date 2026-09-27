@@ -1899,7 +1899,9 @@ function renderPeriods() {
   const shouldShowHomeCustomPeriod = app.activeTab === "home" && app.period === "custom";
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
-  $("[data-custom-period]")?.classList.toggle("hidden", (shouldHidePeriodFilters && !shouldShowHomeCustomPeriod) || app.period !== "custom");
+  const customPeriod = $("[data-custom-period]");
+  customPeriod?.classList.toggle("hidden", (shouldHidePeriodFilters && !shouldShowHomeCustomPeriod) || app.period !== "custom");
+  customPeriod?.classList.toggle("home-custom-period", shouldShowHomeCustomPeriod);
   const preset = $("[data-period-preset]");
   if (preset) preset.value = ["last7", "month", "lastMonth", "year"].includes(app.period) ? app.period : "custom";
   const homePeriod = $("[data-home-period]");

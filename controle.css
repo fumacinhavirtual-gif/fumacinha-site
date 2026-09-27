@@ -1600,6 +1600,21 @@ textarea {
   font-size: 0.88rem;
 }
 
+.custom-period.home-custom-period {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.custom-period.home-custom-period [data-period-preset-field] {
+  display: none;
+}
+
+.custom-period.home-custom-period input[type="date"] {
+  min-height: 52px;
+  padding-inline: 14px;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
 .finance-period-panel {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto auto;
