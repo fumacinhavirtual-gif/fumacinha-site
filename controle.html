@@ -827,12 +827,12 @@
             </section>
 
             <div class="cash-grid">
-              <article><span>Pix</span><small data-cash-pix-count>0 recebidos</small><strong data-cash-pix>R$ 0,00</strong></article>
-              <article><span>QR Code Pix</span><small data-cash-qrcode-pix-count>0 recebidos</small><strong data-cash-qrcode-pix>R$ 0,00</strong></article>
-              <article><span>Dinheiro</span><small data-cash-money-count>0 recebidos</small><strong data-cash-money>R$ 0,00</strong></article>
-              <article><span>Debito</span><small data-cash-debit-count>0 recebidos</small><strong data-cash-debit>R$ 0,00</strong></article>
-              <article><span>Credito</span><small data-cash-credit-count>0 recebidos</small><strong data-cash-credit>R$ 0,00</strong></article>
-              <article><span>Outros</span><small data-cash-other-count>0 recebidos</small><strong data-cash-other>R$ 0,00</strong></article>
+              <article data-cash-payment-card="pix" role="button" tabindex="0" aria-label="Ver vendas recebidas no Pix"><span>Pix</span><small data-cash-pix-count>0 recebidos</small><strong data-cash-pix>R$ 0,00</strong></article>
+              <article data-cash-payment-card="qrCodePix" role="button" tabindex="0" aria-label="Ver vendas recebidas no QR Code Pix"><span>QR Code Pix</span><small data-cash-qrcode-pix-count>0 recebidos</small><strong data-cash-qrcode-pix>R$ 0,00</strong></article>
+              <article data-cash-payment-card="dinheiro" role="button" tabindex="0" aria-label="Ver vendas recebidas no dinheiro"><span>Dinheiro</span><small data-cash-money-count>0 recebidos</small><strong data-cash-money>R$ 0,00</strong></article>
+              <article data-cash-payment-card="debito" role="button" tabindex="0" aria-label="Ver vendas recebidas no debito"><span>Debito</span><small data-cash-debit-count>0 recebidos</small><strong data-cash-debit>R$ 0,00</strong></article>
+              <article data-cash-payment-card="credito" role="button" tabindex="0" aria-label="Ver vendas recebidas no credito"><span>Credito</span><small data-cash-credit-count>0 recebidos</small><strong data-cash-credit>R$ 0,00</strong></article>
+              <article data-cash-payment-card="outros" role="button" tabindex="0" aria-label="Ver vendas recebidas em outras formas"><span>Outros</span><small data-cash-other-count>0 recebidos</small><strong data-cash-other>R$ 0,00</strong></article>
               <article><span>Total vendido</span><strong data-cash-total>R$ 0,00</strong></article>
               <article><span>Pagamentos eletronicos</span><strong data-cash-electronic>R$ 0,00</strong></article>
               <article><span>Dinheiro recebido</span><strong data-cash-money-received>R$ 0,00</strong></article>
@@ -841,6 +841,7 @@
               <article><span>Quantidade de vendas</span><strong data-cash-count>0</strong></article>
               <article><span>Vendas canceladas</span><strong data-cash-cancelled>0</strong></article>
             </div>
+            <div class="cash-payment-detail hidden" data-cash-payment-detail-panel></div>
 
             <section class="cash-history-panel" data-cash-history-panel>
               <button class="cash-history-toggle" type="button" data-cash-history-toggle aria-expanded="false">

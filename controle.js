@@ -123,6 +123,8 @@ const app = {
   cashEditing: false,
   cashHistoryOpen: false,
   cashHistoryDate: "",
+  cashPaymentDetail: "",
+  cashHistoryPaymentDetail: "",
   routesDate: "",
   routesFilter: "todas",
   sellerSearch: "",
@@ -281,6 +283,7 @@ const cashHistoryDateSelect = $("[data-cash-history-date]");
 const cashHistoryTitle = $("[data-cash-history-title]");
 const cashHistoryTotal = $("[data-cash-history-total]");
 const cashStatus = $("[data-cash-status]");
+const cashPaymentDetailPanel = $("[data-cash-payment-detail-panel]");
 const conferenceAlert = $("[data-conference-alert]");
 const changeHistory = $("[data-change-history]");
 const routesDateInput = $("[data-routes-date]");
@@ -7486,6 +7489,118 @@ function cashReceivedLabel(count = 0) {
   return `${total} ${total === 1 ? "recebido" : "recebidos"}`;
 }
 
+const CASH_PAYMENT_LABELS = {
+  pix: "Pix",
+  qrCodePix: "QR Code Pix",
+  dinheiro: "Dinheiro",
+  debito: "Debito",
+  credito: "Credito",
+  outros: "Outros",
+};
+
+function cashPaymentKey(payment = "") {
+  const normalized = normalizePayment(payment);
+  if (isPixPayment(normalized)) return "pix";
+  if (isQrCodePixPayment(normalized)) return "qrCodePix";
+  if (normalized === "dinheiro") return "dinheiro";
+  if (normalized === "debito") return "debito";
+  if (normalized === "credito") return "credito";
+  return "outros";
+}
+
+function cashSalePaymentRowsForMethod(sale, method) {
+  const breakdown = salePaymentBreakdown(sale);
+  if (breakdown.length) {
+    return breakdown
+      .filter((row) => cashPaymentKey(row.forma) === method)
+      .map((row) => ({
+        sale,
+        method: row.forma || CASH_PAYMENT_LABELS[method] || "Outros",
+        value: toNumber(row.valor),
+      }))
+      .filter((row) => row.value > 0);
+  }
+
+  if (cashPaymentKey(sale.forma_pagamento) !== method) return [];
+  return [{
+    sale,
+    method: sale.forma_pagamento || CASH_PAYMENT_LABELS[method] || "Outros",
+    value: method === "dinheiro" ? saleDeliveredValue(sale) : saleGrandTotal(sale),
+  }];
+}
+
+function cashSalesByPayment(dateKey, method) {
+  if (!method) return [];
+  return cashSalesForDate(dateKey)
+    .flatMap((sale) => cashSalePaymentRowsForMethod(sale, method))
+    .sort((a, b) => saleDate(b.sale) - saleDate(a.sale));
+}
+
+function cashPaymentSaleCode(sale = {}) {
+  return sale.codigo || sale.codigo_venda || `Venda ${String(sale.id || "").slice(0, 8)}`;
+}
+
+function cashPaymentSaleTime(sale = {}) {
+  return saleDate(sale).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+function cashPaymentDetailMarkup(dateKey, method, { history = false } = {}) {
+  const label = CASH_PAYMENT_LABELS[method] || "Pagamento";
+  const rows = cashSalesByPayment(dateKey, method);
+  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  const dateLabel = new Date(`${dateKey}T12:00:00`).toLocaleDateString("pt-BR");
+  const closeAttr = history ? "data-close-cash-history-payment-detail" : "data-close-cash-payment-detail";
+
+  return `
+    <section class="cash-payment-detail-card">
+      <div class="cash-payment-detail-head">
+        <div>
+          <span>${history ? "Historico" : "Conferencia"} por forma</span>
+          <strong>${escapeHtml(label)}</strong>
+          <small>${escapeHtml(dateLabel)} | ${cashReceivedLabel(rows.length)} | ${currency.format(total)}</small>
+        </div>
+        <button type="button" ${closeAttr}>Fechar</button>
+      </div>
+      <div class="cash-payment-sale-list">
+        ${rows.length ? rows.map((row) => {
+          const sale = row.sale;
+          const client = saleDisplayClient(sale);
+          const products = saleHistoryProducts(sale);
+          const totalSale = saleGrandTotal(sale);
+          return `
+            <button type="button" class="cash-payment-sale" data-cash-payment-sale="${escapeHtml(sale.id)}">
+              <span>
+                <strong>${escapeHtml(cashPaymentSaleCode(sale))}</strong>
+                <small>${escapeHtml(cashPaymentSaleTime(sale))} | ${escapeHtml(client.name)} | ${escapeHtml(products.title)}</small>
+              </span>
+              <span class="cash-payment-sale-values">
+                <strong>${currency.format(row.value)}</strong>
+                <small>Total ${currency.format(totalSale)}</small>
+              </span>
+            </button>
+          `;
+        }).join("") : `
+          <p class="empty-state">Nenhuma venda em ${escapeHtml(label)} neste dia.</p>
+        `}
+      </div>
+    </section>
+  `;
+}
+
+function renderCashPaymentDetail() {
+  if (!cashPaymentDetailPanel) return;
+  $$("[data-cash-payment-card]").forEach((card) => {
+    card.classList.toggle("selected", card.dataset.cashPaymentCard === app.cashPaymentDetail);
+  });
+  if (!app.cashPaymentDetail) {
+    cashPaymentDetailPanel.classList.add("hidden");
+    cashPaymentDetailPanel.innerHTML = "";
+    return;
+  }
+  cashPaymentDetailPanel.classList.remove("hidden");
+  cashPaymentDetailPanel.innerHTML = cashPaymentDetailMarkup(app.cashDate, app.cashPaymentDetail);
+}
+
 function cashMovementTotals(dateKey = app.cashDate) {
   const totals = { sangria: 0, reforco: 0, retirada: 0, pagamento: 0, ajuste: 0 };
   cashMovementsForDate(dateKey).forEach((move) => {
@@ -8095,14 +8210,15 @@ function renderCashHistory() {
         <small>${closing ? escapeHtml(closing.status || "Fechado") : "Sem fechamento"}</small>
       </div>
       <div class="cash-history-payments">
-        <article><span>Pix</span><small>${cashReceivedLabel(values.pixCount)}</small><strong>${currency.format(values.pix)}</strong></article>
-        <article><span>QR Code Pix</span><small>${cashReceivedLabel(values.qrCodePixCount)}</small><strong>${currency.format(values.qrCodePix)}</strong></article>
-        <article><span>Dinheiro</span><small>${cashReceivedLabel(values.dinheiroCount)}</small><strong>${currency.format(values.dinheiro)}</strong></article>
-        <article><span>Credito</span><small>${cashReceivedLabel(values.creditoCount)}</small><strong>${currency.format(values.credito)}</strong></article>
-        <article><span>Debito</span><small>${cashReceivedLabel(values.debitoCount)}</small><strong>${currency.format(values.debito)}</strong></article>
-        <article><span>Outros</span><small>${cashReceivedLabel(values.outrosCount)}</small><strong>${currency.format(values.outros)}</strong></article>
+        <article class="${app.cashHistoryPaymentDetail === "pix" ? "selected" : ""}" data-cash-history-payment-card="pix" role="button" tabindex="0"><span>Pix</span><small>${cashReceivedLabel(values.pixCount)}</small><strong>${currency.format(values.pix)}</strong></article>
+        <article class="${app.cashHistoryPaymentDetail === "qrCodePix" ? "selected" : ""}" data-cash-history-payment-card="qrCodePix" role="button" tabindex="0"><span>QR Code Pix</span><small>${cashReceivedLabel(values.qrCodePixCount)}</small><strong>${currency.format(values.qrCodePix)}</strong></article>
+        <article class="${app.cashHistoryPaymentDetail === "dinheiro" ? "selected" : ""}" data-cash-history-payment-card="dinheiro" role="button" tabindex="0"><span>Dinheiro</span><small>${cashReceivedLabel(values.dinheiroCount)}</small><strong>${currency.format(values.dinheiro)}</strong></article>
+        <article class="${app.cashHistoryPaymentDetail === "credito" ? "selected" : ""}" data-cash-history-payment-card="credito" role="button" tabindex="0"><span>Credito</span><small>${cashReceivedLabel(values.creditoCount)}</small><strong>${currency.format(values.credito)}</strong></article>
+        <article class="${app.cashHistoryPaymentDetail === "debito" ? "selected" : ""}" data-cash-history-payment-card="debito" role="button" tabindex="0"><span>Debito</span><small>${cashReceivedLabel(values.debitoCount)}</small><strong>${currency.format(values.debito)}</strong></article>
+        <article class="${app.cashHistoryPaymentDetail === "outros" ? "selected" : ""}" data-cash-history-payment-card="outros" role="button" tabindex="0"><span>Outros</span><small>${cashReceivedLabel(values.outrosCount)}</small><strong>${currency.format(values.outros)}</strong></article>
         <article><span>Vendas</span><strong>${values.quantidade}</strong></article>
       </div>
+      ${app.cashHistoryPaymentDetail ? cashPaymentDetailMarkup(selectedDate, app.cashHistoryPaymentDetail, { history: true }) : ""}
       <div class="cash-history-total-row">
         <span>Total vendido</span>
         <strong>${currency.format(values.total)}</strong>
@@ -8164,6 +8280,7 @@ function renderCashClosing() {
     field.disabled = isClosed;
   });
   updateCashPreview();
+  renderCashPaymentDetail();
   renderCashHistory();
 }
 
@@ -8805,7 +8922,39 @@ document.addEventListener("click", async (event) => {
   if (openCashDate) {
     app.cashDate = openCashDate.dataset.openCashDate;
     app.cashEditing = false;
+    app.cashPaymentDetail = "";
     renderCashClosing();
+  }
+  const cashPaymentCard = event.target.closest("[data-cash-payment-card]");
+  if (cashPaymentCard) {
+    app.cashPaymentDetail = app.cashPaymentDetail === cashPaymentCard.dataset.cashPaymentCard
+      ? ""
+      : cashPaymentCard.dataset.cashPaymentCard;
+    renderCashPaymentDetail();
+    return;
+  }
+  const cashHistoryPaymentCard = event.target.closest("[data-cash-history-payment-card]");
+  if (cashHistoryPaymentCard) {
+    app.cashHistoryPaymentDetail = app.cashHistoryPaymentDetail === cashHistoryPaymentCard.dataset.cashHistoryPaymentCard
+      ? ""
+      : cashHistoryPaymentCard.dataset.cashHistoryPaymentCard;
+    renderCashHistory();
+    return;
+  }
+  if (event.target.closest("[data-close-cash-payment-detail]")) {
+    app.cashPaymentDetail = "";
+    renderCashPaymentDetail();
+    return;
+  }
+  if (event.target.closest("[data-close-cash-history-payment-detail]")) {
+    app.cashHistoryPaymentDetail = "";
+    renderCashHistory();
+    return;
+  }
+  const cashPaymentSale = event.target.closest("[data-cash-payment-sale]");
+  if (cashPaymentSale) {
+    viewSaleDetails(cashPaymentSale.dataset.cashPaymentSale, cashPaymentSale);
+    return;
   }
   if (event.target.closest("[data-add-change]")) changeCashBalance("adicao");
   if (event.target.closest("[data-adjust-change]")) changeCashBalance("ajuste");
@@ -9159,11 +9308,13 @@ document.addEventListener("change", (event) => {
   if (event.target.matches("[data-date-start], [data-date-end]")) renderAll();
   if (event.target.matches("[data-cash-history-date]")) {
     app.cashHistoryDate = event.target.value;
+    app.cashHistoryPaymentDetail = "";
     renderCashHistory();
   }
   if (event.target.matches("[data-cash-date]")) {
     app.cashDate = event.target.value || localDateValue();
     app.cashEditing = false;
+    app.cashPaymentDetail = "";
     renderCashClosing();
   }
   if (event.target.closest("[data-cash-form]") && event.target.tagName === "INPUT") {
@@ -9178,6 +9329,12 @@ document.addEventListener("keydown", (event) => {
     if (financeCard) {
       event.preventDefault();
       openFinanceDetail(financeCard.dataset.financeDetail);
+      return;
+    }
+    const cashPaymentCard = event.target.closest?.("[data-cash-payment-card], [data-cash-history-payment-card], [data-cash-payment-sale]");
+    if (cashPaymentCard) {
+      event.preventDefault();
+      cashPaymentCard.click();
       return;
     }
     const saleRow = event.target.closest?.("[data-sale-detail-row]");
