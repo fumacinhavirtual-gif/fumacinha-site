@@ -268,6 +268,11 @@
     gap: 8px;
   }
 
+  .sale-payment-panel .sale-form-grid > label:has(input[name="data_venda"]) {
+    order: 0;
+    grid-column: 1 / -1;
+  }
+
   .sale-payment-panel .sale-form-grid > label:has(select[name="forma_pagamento"]) {
     order: 1;
   }
@@ -9715,6 +9720,11 @@ body.modal-open {
   .sale-payment-panel .sale-form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
+  }
+
+  .sale-payment-panel .sale-form-grid > label:has(input[name="data_venda"]) {
+    order: 0;
+    grid-column: 1 / -1;
   }
 
   .sale-payment-panel .sale-form-grid > label:has(select[name="forma_pagamento"]) {

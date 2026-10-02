@@ -458,6 +458,10 @@ function routeIso(dateKey, routeTime) {
   return dateKey && routeTime ? new Date(`${dateKey}T${routeTime}:00`).toISOString() : null;
 }
 
+function saleDayIso(dateKey) {
+  return dateKey ? new Date(`${dateKey}T12:00:00`).toISOString() : new Date().toISOString();
+}
+
 function startOfDay(date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
@@ -2802,6 +2806,7 @@ function currentSaleDraft() {
     totalSale,
     productsSubtotal,
     discount,
+    saleDate: saleForm?.elements.data_venda?.value || localDateValue(),
     routeDate: saleForm?.elements.data_entrega?.value || localDateValue(),
     routeTime: saleForm?.elements.horario_rota?.value || "11:00",
   };
@@ -2847,6 +2852,7 @@ function updateSaleTotal() {
   setAllText("[data-sale-net-products]", currency.format(draft.productsValue));
   setAllText("[data-sale-change]", currency.format(draft.changeValue));
   setAllText("[data-sale-payment]", draft.paymentLabel || draft.payment);
+  setAllText("[data-sale-date-summary]", draft.saleDate === localDateValue() ? "Hoje" : formatDateBR(draft.saleDate));
   setAllText("[data-sale-commission]", currency.format(commission.total));
   setAllText("[data-sale-route-summary]", draft.routeTime);
   setAllText("[data-sale-route-current]", draft.routeTime || "Selecionar");
@@ -3097,6 +3103,7 @@ function buildSalePayload(items, seller, deliverer) {
       cliente_bairro: saleForm.elements.bairro?.value.trim() || "",
       cliente_telefone: String(saleForm.elements.telefone?.value || "").replace(/\D/g, ""),
       observacao: observation,
+      data_venda: saleDayIso(draft.saleDate),
       data_entrega: draft.routeDate,
       horario_rota: draft.routeTime,
       rota_data_hora: routeDateTime,
@@ -3126,6 +3133,7 @@ function resetSaleForm() {
   app.saleProductCategory = preservedProductCategory;
   renderSaleProductFilters();
   saleForm.elements.desconto.value = "0";
+  if (saleForm.elements.data_venda) saleForm.elements.data_venda.value = localDateValue();
   saleForm.elements.valor_recebido.value = "";
   saleForm.elements.troco.value = "";
   saleForm.elements.teve_troco.value = "nao";
@@ -3174,6 +3182,7 @@ function loadSaleForEdit(saleId) {
   saleForm.elements.valor_recebido.value = saleDeliveredValue(sale).toFixed(2).replace(".", ",");
   saleForm.elements.teve_troco.value = sale.teve_troco || saleChangeValue(sale) > 0 ? "sim" : "nao";
   saleForm.elements.troco.value = saleChangeValue(sale).toFixed(2).replace(".", ",");
+  if (saleForm.elements.data_venda) saleForm.elements.data_venda.value = localDateValue(saleDate(sale));
   saleForm.elements.data_entrega.value = saleRouteDate(sale);
   saleForm.elements.horario_rota.value = saleRouteTime(sale) || "11:00";
   applySaleClientFromRecord(sale);
@@ -3930,7 +3939,7 @@ function renderSalesHistoryRow(row) {
 }
 
 function saleHistoryLineDetails(sale, products, linkedOrder) {
-  const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
+  const createdAt = saleDate(sale);
   const firstItem = saleDetailItems(sale)[0] || {};
   const customer = saleDisplayClient(sale, linkedOrder);
   return {
@@ -4027,7 +4036,7 @@ function saleDetailStatus(sale) {
 }
 
 function saleTimelineItems(sale) {
-  const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
+  const createdAt = saleDate(sale);
   const items = [{
     title: "Venda registrada",
     detail: createdAt.toLocaleString("pt-BR"),
@@ -4072,7 +4081,7 @@ function openSaleDetailPanel(sale, trigger = null) {
   lastSaleDetailTrigger = trigger || document.activeElement;
   const items = saleDetailItems(sale);
   const statusInfo = saleDetailStatus(sale);
-  const createdAt = new Date(sale.created_at || sale.data_venda || Date.now());
+  const createdAt = saleDate(sale);
   const linkedOrder = saleLinkedOrder(sale);
   const customer = saleDisplayClient(sale, linkedOrder);
   const quantity = items.reduce((sum, item) => sum + toNumber(item.quantity), 0);
@@ -4411,6 +4420,7 @@ function loadOrderIntoSaleForm(orderId, mode = "confirm") {
   saleForm.elements.teve_troco.value = order.teve_troco || toNumber(order.troco) > 0 ? "sim" : "nao";
   saleForm.elements.troco.value = toNumber(order.troco || 0) ? toNumber(order.troco).toFixed(2).replace(".", ",") : "";
   saleForm.elements.taxa_entrega.value = toNumber(order.taxa_entrega || 0).toFixed(2).replace(".", ",");
+  if (saleForm.elements.data_venda) saleForm.elements.data_venda.value = localDateValue(new Date(order.created_at || Date.now()));
   applySaleClientFromRecord(order);
   if (saleForm.elements.bairro) saleForm.elements.bairro.value = order.cliente_bairro || "";
   if (saleForm.elements.status_entrega) saleForm.elements.status_entrega.value = order.status_entrega || "Aguardando";
@@ -8400,6 +8410,9 @@ function setSuggestedDeliveryRoute() {
 }
 
 function refreshManualSaleDateIfNeeded() {
+  if (saleForm?.elements.data_venda && !saleForm.elements.data_venda.value) {
+    saleForm.elements.data_venda.value = localDateValue();
+  }
   if (!saleForm?.elements.data_entrega || app.editingSaleId || app.editingOrderId || app.confirmingOrderId) return;
   const currentDate = saleForm.elements.data_entrega.value;
   const today = localDateValue();
@@ -9244,7 +9257,7 @@ document.addEventListener("change", (event) => {
   if (["pagamento_1_forma", "pagamento_2_forma"].includes(event.target.name)) updateSaleTotal();
   if (event.target.name === "teve_troco") updateSaleTotal();
   if (event.target.name === "pagamento_conferido") setPaymentCheckMessage("");
-  if (event.target.name === "data_entrega" || event.target.name === "horario_rota") updateSaleTotal();
+  if (["data_venda", "data_entrega", "horario_rota"].includes(event.target.name)) updateSaleTotal();
   if (event.target.matches("[data-exchange-count]")) {
     const time = event.target.dataset.exchangeCount;
     const saved = exchangeRowFromSaved(app.cashDate, time);
@@ -9405,6 +9418,7 @@ function initDefaults() {
   if (cashDateInput) cashDateInput.value = app.cashDate;
   if (routesDateInput) routesDateInput.value = app.routesDate;
   setSuggestedDeliveryRoute();
+  if (saleForm?.elements.data_venda) saleForm.elements.data_venda.value = localDateValue();
   if (saleForm?.elements.valor_recebido) saleForm.elements.valor_recebido.value = "";
   if (saleForm?.elements.taxa_entrega) saleForm.elements.taxa_entrega.value = "";
   if (saleForm?.elements.troco) saleForm.elements.troco.value = "";
