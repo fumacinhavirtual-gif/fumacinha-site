@@ -7178,7 +7178,8 @@ body.modal-open {
   color: #1f2937;
 }
 
-.stock-edit-button {
+.stock-edit-button,
+.stock-delete-button {
   min-height: 42px;
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -7186,6 +7187,12 @@ body.modal-open {
   color: var(--green);
   background: #ffffff;
   font-weight: 900;
+}
+
+.stock-delete-button {
+  border-color: rgba(211, 47, 47, 0.22);
+  color: #d32f2f;
+  background: rgba(211, 47, 47, 0.08);
 }
 
 .stock-edit-modal {

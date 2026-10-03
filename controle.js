@@ -4736,7 +4736,7 @@ function renderStockFilters() {
   const categorySelect = $("[data-stock-category]");
   const categoryChips = $("[data-stock-category-chips]");
   const productCategories = $("[data-stock-product-categories]");
-  const categories = [...new Set(app.products.map((product) => product.categoria || "Produtos"))].sort();
+  const categories = [...new Set(app.products.filter(isVisibleProduct).map((product) => product.categoria || "Produtos"))].sort();
   if (productCategories) {
     productCategories.innerHTML = categories.map((category) => `<option value="${escapeHtml(category)}"></option>`).join("");
   }
@@ -4756,9 +4756,14 @@ function renderStockFilters() {
   }
 }
 
+function isVisibleProduct(product = {}) {
+  return product.ativo !== false && !product.deleted_at;
+}
+
 function stockProducts() {
   const search = saleFilterText(app.stockSearch);
   return app.products
+    .filter(isVisibleProduct)
     .filter((product) => !search || saleFilterText([product.nome, product.categoria, product.descricao, product.marca, product.sabor].filter(Boolean).join(" ")).includes(search))
     .filter((product) => !app.stockCategories.length || app.stockCategories.includes(product.categoria || "Produtos"))
     .filter((product) => app.stockFilter !== "low" || toNumber(product.estoque) <= 5)
@@ -4823,7 +4828,7 @@ function costUpdateResultsList() {
   if (!costUpdateSearchReady()) return [];
   const tokens = normalizeCostSearchText(app.costUpdateSearch).split(" ").filter((token) => token.length >= 2);
   if (!tokens.length) return [];
-  return app.products.filter((product) => {
+  return app.products.filter(isVisibleProduct).filter((product) => {
     const haystack = normalizeCostSearchText([
       product.nome,
       product.categoria,
@@ -4835,7 +4840,7 @@ function costUpdateResultsList() {
 
 function costUpdateSelectedProducts() {
   const selected = app.costUpdateSelectedProducts;
-  return app.products.filter((product) => selected.has(String(product.id)));
+  return app.products.filter(isVisibleProduct).filter((product) => selected.has(String(product.id)));
 }
 
 function renderCostUpdate() {
@@ -4958,6 +4963,7 @@ function renderStock() {
         </div>
         <button class="stock-save-button" type="button" data-stock-save="${product.id}" disabled>Salvar estoque</button>
         <button class="stock-edit-button" type="button" data-stock-edit="${product.id}">Editar</button>
+        <button class="stock-delete-button" type="button" data-stock-delete="${product.id}">Excluir</button>
         <span class="stock-save-status" data-stock-save-status="${product.id}">Estoque atualizado</span>
       </div>
     </article>
@@ -5238,6 +5244,60 @@ async function saveStock(productId) {
       button.textContent = "Salvar estoque";
     }
   }
+}
+
+async function softDeleteStockProduct(product) {
+  const payload = {
+    ativo: false,
+    estoque: 0,
+    ocultar_home: true,
+    deleted_at: new Date().toISOString(),
+  };
+  let result = await supabaseClient.from(TABLES.products).update(payload).eq("id", product.id);
+  if (!result.error) return result;
+
+  const fallbackPayload = { ...payload };
+  delete fallbackPayload.deleted_at;
+  result = await supabaseClient.from(TABLES.products).update(fallbackPayload).eq("id", product.id);
+  if (!result.error) return result;
+
+  return supabaseClient.from(TABLES.products).update({ ativo: false, estoque: 0 }).eq("id", product.id);
+}
+
+async function deleteStockProduct(productId) {
+  const product = app.products.find((item) => String(item.id) === String(productId));
+  if (!product || !(await requireAuth())) return;
+  requestConfirmation({
+    title: "Excluir produto",
+    message: `Excluir "${product.nome || "produto"}" do controle? O historico de vendas antigas sera mantido.`,
+    confirmText: "Excluir produto",
+    onConfirm: async () => {
+      setStatus("Excluindo produto...", "loading");
+      try {
+        let hardDeleted = false;
+        const deleteResult = await supabaseClient.from(TABLES.products).delete().eq("id", product.id);
+        if (!deleteResult.error) {
+          hardDeleted = true;
+        } else {
+          console.warn("Exclusao definitiva bloqueada. Aplicando exclusao segura.", deleteResult.error);
+          const softResult = await softDeleteStockProduct(product);
+          if (softResult.error) throw softResult.error;
+        }
+        app.products = app.products.filter((item) => String(item.id) !== String(product.id));
+        app.costUpdateSelectedProducts.delete(String(product.id));
+        renderStock();
+        renderSaleProductFilters();
+        renderSaleProductPicker();
+        setStatus("Produto excluido com sucesso.", "success");
+        showToast(hardDeleted ? "Produto excluido com sucesso." : "Produto removido do controle e inativado com seguranca.", "success");
+        await loadAll();
+      } catch (error) {
+        console.error("Erro ao excluir produto:", error);
+        setStatus(error.message || "Nao foi possivel excluir o produto.", "error");
+        showToast("Nao foi possivel excluir o produto.", "error");
+      }
+    },
+  });
 }
 
 function stockCategoryOptions(currentCategory = "") {
@@ -8874,6 +8934,11 @@ document.addEventListener("click", async (event) => {
   const stockEditButton = event.target.closest("[data-stock-edit]");
   if (stockEditButton) {
     openStockEditModal(stockEditButton.dataset.stockEdit);
+    return;
+  }
+  const stockDeleteButton = event.target.closest("[data-stock-delete]");
+  if (stockDeleteButton) {
+    deleteStockProduct(stockDeleteButton.dataset.stockDelete);
     return;
   }
   if (event.target.closest("[data-stock-edit-close]")) {
