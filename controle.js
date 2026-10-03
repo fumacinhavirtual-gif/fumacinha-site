@@ -996,6 +996,12 @@ function saleItemCost(item) {
   return 0;
 }
 
+function saleItemRevenue(item) {
+  const storedTotal = toNumber(item?.valor_total || item?.subtotal);
+  if (storedTotal > 0 || item?.valor_total === 0 || item?.valor_total === "0") return storedTotal;
+  return toNumber(item?.quantidade) * toNumber(item?.valor_unitario);
+}
+
 function saleCost(sale) {
   if (hasStoredNumber(sale?.custo_total)) return toNumber(sale.custo_total);
   return saleItemsForSale(sale?.id).reduce((sum, item) => sum + saleItemCost(item), 0);
@@ -2928,6 +2934,139 @@ async function updateProductStock(product, nextStock, type = "ajuste manual", sa
   await insertStockMove(product, previous, next, type, saleId);
   product.estoque = next;
   product.ativo = next > 0;
+}
+
+function chunkArray(items = [], size = 80) {
+  const chunks = [];
+  for (let index = 0; index < items.length; index += size) chunks.push(items.slice(index, index + size));
+  return chunks;
+}
+
+function lastProductArrivalDate(productId) {
+  const arrivals = app.stockMoves
+    .filter((move) => (
+      String(move.produto_id || "") === String(productId)
+      && toNumber(move.diferenca) > 0
+      && !move.venda_id
+      && move.created_at
+    ))
+    .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  return arrivals[0]?.created_at ? new Date(arrivals[0].created_at) : null;
+}
+
+function saleItemNeedsCostSnapshot(item) {
+  return toNumber(item?.custo_unitario) <= 0
+    || toNumber(item?.custo_total) <= 0
+    || !hasStoredNumber(item?.custo_unitario)
+    || !hasStoredNumber(item?.custo_total)
+    || !hasStoredNumber(item?.lucro_total);
+}
+
+async function fetchRowsByIds(tableName, column, ids = []) {
+  const uniqueIds = [...new Set(ids.map((id) => String(id)).filter(Boolean))];
+  if (!uniqueIds.length) return [];
+  const rows = [];
+  for (const chunk of chunkArray(uniqueIds)) {
+    const { data, error } = await supabaseClient.from(tableName).select("*").in(column, chunk);
+    if (error) throw error;
+    rows.push(...(data || []));
+  }
+  return rows;
+}
+
+function replaceRowsById(currentRows = [], nextRows = []) {
+  const byId = new Map(nextRows.filter((row) => row?.id !== undefined && row?.id !== null).map((row) => [String(row.id), row]));
+  const updated = currentRows.map((row) => byId.get(String(row.id)) || row);
+  nextRows.forEach((row) => {
+    if (row?.id !== undefined && row?.id !== null && !currentRows.some((current) => String(current.id) === String(row.id))) {
+      updated.push(row);
+    }
+  });
+  return updated;
+}
+
+function saleProductsValueFromItems(sale = {}, items = []) {
+  const direct = toNumber(sale.valor_produtos);
+  if (direct > 0 || sale.valor_produtos === 0 || sale.valor_produtos === "0") return direct;
+  const total = items.reduce((sum, item) => sum + saleItemRevenue(item), 0);
+  return total > 0 ? total : saleProductsValue(sale);
+}
+
+async function backfillHistoricalCostSnapshots(costUpdates = []) {
+  const updates = costUpdates
+    .map((row) => ({ productId: String(row.productId || row.id || ""), cost: toNumber(row.cost) }))
+    .filter((row) => row.productId && row.cost > 0);
+  if (!updates.length || !supabaseClient) return { itemsUpdated: 0, salesUpdated: 0 };
+
+  const costByProduct = new Map(updates.map((row) => [row.productId, row.cost]));
+  const startByProduct = new Map(updates.map((row) => [row.productId, lastProductArrivalDate(row.productId)]));
+  const productItems = await fetchRowsByIds(TABLES.saleItems, "produto_id", [...costByProduct.keys()]);
+  const saleIds = [...new Set(productItems.map((item) => String(item.venda_id || "")).filter(Boolean))];
+  const sales = await fetchRowsByIds(TABLES.sales, "id", saleIds);
+  const saleById = new Map(sales.map((sale) => [String(sale.id), sale]));
+
+  const itemUpdates = productItems
+    .filter((item) => {
+      const productId = String(item.produto_id || "");
+      const sale = saleById.get(String(item.venda_id || ""));
+      const startDate = startByProduct.get(productId);
+      if (!sale || sale.cancelada) return false;
+      if (startDate && saleDate(sale) < startDate) return false;
+      return saleItemNeedsCostSnapshot(item);
+    })
+    .map((item) => {
+      const cost = costByProduct.get(String(item.produto_id || "")) || 0;
+      const quantity = toNumber(item.quantidade);
+      const costTotal = quantity * cost;
+      return {
+        id: item.id,
+        venda_id: item.venda_id,
+        custo_unitario: cost,
+        custo_total: costTotal,
+        lucro_total: saleItemRevenue(item) - costTotal,
+      };
+    })
+    .filter((item) => item.id !== undefined && item.id !== null);
+
+  const updatedItems = [];
+  for (const item of itemUpdates) {
+    const { data, error } = await supabaseClient
+      .from(TABLES.saleItems)
+      .update({
+        custo_unitario: item.custo_unitario,
+        custo_total: item.custo_total,
+        lucro_total: item.lucro_total,
+      })
+      .eq("id", item.id)
+      .select("*")
+      .single();
+    if (error) throw error;
+    updatedItems.push(data || item);
+  }
+
+  const impactedSaleIds = [...new Set(updatedItems.map((item) => String(item.venda_id || "")).filter(Boolean))];
+  const allImpactedItems = await fetchRowsByIds(TABLES.saleItems, "venda_id", impactedSaleIds);
+  const saleUpdates = [];
+  for (const saleId of impactedSaleIds) {
+    const sale = saleById.get(String(saleId)) || app.sales.find((row) => String(row.id) === String(saleId));
+    if (!sale) continue;
+    const items = allImpactedItems.filter((item) => String(item.venda_id || "") === String(saleId));
+    const costTotal = items.reduce((sum, item) => sum + saleItemCost(item), 0);
+    const productsValue = saleProductsValueFromItems(sale, items);
+    const payload = { custo_total: costTotal, lucro_total: productsValue - costTotal };
+    const { data, error } = await supabaseClient
+      .from(TABLES.sales)
+      .update(payload)
+      .eq("id", saleId)
+      .select("*")
+      .single();
+    if (error) throw error;
+    saleUpdates.push(data || { ...sale, ...payload });
+  }
+
+  app.saleItems = replaceRowsById(app.saleItems, updatedItems);
+  app.sales = replaceRowsById(app.sales, saleUpdates);
+  return { itemsUpdated: updatedItems.length, salesUpdated: saleUpdates.length };
 }
 
 async function getOrCreatePerson(tableName, rows, name) {
@@ -5170,6 +5309,7 @@ async function saveStockEdit(event) {
   const payload = stockEditPayload(stockEditForm);
   const validation = validateStockProduct(payload);
   if (validation) return setStockEditStatus(validation, "error");
+  const previousCost = productCost(product);
 
   app.stockEditSaving = true;
   if (stockEditSubmit) {
@@ -5193,8 +5333,21 @@ async function saveStockEdit(event) {
       error = fallback.error;
     }
     if (error) throw error;
-    showToast("Produto atualizado com sucesso.", "success");
-    setStockEditStatus("Produto atualizado com sucesso.", "success");
+    let historicalMessage = "";
+    if (payload.custo > 0 && Math.abs(payload.custo - previousCost) > 0.009) {
+      try {
+        setStockEditStatus("Atualizando custo historico das vendas...", "loading");
+        const historical = await backfillHistoricalCostSnapshots([{ productId: product.id, cost: payload.custo }]);
+        if (historical.itemsUpdated) {
+          historicalMessage = ` Custos historicos atualizados em ${historical.salesUpdated} ${historical.salesUpdated === 1 ? "venda" : "vendas"}.`;
+        }
+      } catch (historyError) {
+        console.error("Erro ao atualizar custos historicos:", historyError);
+        historicalMessage = " Produto salvo, mas nao foi possivel recalcular custos historicos.";
+      }
+    }
+    showToast(`Produto atualizado com sucesso.${historicalMessage}`, historicalMessage.includes("nao foi possivel") ? "warning" : "success");
+    setStockEditStatus(`Produto atualizado com sucesso.${historicalMessage}`, historicalMessage.includes("nao foi possivel") ? "error" : "success");
     closeStockEditModal(true);
     await loadAll();
     switchTab("stock");
@@ -5302,12 +5455,24 @@ async function confirmCostUpdate() {
     app.products = app.products.map((product) => (
       ids.includes(String(product.id)) ? { ...product, custo: cost } : product
     ));
+    let historicalMessage = "";
+    try {
+      setCostUpdateModalStatus("Atualizando custo historico das vendas...", "loading", costUpdateConfirmStatus);
+      const historical = await backfillHistoricalCostSnapshots(ids.map((id) => ({ productId: id, cost })));
+      if (historical.itemsUpdated) {
+        historicalMessage = ` Custos historicos atualizados em ${historical.salesUpdated} ${historical.salesUpdated === 1 ? "venda" : "vendas"}.`;
+      }
+    } catch (historyError) {
+      console.error("Erro ao atualizar custos historicos:", historyError);
+      historicalMessage = " Custo atual salvo, mas nao foi possivel recalcular vendas antigas.";
+    }
     const updated = ids.length;
     app.costUpdateSelectedProducts.clear();
     closeCostUpdateModal(true);
     renderCostUpdate();
     renderStock();
-    showToast(`Custo de ${updated} ${updated === 1 ? "produto atualizado" : "produtos atualizados"} para ${currency.format(cost)}.`, "success");
+    if (app.activeTab === "finance") renderFinance();
+    showToast(`Custo de ${updated} ${updated === 1 ? "produto atualizado" : "produtos atualizados"} para ${currency.format(cost)}.${historicalMessage}`, historicalMessage.includes("nao foi possivel") ? "warning" : "success");
   } catch (error) {
     console.error("Erro ao atualizar custos em massa:", error);
     setCostUpdateModalStatus("Nao foi possivel atualizar os custos. Tente novamente.", "error", costUpdateConfirmStatus);
