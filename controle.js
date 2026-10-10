@@ -462,6 +462,21 @@ function saleDayIso(dateKey) {
   return dateKey ? new Date(`${dateKey}T12:00:00`).toISOString() : new Date().toISOString();
 }
 
+async function persistSaleDay(saleId, saleDateValue) {
+  if (!saleId || !saleDateValue || !supabaseClient) return null;
+  const { data, error } = await supabaseClient
+    .from(TABLES.sales)
+    .update({ data_venda: saleDateValue })
+    .eq("id", saleId)
+    .select("*")
+    .single();
+  if (error) throw error;
+  if (data) {
+    app.sales = app.sales.map((sale) => String(sale.id) === String(saleId) ? { ...sale, ...data } : sale);
+  }
+  return data;
+}
+
 function startOfDay(date) {
   const next = new Date(date);
   next.setHours(0, 0, 0, 0);
@@ -691,7 +706,9 @@ function applyFinanceCustomDates() {
 }
 
 function saleDate(sale) {
-  return new Date(sale.data_venda || sale.created_at || Date.now());
+  const saleDay = String(sale?.data_venda || "").slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(saleDay)) return new Date(`${saleDay}T12:00:00`);
+  return new Date(sale?.created_at || Date.now());
 }
 
 function filteredSales() {
@@ -3390,6 +3407,7 @@ async function registerSale(event) {
     });
     if (saleError) throw saleError;
     saleCreated = true;
+    await persistSaleDay(sale?.id, salePayload.data_venda);
     if (confirmingOrderId) {
       const { error: orderUpdateError } = await supabaseClient
         .from(TABLES.orders)
@@ -3496,6 +3514,7 @@ async function updateEditedSale(event) {
       p_motivo: motive,
     });
     if (error) throw error;
+    await persistSaleDay(app.editingSaleId, payload.data_venda);
     await loadAll();
     resetSaleForm();
     const successMessage = `Venda atualizada com sucesso. Valor produtos ${currency.format(productsValue)} | Valor pago ${currency.format(deliveredValue)} | Taxa ${currency.format(deliveryValue)} | ${paymentLabel} | Rota ${draft.routeTime}.`;
