@@ -430,6 +430,7 @@ function mapProduct(row) {
     ativo: hasActiveColumn ? row.ativo !== false : true,
     destaque_home: hasFeaturedColumn ? row.destaque_home === true : false,
     ocultar_home: hasHideHomeColumn ? row.ocultar_home === true : false,
+    selo_produto: FumacinhaProductLabels.normalize(row.selo_produto),
     categoryId: slugify(categoryName),
   };
 }
@@ -449,6 +450,7 @@ function normalizeProduct(product) {
     ativo: product.ativo !== false,
     destaque_home: product.destaque_home === true,
     ocultar_home: product.ocultar_home === true,
+    selo_produto: FumacinhaProductLabels.normalize(product.selo_produto),
     categoryId: slugify(categoryName),
   };
 }
@@ -507,7 +509,10 @@ async function loadProductsOnce({ showLoading = true } = {}) {
   let response;
 
   try {
-    response = await supabaseClient.from(TABLE_NAME).select(fields).order("categoria", { ascending: true }).order("nome", { ascending: true });
+    response = await supabaseClient.from(TABLE_NAME).select(`${fields},selo_produto`).order("categoria", { ascending: true }).order("nome", { ascending: true });
+    if (response.error?.message?.includes("selo_produto")) {
+      response = await supabaseClient.from(TABLE_NAME).select(fields).order("categoria", { ascending: true }).order("nome", { ascending: true });
+    }
   } catch (error) {
     console.error("[Fumacinha Produtos] Exceção ao carregar produtos:", error);
     if (!state.products.length) showProductRetry();
@@ -1197,7 +1202,7 @@ function productCard(product, index = 0, extraClass = "") {
             </div>`
           : ""
       }
-      <div class="product-photo">${productImage(product, false, index < 4)}</div>
+      <div class="product-photo">${FumacinhaProductLabels.markup(product.selo_produto)}${productImage(product, false, index < 4)}</div>
       <span class="category">${escapeHtml(product.categoria)}</span>
       <h3>${escapeHtml(product.nome)}</h3>
       <div class="price-block">
@@ -1424,7 +1429,7 @@ function showProduct(productId) {
   productPage.innerHTML = `
     <button class="btn back-link" type="button" data-home-link>Voltar para a página inicial</button>
     <section class="product-detail">
-      <div class="detail-photo">${productImage(product, true, true)}</div>
+      <div class="detail-photo">${FumacinhaProductLabels.markup(product.selo_produto)}${productImage(product, true, true)}</div>
       <div class="product-info">
         <span class="category">${product.categoria}</span>
         <h1>${product.nome}</h1>
@@ -2746,6 +2751,7 @@ function openProductEditor(product = null, mode = product?.id ? "edit" : "create
   setFormValue(productEditorForm, "preco", product?.preco || "");
   setFormValue(productEditorForm, "estoque", product?.estoque ?? 0);
   setFormValue(productEditorForm, "descricao", product?.descricao || "");
+  setFormValue(productEditorForm, "selo_produto", FumacinhaProductLabels.normalize(product?.selo_produto));
   setFormChecked(productEditorForm, "ativo", product ? product.ativo : true);
   setFormChecked(productEditorForm, "destaque_home", product ? product.destaque_home : false);
   setFormChecked(productEditorForm, "ocultar_home", product ? product.ocultar_home : false);
@@ -2819,6 +2825,7 @@ function getProductPayload(form) {
     ativo: getFormChecked(form, "ativo") && stock > 0,
     destaque_home: getFormChecked(form, "destaque_home"),
     ocultar_home: getFormChecked(form, "ocultar_home"),
+    selo_produto: FumacinhaProductLabels.normalize(getFormValue(form, "selo_produto")),
     descricao: getFormValue(form, "descricao").trim(),
     imagem: getFormValue(form, "imagem").trim(),
   };
@@ -2859,7 +2866,7 @@ async function saveProduct(event) {
   try {
     setProductLoading(true, state.selectedProductImageFile ? "Enviando..." : "Salvando...");
     payload.imagem = state.removeProductImage ? "" : await uploadSelectedProductImage();
-    const { error } = await saveProductWithFallback(existingId, payload);
+    const { error } = await FumacinhaProductLabels.save(payload, (values) => saveProductWithFallback(existingId, values));
     if (error) {
       if (productEditorError) productEditorError.textContent = error.message;
       console.error("[Fumacinha Produtos] Erro ao salvar produto:", error);

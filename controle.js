@@ -1264,9 +1264,17 @@ async function loadProductsFromSupabase({ silent = false } = {}) {
   if (!silent) renderProductDependentViews();
   let { data, error } = await supabaseClient
     .from(TABLES.products)
-    .select(PRODUCT_SELECT_FIELDS)
+    .select(`${PRODUCT_SELECT_FIELDS},selo_produto`)
     .order("categoria", { ascending: true })
     .order("nome", { ascending: true });
+  if (error?.message?.includes("selo_produto")) {
+    const compatible = await supabaseClient.from(TABLES.products)
+      .select(PRODUCT_SELECT_FIELDS)
+      .order("categoria", { ascending: true })
+      .order("nome", { ascending: true });
+    data = compatible.data;
+    error = compatible.error;
+  }
   if (error) {
     const missingOptionalColumns =
       error.message?.includes("PRODUTOS.descricao") ||
@@ -5176,6 +5184,7 @@ function stockProductPayload(form) {
     estoque: stock,
     imagem: form.elements.imagem.value.trim(),
     descricao: form.elements.descricao.value.trim(),
+    selo_produto: FumacinhaProductLabels.normalize(form.elements.selo_produto.value),
     ativo: form.elements.ativo.checked,
     destaque_home: false,
     ocultar_home: false,
@@ -5210,11 +5219,11 @@ async function saveStockProduct(event) {
     if (app.selectedStockProductImageFile) setStockProductStatus("Enviando imagem...", "loading");
     payload.imagem = await uploadStockProductImage();
     setStockProductStatus("Cadastrando produto...", "loading");
-    const { error } = await supabaseClient.from(TABLES.products).insert(payload);
+    const { error } = await FumacinhaProductLabels.save(payload, (values) => supabaseClient.from(TABLES.products).insert(values));
     if (error) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.descricao;
-      const fallback = await supabaseClient.from(TABLES.products).insert(fallbackPayload);
+      const fallback = await FumacinhaProductLabels.save(fallbackPayload, (values) => supabaseClient.from(TABLES.products).insert(values));
       if (fallback.error) throw fallback.error;
     }
     stockProductForm.reset();
@@ -5341,6 +5350,7 @@ function openStockEditModal(productId) {
   stockEditForm.elements.custo.value = currencyInputValue(productCost(product));
   stockEditForm.elements.estoque.value = String(Math.max(0, toNumber(product.estoque)));
   stockEditForm.elements.ativo.value = product.ativo === false ? "false" : "true";
+  stockEditForm.elements.selo_produto.value = FumacinhaProductLabels.normalize(product.selo_produto);
   updateStockEditImagePreview(product.imagem || "");
   setStockEditStatus("");
   stockEditModal.classList.remove("hidden");
@@ -5375,6 +5385,7 @@ function stockEditPayload(form) {
     custo_manual: true,
     estoque: stock,
     ativo: form.elements.ativo.value === "true",
+    selo_produto: FumacinhaProductLabels.normalize(form.elements.selo_produto.value),
   };
 }
 
@@ -5404,11 +5415,11 @@ async function saveStockEdit(event) {
       payload.imagem = "";
     }
     setStockEditStatus("Atualizando produto...", "loading");
-    let { error } = await supabaseClient.from(TABLES.products).update(payload).eq("id", product.id);
+    let { error } = await FumacinhaProductLabels.save(payload, (values) => supabaseClient.from(TABLES.products).update(values).eq("id", product.id));
     if (error) {
       const fallbackPayload = { ...payload };
       delete fallbackPayload.custo_manual;
-      const fallback = await supabaseClient.from(TABLES.products).update(fallbackPayload).eq("id", product.id);
+      const fallback = await FumacinhaProductLabels.save(fallbackPayload, (values) => supabaseClient.from(TABLES.products).update(values).eq("id", product.id));
       error = fallback.error;
     }
     if (error) throw error;

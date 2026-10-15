@@ -34,6 +34,7 @@ function stampAssetVersion() {
       replacements: [
         [/\.\/style\.css(?:\?v=[^"]*)?/g, `./style.css?v=${version}`],
         [/\.\/script\.js(?:\?v=[^"]*)?/g, `./script.js?v=${version}`],
+        [/\.\/product-labels\.js(?:\?v=[^"]*)?/g, `./product-labels.js?v=${version}`],
       ],
     },
     {
@@ -42,6 +43,7 @@ function stampAssetVersion() {
         [/\.\/controle\.webmanifest(?:\?v=[^"]*)?/g, `./controle.webmanifest?v=${version}`],
         [/\.\/controle\.css(?:\?v=[^"]*)?/g, `./controle.css?v=${version}`],
         [/\.\/controle\.js(?:\?v=[^"]*)?/g, `./controle.js?v=${version}`],
+        [/\.\/product-labels\.js(?:\?v=[^"]*)?/g, `./product-labels.js?v=${version}`],
       ],
     },
   ];

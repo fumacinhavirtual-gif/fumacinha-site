@@ -367,6 +367,14 @@
             Descricao
             <textarea name="descricao" rows="3" placeholder="Detalhes do produto, sabor, tamanho ou observacoes"></textarea>
           </label>
+          <label class="wide">
+            Selo no site
+            <select name="selo_produto">
+              <option value="">Sem selo</option>
+              <option value="novidade">Novidade</option>
+              <option value="lancamento">Lançamento</option>
+            </select>
+          </label>
           <label class="edit-check">
             <input type="checkbox" name="ativo" />
             Produto visivel no site
@@ -672,6 +680,7 @@
       </div>
     </section>
 
+    <script src="./product-labels.js"></script>
     <script src="./script.js?v=beneficios-20260711"></script>
   </body>
 </html>

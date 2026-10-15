@@ -524,6 +524,13 @@
               <label>Preco de venda <input type="text" name="preco" inputmode="decimal" required placeholder="0,00" /></label>
               <label>Custo <input type="text" name="custo" inputmode="decimal" placeholder="0,00" /></label>
               <label>Estoque inicial <input type="number" name="estoque" min="0" step="1" required value="1" /></label>
+              <label>Selo no site
+                <select name="selo_produto">
+                  <option value="">Sem selo</option>
+                  <option value="novidade">Novidade</option>
+                  <option value="lancamento">Lançamento</option>
+                </select>
+              </label>
               <label>Imagem (URL opcional) <input type="url" name="imagem" placeholder="https://..." data-stock-product-image-url /></label>
               <label>Foto da galeria/camera <input type="file" name="imagem_arquivo" accept="image/jpeg,image/png,image/webp" data-stock-product-image-file /></label>
             </div>
@@ -1268,6 +1275,13 @@
             <button type="button" class="ghost-action" data-stock-edit-remove-image>Remover foto</button>
           </div>
           <label>Nome do produto <input type="text" name="nome" required /></label>
+          <label>Selo no site
+            <select name="selo_produto">
+              <option value="">Sem selo</option>
+              <option value="novidade">Novidade</option>
+              <option value="lancamento">Lançamento</option>
+            </select>
+          </label>
           <label>Categoria
             <select name="categoria" required data-stock-edit-category></select>
           </label>
@@ -1320,6 +1334,7 @@
       </aside>
     </div>
 
+    <script src="./product-labels.js"></script>
     <script src="./controle.js"></script>
   </body>
 </html>
