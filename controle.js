@@ -1262,16 +1262,17 @@ async function loadProductsFromSupabase({ silent = false } = {}) {
   app.productsLoading = true;
   app.productsError = "";
   if (!silent) renderProductDependentViews();
-  let { data, error } = await supabaseClient
+  let productFields = `${PRODUCT_SELECT_FIELDS},selo_produto,deleted_at`;
+  const queryProducts = () => supabaseClient
     .from(TABLES.products)
-    .select(`${PRODUCT_SELECT_FIELDS},selo_produto`)
+    .select(productFields)
     .order("categoria", { ascending: true })
     .order("nome", { ascending: true });
-  if (error?.message?.includes("selo_produto")) {
-    const compatible = await supabaseClient.from(TABLES.products)
-      .select(PRODUCT_SELECT_FIELDS)
-      .order("categoria", { ascending: true })
-      .order("nome", { ascending: true });
+  let { data, error } = await queryProducts();
+  let missingField;
+  while (error && (missingField = ["selo_produto", "deleted_at"].find((field) => productFields.split(",").includes(field) && error.message?.includes(field)))) {
+    productFields = productFields.split(",").filter((field) => field !== missingField).join(",");
+    const compatible = await queryProducts();
     data = compatible.data;
     error = compatible.error;
   }
@@ -4763,7 +4764,7 @@ function renderStockFilters() {
   const categorySelect = $("[data-stock-category]");
   const categoryChips = $("[data-stock-category-chips]");
   const productCategories = $("[data-stock-product-categories]");
-  const categories = [...new Set(app.products.filter(isVisibleProduct).map((product) => product.categoria || "Produtos"))].sort();
+  const categories = [...new Set(app.products.filter((product) => isVisibleProduct(product) || isStockFilterProduct(product)).map((product) => product.categoria || "Produtos"))].sort();
   if (productCategories) {
     productCategories.innerHTML = categories.map((category) => `<option value="${escapeHtml(category)}"></option>`).join("");
   }
@@ -4787,10 +4788,15 @@ function isVisibleProduct(product = {}) {
   return product.ativo !== false && !product.deleted_at;
 }
 
+function isStockFilterProduct(product = {}) {
+  if (app.stockSort === "sold-out") return !product.deleted_at && toNumber(product.estoque) === 0;
+  return isVisibleProduct(product);
+}
+
 function stockProducts() {
   const search = saleFilterText(app.stockSearch);
   return app.products
-    .filter(isVisibleProduct)
+    .filter(isStockFilterProduct)
     .filter((product) => !search || saleFilterText([product.nome, product.categoria, product.descricao, product.marca, product.sabor].filter(Boolean).join(" ")).includes(search))
     .filter((product) => !app.stockCategories.length || app.stockCategories.includes(product.categoria || "Produtos"))
     .filter((product) => app.stockFilter !== "low" || toNumber(product.estoque) <= 5)
