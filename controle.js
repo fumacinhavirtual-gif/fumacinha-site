@@ -75,7 +75,7 @@ const app = {
   clientsError: "",
   clientsDirectoryLoaded: false,
   clientVisibleCount: 10,
-  clientRecoveryMinDays: 30,
+  clientRecoveryMinDays: 15,
   clientRecoveryVisibleCount: 10,
   clientStatusFilter: "active",
   clientSort: "name-asc",
@@ -6918,10 +6918,13 @@ function renderClientsDashboard() {
 
 function renderClientRecovery() {
   if (!clientRecoveryList || app.clientsLoading || app.clientsError) return;
+  const minDays = app.clientRecoveryMinDays;
+  const maxDays = { 15: 30, 30: 60, 60: 90 }[minDays] || Infinity;
+  const rangeLabel = Number.isFinite(maxDays) ? `${minDays} a ${maxDays - 1} dias` : `${minDays} dias ou mais`;
   const rows = app.clients
     .map((client) => ({ client, metrics: clientMetrics(client) }))
-    .filter((row) => row.metrics.purchaseCount > 0 && row.metrics.daysWithoutBuying >= app.clientRecoveryMinDays)
-    .sort((a, b) => (b.metrics.daysWithoutBuying || 0) - (a.metrics.daysWithoutBuying || 0));
+    .filter((row) => row.metrics.purchaseCount > 0 && row.metrics.daysWithoutBuying >= minDays && row.metrics.daysWithoutBuying < maxDays)
+    .sort((a, b) => a.metrics.daysWithoutBuying - b.metrics.daysWithoutBuying || String(a.client.nome || "").localeCompare(String(b.client.nome || ""), "pt-BR"));
   const visibleRows = rows.slice(0, app.clientRecoveryVisibleCount);
   if (clientRecoveryCount) clientRecoveryCount.textContent = `Mostrando ${visibleRows.length} de ${rows.length} contatos`;
   updateClientLoadMore(clientRecoveryMore, visibleRows.length, rows.length);
@@ -6938,7 +6941,7 @@ function renderClientRecovery() {
         ${url ? `<a href="${url}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
       </article>
     `;
-  }).join("") : `<p class="empty-state">Nenhum cliente há ${app.clientRecoveryMinDays} dias ou mais sem comprar.</p>`;
+  }).join("") : `<p class="empty-state">Nenhum cliente nesta faixa: ${rangeLabel} sem comprar.</p>`;
 }
 
 function updateClientLoadMore(button, visible, total) {
@@ -9588,7 +9591,7 @@ document.addEventListener("change", (event) => {
   }
   if (event.target.matches("[data-client-recovery-days]")) {
     const days = Number(event.target.value);
-    app.clientRecoveryMinDays = [15, 30, 60, 90].includes(days) ? days : 30;
+    app.clientRecoveryMinDays = [15, 30, 60, 90].includes(days) ? days : 15;
     app.clientRecoveryVisibleCount = 10;
     renderClientRecovery();
   }
