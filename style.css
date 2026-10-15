@@ -3035,6 +3035,14 @@ body.order-confirmation-view .whatsapp-float {
 }
 
 @media (max-width: 768px) {
+  .product-label {
+    top: 0;
+    left: 0;
+    padding: 3px 6px;
+    font-size: 9px;
+    font-weight: 700;
+  }
+
   .edit-login {
     place-items: stretch;
     padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
