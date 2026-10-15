@@ -73,6 +73,10 @@ const app = {
   couponSaving: false,
   clientsLoading: false,
   clientsError: "",
+  clientsDirectoryLoaded: false,
+  clientVisibleCount: 10,
+  clientRecoveryMinDays: 30,
+  clientRecoveryVisibleCount: 10,
   clientStatusFilter: "active",
   clientSort: "name-asc",
   clientModalMode: "",
@@ -294,6 +298,7 @@ const routesList = $("[data-routes-list]");
 const topClientsRoot = $("[data-top-clients]");
 const clientsListRoot = $("[data-clients-list]");
 const clientsCount = $("[data-clients-count]");
+const clientsMore = $("[data-clients-more]");
 const clientStatusMessage = $("[data-client-status-message]");
 const clientModalShell = $("[data-client-modal-shell]");
 const clientModalContent = $("[data-client-modal-content]");
@@ -301,6 +306,8 @@ const clientModalTitle = $("[data-client-modal-title]");
 const clientModalEyebrow = $("[data-client-modal-eyebrow]");
 const clientsCrmDashboard = $("[data-clients-crm-dashboard]");
 const clientRecoveryList = $("[data-client-recovery-list]");
+const clientRecoveryCount = $("[data-client-recovery-count]");
+const clientRecoveryMore = $("[data-client-recovery-more]");
 const clientRankingList = $("[data-client-ranking-list]");
 const clientRankingSort = $("[data-client-ranking-sort]");
 const couponKpis = $("[data-coupon-kpis]");
@@ -1452,6 +1459,7 @@ async function loadAll() {
   app.orders = readData(ordersResult, "pedidos", app.orders);
   app.orderItems = readData(orderItemsResult, "itens de pedido", app.orderItems);
   app.clients = readData(clientsResult, "clientes", app.clients);
+  app.clientsDirectoryLoaded = clientsResult.status === "fulfilled" && !clientsResult.value.error && app.clients.length < 1000;
   invalidateClientMetricsCache();
   app.stockMoves = readData(movesResult, "movimentacoes de estoque", app.stockMoves);
   app.expenses = readData(expensesResult, "despesas", app.expenses);
@@ -1551,6 +1559,10 @@ function renderAll() {
     return;
   }
   if (tab === "clients") {
+    if (supabaseClient && !app.clientsDirectoryLoaded && !app.clientsLoading && !app.clientsError) {
+      loadClientsForDirectory();
+      return;
+    }
     renderSafely("clientes", renderClients);
     return;
   }
@@ -6904,36 +6916,36 @@ function renderClientsDashboard() {
   `).join("");
 }
 
-function recoveryBucket(days) {
-  if (days === null) return "";
-  if (days >= 90) return "Mais de 90 dias";
-  if (days >= 60) return "60 dias sem comprar";
-  if (days >= 30) return "30 dias sem comprar";
-  if (days >= 15) return "15 dias sem comprar";
-  return "";
-}
-
 function renderClientRecovery() {
-  if (!clientRecoveryList) return;
+  if (!clientRecoveryList || app.clientsLoading || app.clientsError) return;
   const rows = app.clients
     .map((client) => ({ client, metrics: clientMetrics(client) }))
-    .filter((row) => row.metrics.purchaseCount > 0 && recoveryBucket(row.metrics.daysWithoutBuying))
-    .sort((a, b) => (b.metrics.daysWithoutBuying || 0) - (a.metrics.daysWithoutBuying || 0))
-    .slice(0, 8);
-  clientRecoveryList.innerHTML = rows.length ? rows.map(({ client, metrics }) => {
+    .filter((row) => row.metrics.purchaseCount > 0 && row.metrics.daysWithoutBuying >= app.clientRecoveryMinDays)
+    .sort((a, b) => (b.metrics.daysWithoutBuying || 0) - (a.metrics.daysWithoutBuying || 0));
+  const visibleRows = rows.slice(0, app.clientRecoveryVisibleCount);
+  if (clientRecoveryCount) clientRecoveryCount.textContent = `Mostrando ${visibleRows.length} de ${rows.length} contatos`;
+  updateClientLoadMore(clientRecoveryMore, visibleRows.length, rows.length);
+  clientRecoveryList.innerHTML = rows.length ? visibleRows.map(({ client, metrics }) => {
     const phone = clientPhoneKey(client);
     const url = clientWhatsappUrl(phone, client.nome);
     return `
-      <article class="client-recovery-card">
+      <article class="client-recovery-card" data-client-recovery-row="${escapeHtml(client.id)}">
         <div>
           <strong>${escapeHtml(client.nome || "Cliente")}</strong>
-          <span>${escapeHtml(recoveryBucket(metrics.daysWithoutBuying))} • ultima compra ${escapeHtml(clientDateShort(metrics.lastPurchaseDate))}</span>
+          <span>${metrics.daysWithoutBuying} dias sem comprar • ultima compra ${escapeHtml(clientDateShort(metrics.lastPurchaseDate))}</span>
           <small>${escapeHtml(currency.format(metrics.totalSpent))} gastos</small>
         </div>
         ${url ? `<a href="${url}" target="_blank" rel="noreferrer">WhatsApp</a>` : ""}
       </article>
     `;
-  }).join("") : `<p class="empty-state">Nenhum cliente para recuperar agora.</p>`;
+  }).join("") : `<p class="empty-state">Nenhum cliente há ${app.clientRecoveryMinDays} dias ou mais sem comprar.</p>`;
+}
+
+function updateClientLoadMore(button, visible, total) {
+  if (!button) return;
+  const remaining = total - visible;
+  button.classList.toggle("hidden", remaining <= 0);
+  button.textContent = `Ver mais ${Math.min(10, Math.max(0, remaining))} contatos`;
 }
 
 function rankingClients() {
@@ -6985,13 +6997,21 @@ async function loadClientsForDirectory() {
   renderClients();
   try {
     await requireUserId();
-    const { data, error } = await supabaseClient
-      .from(TABLES.clients)
-      .select("*")
-      .order("nome", { ascending: true })
-      .limit(500);
-    if (error) throw error;
-    app.clients = data || [];
+    const clients = [];
+    const pageSize = 500;
+    for (let offset = 0; ; offset += pageSize) {
+      const { data, error } = await supabaseClient
+        .from(TABLES.clients)
+        .select("*")
+        .order("nome", { ascending: true })
+        .order("id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+      if (error) throw error;
+      clients.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+    app.clients = clients;
+    app.clientsDirectoryLoaded = true;
     invalidateClientMetricsCache();
   } catch (error) {
     console.error("Erro ao carregar clientes:", error);
@@ -7005,11 +7025,15 @@ async function loadClientsForDirectory() {
 function renderClients() {
   if (!clientsListRoot) return;
   if (app.clientsLoading) {
+    clientsMore?.classList.add("hidden");
+    clientRecoveryMore?.classList.add("hidden");
     if (clientsCount) clientsCount.textContent = "Carregando clientes...";
     clientsListRoot.innerHTML = `<div class="empty-state"><p>Carregando clientes...</p></div>`;
     return;
   }
   if (app.clientsError) {
+    clientsMore?.classList.add("hidden");
+    clientRecoveryMore?.classList.add("hidden");
     if (clientsCount) clientsCount.textContent = "Clientes indisponiveis";
     setClientStatus("Nao foi possivel carregar os clientes.", "error");
     clientsListRoot.innerHTML = `<div class="empty-state"><p>Não foi possível carregar os clientes.</p><button type="button" class="ghost-action" data-clients-retry>Tentar novamente</button></div>`;
@@ -7019,8 +7043,14 @@ function renderClients() {
   renderClientsDashboard();
   renderClientRecovery();
   renderClientRanking();
+  renderClientDirectory();
+}
+
+function renderClientDirectory() {
+  if (!clientsListRoot || app.clientsLoading || app.clientsError) return;
   const rows = filteredRegisteredClients();
-  const visibleRows = rows.slice(0, 40);
+  const visibleRows = rows.slice(0, app.clientVisibleCount);
+  updateClientLoadMore(clientsMore, visibleRows.length, rows.length);
   if (clientsCount) clientsCount.textContent = `${rows.length} ${rows.length === 1 ? "cliente encontrado" : "clientes encontrados"}${rows.length > visibleRows.length ? ` • mostrando ${visibleRows.length}` : ""}`;
   const hasSearch = app.clientSearch.trim();
   clientsListRoot.innerHTML = rows.length ? visibleRows.map((client) => {
@@ -8830,7 +8860,6 @@ function switchTab(tab) {
   $$("[data-panel]").forEach((panel) => panel.classList.toggle("hidden", panel.dataset.panel !== tab));
   $$("[data-tab]").forEach((button) => button.classList.toggle("active", button.dataset.tab === tab));
   renderAll();
-  if (tab === "clients" && !app.clients.length && !app.clientsError) loadClientsForDirectory();
 }
 
 function openSideMenu() {
@@ -9371,6 +9400,16 @@ document.addEventListener("click", async (event) => {
     return;
   }
   if (event.target.closest("[data-client-add]")) openClientModal("form");
+  if (event.target.closest("[data-clients-more]")) {
+    app.clientVisibleCount += 10;
+    renderClientDirectory();
+    return;
+  }
+  if (event.target.closest("[data-client-recovery-more]")) {
+    app.clientRecoveryVisibleCount += 10;
+    renderClientRecovery();
+    return;
+  }
   const clientView = event.target.closest("[data-client-view]");
   if (clientView) {
     closeClientActionMenus();
@@ -9476,7 +9515,8 @@ document.addEventListener("input", (event) => {
     clearTimeout(clientSearchTimer);
     clientSearchTimer = setTimeout(() => {
       app.clientSearch = event.target.value;
-      renderClients();
+      app.clientVisibleCount = 10;
+      renderClientDirectory();
     }, 250);
   }
   if (event.target.closest("[data-coupon-form]") && ["valor", "valor_minimo", "faixa_menor_ate", "faixa_menor_desconto", "faixa_maior_de", "faixa_maior_desconto"].includes(event.target.name)) {
@@ -9538,11 +9578,19 @@ document.addEventListener("change", (event) => {
 document.addEventListener("change", (event) => {
   if (event.target.matches("[data-client-status-filter]")) {
     app.clientStatusFilter = event.target.value || "active";
-    renderClients();
+    app.clientVisibleCount = 10;
+    renderClientDirectory();
   }
   if (event.target.matches("[data-client-sort]")) {
     app.clientSort = event.target.value || "name-asc";
-    renderClients();
+    app.clientVisibleCount = 10;
+    renderClientDirectory();
+  }
+  if (event.target.matches("[data-client-recovery-days]")) {
+    const days = Number(event.target.value);
+    app.clientRecoveryMinDays = [15, 30, 60, 90].includes(days) ? days : 30;
+    app.clientRecoveryVisibleCount = 10;
+    renderClientRecovery();
   }
   if (event.target.matches("[data-client-ranking-sort]")) {
     renderClientRanking();
