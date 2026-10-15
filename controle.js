@@ -167,6 +167,8 @@ const app = {
   financeDetailRange: null,
   clientMetricsCache: new Map(),
   clientMetricsSignature: "",
+  clientMetricsSources: [],
+  clientPurchaseIndex: null,
   user: null,
 };
 
@@ -6573,12 +6575,14 @@ function filteredRegisteredClients() {
     return name.includes(searchText) || observation.includes(searchText) || (searchPhone && phone.includes(searchPhone));
   });
   rows.sort((a, b) => {
-    const metricsA = clientMetrics(a);
-    const metricsB = clientMetrics(b);
-    if (app.clientSort === "spent-desc") return metricsB.totalSpent - metricsA.totalSpent;
-    if (app.clientSort === "purchases-desc") return metricsB.purchaseCount - metricsA.purchaseCount;
-    if (app.clientSort === "ticket-desc") return metricsB.ticketAverage - metricsA.ticketAverage;
-    if (app.clientSort === "last-purchase") return (metricsB.lastPurchaseDate?.getTime() || 0) - (metricsA.lastPurchaseDate?.getTime() || 0);
+    if (["spent-desc", "purchases-desc", "ticket-desc", "last-purchase"].includes(app.clientSort)) {
+      const metricsA = clientMetrics(a);
+      const metricsB = clientMetrics(b);
+      if (app.clientSort === "spent-desc") return metricsB.totalSpent - metricsA.totalSpent;
+      if (app.clientSort === "purchases-desc") return metricsB.purchaseCount - metricsA.purchaseCount;
+      if (app.clientSort === "ticket-desc") return metricsB.ticketAverage - metricsA.ticketAverage;
+      return (metricsB.lastPurchaseDate?.getTime() || 0) - (metricsA.lastPurchaseDate?.getTime() || 0);
+    }
     if (app.clientSort === "name-desc") return String(b.nome || "").localeCompare(String(a.nome || ""), "pt-BR");
     if (app.clientSort === "recent") return new Date(b.created_at || 0) - new Date(a.created_at || 0);
     if (app.clientSort === "oldest") return new Date(a.created_at || 0) - new Date(b.created_at || 0);
@@ -6671,9 +6675,61 @@ function clientOrders(client) {
 }
 
 function clientPurchases(client) {
+  ensureClientMetricsCache();
+  if (!app.clientPurchaseIndex) app.clientPurchaseIndex = buildClientPurchaseIndex();
+  const indexed = app.clientPurchaseIndex.get(clientMetricsCacheKey(client));
+  if (indexed) return indexed;
   const sales = clientSales(client).map((sale) => ({ type: "sale", sale }));
   const orders = clientOrders(client).map((order) => ({ type: "order", order }));
   return [...sales, ...orders].sort((a, b) => purchaseDate(b) - purchaseDate(a));
+}
+
+function buildClientPurchaseIndex() {
+  const purchases = new Map();
+  const byId = new Map();
+  const byPhone = new Map();
+  const byName = new Map();
+  const addKey = (index, value, clientKey) => {
+    if (!value) return;
+    if (!index.has(value)) index.set(value, new Set());
+    index.get(value).add(clientKey);
+  };
+  app.clients.forEach((client) => {
+    const key = clientMetricsCacheKey(client);
+    purchases.set(key, []);
+    addKey(byId, client.id ? String(client.id) : "", key);
+    addKey(byPhone, clientPhoneKey(client), key);
+    addKey(byName, clientNameKey(client), key);
+  });
+
+  const ordersBySale = new Map();
+  app.orders.forEach((order) => {
+    const key = String(order.venda_id || "");
+    if (!ordersBySale.has(key)) ordersBySale.set(key, order);
+  });
+  const saleIds = new Set(app.sales.map((sale) => String(sale.id)));
+  const appendPurchase = (purchase, ids, customer) => {
+    const matches = new Set();
+    const collect = (index, key) => index.get(key)?.forEach((clientKey) => matches.add(clientKey));
+    ids.filter(Boolean).forEach((id) => collect(byId, String(id)));
+    collect(byPhone, normalizeClientWhatsapp(customer.phone || ""));
+    const name = normalizeText(customer.name || "");
+    if (isUsableClientNameKey(name)) collect(byName, name);
+    matches.forEach((clientKey) => purchases.get(clientKey).push(purchase));
+  };
+
+  // Resolve each purchase once, preserving the existing ID, phone and name matches.
+  app.sales.forEach((sale) => {
+    if (!validClientSale(sale)) return;
+    const linkedOrder = ordersBySale.get(String(sale.id)) || null;
+    appendPurchase({ type: "sale", sale }, [sale.cliente_id, linkedOrder?.cliente_id], saleDisplayClient(sale, linkedOrder));
+  });
+  app.orders.forEach((order) => {
+    if (!validClientOrder(order) || (order.venda_id && saleIds.has(String(order.venda_id)))) return;
+    appendPurchase({ type: "order", order }, [order.cliente_id], orderDisplayClient(order));
+  });
+  purchases.forEach((rows) => rows.sort((a, b) => purchaseDate(b) - purchaseDate(a)));
+  return purchases;
 }
 
 function daysSince(date) {
@@ -6748,8 +6804,8 @@ function computeClientMetrics(client) {
   const ticketAverage = purchaseCount ? totalSpent / purchaseCount : 0;
   const firstPurchaseDate = purchases.length ? purchaseDate(purchases[purchases.length - 1]) : null;
   const lastPurchaseDate = purchases.length ? purchaseDate(purchases[0]) : null;
-  const favoriteProducts = clientFavoriteProducts(purchases);
-  const paymentMethods = purchases.flatMap((purchase) => purchasePaymentMethods(purchase));
+  let favoriteProducts = null;
+  let topPayment = null;
   const daysWithoutBuying = daysSince(lastPurchaseDate);
   return {
     purchases,
@@ -6760,9 +6816,17 @@ function computeClientMetrics(client) {
     firstPurchaseDate,
     lastPurchaseDate,
     daysWithoutBuying,
-    favoriteProducts,
-    topProduct: favoriteProducts[0]?.name || "Nao informado",
-    topPayment: mostCommonValue(paymentMethods),
+    get favoriteProducts() {
+      if (!favoriteProducts) favoriteProducts = clientFavoriteProducts(purchases);
+      return favoriteProducts;
+    },
+    get topProduct() {
+      return this.favoriteProducts[0]?.name || "Nao informado";
+    },
+    get topPayment() {
+      if (topPayment === null) topPayment = mostCommonValue(purchases.flatMap((purchase) => purchasePaymentMethods(purchase)));
+      return topPayment;
+    },
     isVip: totalSpent >= 1000,
     isRecurring: purchaseCount >= 2,
   };
@@ -6770,6 +6834,7 @@ function computeClientMetrics(client) {
 
 function clientMetricsDataSignature() {
   return [
+    localDateValue(),
     app.clients.length,
     app.sales.length,
     app.orders.length,
@@ -6785,14 +6850,22 @@ function clientMetricsCacheKey(client = {}) {
 function invalidateClientMetricsCache() {
   app.clientMetricsSignature = "";
   app.clientMetricsCache = new Map();
+  app.clientMetricsSources = [];
+  app.clientPurchaseIndex = null;
+}
+
+function ensureClientMetricsCache() {
+  const signature = clientMetricsDataSignature();
+  const sources = [app.clients, app.sales, app.orders, app.saleItems, app.orderItems, app.products];
+  if (app.clientMetricsSignature !== signature || sources.some((source, index) => app.clientMetricsSources[index] !== source)) {
+    invalidateClientMetricsCache();
+    app.clientMetricsSignature = signature;
+    app.clientMetricsSources = sources;
+  }
 }
 
 function clientMetrics(client) {
-  const signature = clientMetricsDataSignature();
-  if (app.clientMetricsSignature !== signature) {
-    app.clientMetricsSignature = signature;
-    app.clientMetricsCache = new Map();
-  }
+  ensureClientMetricsCache();
   const key = clientMetricsCacheKey(client);
   if (!key) return computeClientMetrics(client);
   if (app.clientMetricsCache.has(key)) return app.clientMetricsCache.get(key);
@@ -6931,9 +7004,6 @@ async function loadClientsForDirectory() {
 
 function renderClients() {
   if (!clientsListRoot) return;
-  renderClientsDashboard();
-  renderClientRecovery();
-  renderClientRanking();
   if (app.clientsLoading) {
     if (clientsCount) clientsCount.textContent = "Carregando clientes...";
     clientsListRoot.innerHTML = `<div class="empty-state"><p>Carregando clientes...</p></div>`;
@@ -6946,6 +7016,9 @@ function renderClients() {
     return;
   }
   setClientStatus("", "");
+  renderClientsDashboard();
+  renderClientRecovery();
+  renderClientRanking();
   const rows = filteredRegisteredClients();
   const visibleRows = rows.slice(0, 40);
   if (clientsCount) clientsCount.textContent = `${rows.length} ${rows.length === 1 ? "cliente encontrado" : "clientes encontrados"}${rows.length > visibleRows.length ? ` • mostrando ${visibleRows.length}` : ""}`;
