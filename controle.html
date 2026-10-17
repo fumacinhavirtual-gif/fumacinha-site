@@ -546,16 +546,16 @@
           </form>
           <div class="stock-filters">
             <input type="search" data-stock-search placeholder="Buscar por nome" />
-            <select data-stock-filter>
+            <select data-stock-filter aria-label="Filtrar e ordenar estoque">
               <option value="all">Todos</option>
               <option value="low">Estoque baixo</option>
+              <option value="stock-asc">Menor quantidade</option>
+              <option value="stock-desc">Maior quantidade</option>
             </select>
-            <select data-stock-sort>
+            <select data-stock-sort aria-label="Disponibilidade dos produtos">
               <option value="all">Todos</option>
               <option value="available">Disponíveis</option>
               <option value="sold-out">Esgotados</option>
-              <option value="stock-asc">Menor quantidade</option>
-              <option value="stock-desc">Maior quantidade</option>
             </select>
           </div>
           <section class="panel-card cost-update-panel" data-cost-update-panel>

@@ -4818,8 +4818,8 @@ function stockProducts() {
     .filter((product) => !app.stockCategories.length || app.stockCategories.includes(product.categoria || "Produtos"))
     .filter((product) => app.stockFilter !== "low" || toNumber(product.estoque) <= 5)
     .sort((a, b) => {
-      if (app.stockSort === "stock-asc") return toNumber(a.estoque) - toNumber(b.estoque);
-      if (app.stockSort === "stock-desc") return toNumber(b.estoque) - toNumber(a.estoque);
+      if (app.stockFilter === "stock-asc") return toNumber(a.estoque) - toNumber(b.estoque);
+      if (app.stockFilter === "stock-desc") return toNumber(b.estoque) - toNumber(a.estoque);
       return 0;
     });
 }
