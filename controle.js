@@ -153,7 +153,7 @@ const app = {
   stockCategory: "all",
   stockCategories: [],
   stockFilter: "all",
-  stockSort: "filter",
+  stockSort: "all",
   stockProductSaving: false,
   selectedStockProductImageFile: null,
   stockProductPreviewUrl: "",
@@ -4778,7 +4778,7 @@ function renderStockFilters() {
   const categorySelect = $("[data-stock-category]");
   const categoryChips = $("[data-stock-category-chips]");
   const productCategories = $("[data-stock-product-categories]");
-  const categories = [...new Set(app.products.filter((product) => isVisibleProduct(product) || isStockFilterProduct(product)).map((product) => product.categoria || "Produtos"))].sort();
+  const categories = [...new Set(app.products.filter((product) => isStockFilterProduct(product, "all")).map((product) => product.categoria || "Produtos"))].sort();
   if (productCategories) {
     productCategories.innerHTML = categories.map((category) => `<option value="${escapeHtml(category)}"></option>`).join("");
   }
@@ -4802,15 +4802,18 @@ function isVisibleProduct(product = {}) {
   return product.ativo !== false && !product.deleted_at;
 }
 
-function isStockFilterProduct(product = {}) {
-  if (app.stockSort === "sold-out") return !product.deleted_at && toNumber(product.estoque) === 0;
-  return isVisibleProduct(product);
+function isStockFilterProduct(product = {}, filter = app.stockSort) {
+  if (product.deleted_at) return false;
+  const stock = toNumber(product.estoque);
+  if (filter === "available") return stock > 0;
+  if (filter === "sold-out") return stock === 0;
+  return true;
 }
 
 function stockProducts() {
   const search = saleFilterText(app.stockSearch);
   return app.products
-    .filter(isStockFilterProduct)
+    .filter((product) => isStockFilterProduct(product))
     .filter((product) => !search || saleFilterText([product.nome, product.categoria, product.descricao, product.marca, product.sabor].filter(Boolean).join(" ")).includes(search))
     .filter((product) => !app.stockCategories.length || app.stockCategories.includes(product.categoria || "Produtos"))
     .filter((product) => app.stockFilter !== "low" || toNumber(product.estoque) <= 5)
