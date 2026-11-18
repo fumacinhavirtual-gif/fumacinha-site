@@ -18,6 +18,7 @@ const TABLES = {
   changeBox: "CAIXA_TROCO",
   changeMoves: "MOVIMENTACOES_TROCO",
   exchangeChecks: "CONFERENCIAS_TROCAS",
+  exchangeFees: "TAXAS_TROCAS",
   clients: "clientes",
   coupons: "cupons",
   siteConfig: "SITE_CONFIG",
@@ -65,6 +66,9 @@ const app = {
   changeBox: null,
   changeMoves: [],
   exchangeChecks: [],
+  exchangeFees: [],
+  exchangeFeesError: "",
+  exchangeFeeSaving: false,
   clients: [],
   coupons: [],
   couponsLoading: false,
@@ -283,6 +287,7 @@ const saleEditLabel = $("[data-sale-edit-label]");
 const saleEditMotive = $("[data-sale-edit-motive]");
 const cashDateInput = $("[data-cash-date]");
 const cashForm = $("[data-cash-form]");
+const exchangeFeeForm = $("[data-exchange-fee-form]");
 const cashHistory = $("[data-cash-history]");
 const cashHistoryBody = $("[data-cash-history-body]");
 const cashHistoryDateSelect = $("[data-cash-history-date]");
@@ -1419,7 +1424,7 @@ async function loadAll() {
     showToast("Nao foi possivel carregar os produtos.", "error");
   }
 
-  const [salesResult, itemsResult, ordersResult, orderItemsResult, clientsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, couponsResult, siteConfigResult] = await Promise.allSettled([
+  const [salesResult, itemsResult, ordersResult, orderItemsResult, clientsResult, movesResult, expensesResult, deliverersResult, sellersResult, payoutsResult, closingsResult, cashMovesResult, changeBoxResult, changeMovesResult, exchangeChecksResult, exchangeFeesResult, couponsResult, siteConfigResult] = await Promise.allSettled([
     supabaseClient.from(TABLES.sales).select("*").order("created_at", { ascending: false }).limit(1500),
     supabaseClient.from(TABLES.saleItems).select("*").order("created_at", { ascending: false }).limit(3000),
     supabaseClient.from(TABLES.orders).select("*").order("created_at", { ascending: false }).limit(1500),
@@ -1435,6 +1440,7 @@ async function loadAll() {
     supabaseClient.from(TABLES.changeBox).select("*").order("id", { ascending: true }).limit(1),
     supabaseClient.from(TABLES.changeMoves).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.exchangeChecks).select("*").order("data_caixa", { ascending: false }).limit(1000),
+    supabaseClient.from(TABLES.exchangeFees).select("*").order("data_troca", { ascending: false }).limit(1500),
     supabaseClient.from(TABLES.coupons).select("*").order("created_at", { ascending: false }).limit(500),
     supabaseClient.from(TABLES.siteConfig).select("*").eq("id", 1).maybeSingle(),
   ]);
@@ -1477,6 +1483,12 @@ async function loadAll() {
   app.exchangeChecks = exchangeChecksResult.status === "fulfilled" && !exchangeChecksResult.value.error
     ? exchangeChecksResult.value.data || []
     : [];
+  app.exchangeFees = exchangeFeesResult.status === "fulfilled" && !exchangeFeesResult.value.error
+    ? exchangeFeesResult.value.data || []
+    : [];
+  app.exchangeFeesError = exchangeFeesResult.status === "fulfilled" && !exchangeFeesResult.value.error
+    ? ""
+    : "Ative o registro de trocas executando SUPABASE_TAXAS_TROCAS.sql no Supabase.";
   if (exchangeChecksResult.status === "rejected" || exchangeChecksResult.value?.error) {
     console.error("Erro ao carregar conferencias de trocas:", exchangeChecksResult.reason || exchangeChecksResult.value?.error);
   }
@@ -1552,6 +1564,10 @@ function renderAll() {
   }
   if (tab === "cash") {
     renderSafely("conferencia", renderCashClosing);
+    return;
+  }
+  if (tab === "exchanges") {
+    renderSafely("taxas de trocas", renderExchangeFees);
     return;
   }
   if (tab === "coupons") {
@@ -1948,7 +1964,7 @@ async function saveClosedStoreMessage() {
 }
 
 function renderPeriods() {
-  const shouldHidePeriodFilters = ["home", "sales", "orders", "stock", "history", "finance", "cash", "clients", "coupons"].includes(app.activeTab);
+  const shouldHidePeriodFilters = ["home", "sales", "orders", "stock", "history", "finance", "cash", "exchanges", "clients", "coupons"].includes(app.activeTab);
   const shouldShowHomeCustomPeriod = app.activeTab === "home" && app.period === "custom";
   $("[data-period-tabs]")?.classList.toggle("hidden", shouldHidePeriodFilters);
   $$("[data-period]").forEach((button) => button.classList.toggle("active", button.dataset.period === app.period));
@@ -2087,9 +2103,10 @@ function renderDashboard() {
   $("[data-kpi-total-sales]").textContent = String(totalSales);
   $("[data-kpi-total-sales-breakdown]").textContent = `${manualSales.length} manuais | ${confirmedSiteOrders.length} site`;
   $("[data-kpi-home-commission]").textContent = currency.format(salesSummary.commission);
-  $("[data-kpi-home-delivery]").textContent = currency.format(salesSummary.delivery);
+  $("[data-kpi-home-delivery]").textContent = currency.format(salesSummary.delivery + exchangeFeesInRange(periodRange()).reduce((sum, row) => sum + toNumber(row.taxa_entrega), 0));
   $("[data-kpi-low-stock]").textContent = String(lowStock.length);
   $("[data-kpi-out-stock]").textContent = String(outStock.length);
+  renderHomeDeliveries();
   renderOperationalAlerts(alerts);
   renderHomeLowStockList();
   const topProductsSales = analyticsSales("topProducts");
@@ -2099,6 +2116,137 @@ function renderDashboard() {
   renderTopProductsRanking(topProducts.slice(0, app.homeTopProductsExpanded ? 20 : 5));
   updateHomeTopProductsMoreButton(topProducts.length);
   renderSmartOrderSuggestions();
+}
+
+function activeExchangeFees() {
+  return app.exchangeFees.filter((row) => !row.cancelada);
+}
+
+function exchangeFeesForDate(dateKey) {
+  return activeExchangeFees().filter((row) => row.data_troca === dateKey);
+}
+
+function exchangeFeesInRange({ start, end }) {
+  return activeExchangeFees().filter((row) => {
+    const day = new Date(`${row.data_troca}T12:00:00`);
+    return day >= start && day <= end;
+  });
+}
+
+function deliveryRowsForDate(dateKey) {
+  const groups = new Map();
+  const add = (id, name, kind, fee) => {
+    const key = id ? String(id) : `name:${name || "Sem entregador"}`;
+    const row = groups.get(key) || { name: name || "Sem entregador", sales: 0, exchanges: 0, fees: 0 };
+    row[kind] += 1;
+    row.fees += fee;
+    groups.set(key, row);
+  };
+  cashSalesForDate(dateKey).forEach((sale) => {
+    if (!sale.entregador_id && !sale.entregador_nome) return;
+    add(sale.entregador_id, sale.entregador_nome || personNameById(app.deliverers, sale.entregador_id), "sales", saleDelivery(sale));
+  });
+  exchangeFeesForDate(dateKey).forEach((fee) => {
+    add(fee.entregador_id, fee.entregador_nome || personNameById(app.deliverers, fee.entregador_id), "exchanges", toNumber(fee.taxa_entrega));
+  });
+  return [...groups.values()].sort((a, b) => b.sales + b.exchanges - a.sales - a.exchanges);
+}
+
+function renderHomeDeliveries() {
+  const root = $("[data-home-deliveries]");
+  if (!root) return;
+  const rows = deliveryRowsForDate(localDateValue());
+  root.innerHTML = rows.length
+    ? rows.map((row) => `<div class="home-delivery-row"><strong>${escapeHtml(row.name)}</strong><span>${row.sales + row.exchanges} ${row.sales + row.exchanges === 1 ? "entrega" : "entregas"}<small>${row.sales} vendas | ${row.exchanges} trocas</small></span><b>${currency.format(row.fees)}</b></div>`).join("")
+    : '<p class="empty-state">Nenhuma entrega registrada hoje.</p>';
+  if (app.exchangeFeesError) root.insertAdjacentHTML("beforeend", `<p class="form-status error">${escapeHtml(app.exchangeFeesError)}</p>`);
+}
+
+function renderExchangeFees() {
+  if (!exchangeFeeForm) return;
+  const select = exchangeFeeForm.elements.entregador_id;
+  const selected = select.value;
+  select.innerHTML = `<option value="">Selecione</option>${app.deliverers.filter((row) => row.ativo !== false).map((row) => `<option value="${escapeHtml(row.id)}">${escapeHtml(row.nome)}</option>`).join("")}`;
+  select.value = selected;
+  if (!exchangeFeeForm.elements.data_troca.value) exchangeFeeForm.elements.data_troca.value = localDateValue();
+  const status = $("[data-exchange-fee-status]");
+  if (status) status.textContent = app.exchangeFeesError || (app.exchangeFeeSaving ? "Salvando troca..." : "");
+  const submit = $("[data-exchange-fee-submit]");
+  if (submit) submit.disabled = Boolean(app.exchangeFeesError || app.exchangeFeeSaving);
+  const root = $("[data-exchange-fee-list]");
+  if (!root) return;
+  root.innerHTML = app.exchangeFees.length ? app.exchangeFees.slice(0, 100).map((row) => {
+    const cancelled = row.cancelada;
+    const closed = app.cashClosings.some((closing) => closing.data_caixa === row.data_troca && closing.status === "fechado");
+    return `<article class="exchange-fee-row${cancelled ? " cancelled" : ""}">
+      <div><strong>${escapeHtml(row.entregador_nome || "Entregador")}</strong><span>${escapeHtml(formatDateBR(row.data_troca))} | ${escapeHtml(row.forma_pagamento)}${cancelled ? " | Cancelada" : ""}</span>${row.produto_descricao ? `<small>${escapeHtml(row.produto_descricao)}</small>` : ""}</div>
+      <b>${currency.format(toNumber(row.taxa_entrega))}</b>
+      ${cancelled || closed ? "" : `<button type="button" class="ghost-action" data-cancel-exchange-fee="${escapeHtml(row.id)}">Cancelar</button>`}
+    </article>`;
+  }).join("") : '<p class="empty-state">Nenhuma taxa de troca registrada.</p>';
+}
+
+async function saveExchangeFee(event) {
+  event.preventDefault();
+  if (!exchangeFeeForm || app.exchangeFeeSaving || app.exchangeFeesError) return;
+  const form = exchangeFeeForm.elements;
+  const day = form.data_troca.value;
+  const deliverer = app.deliverers.find((row) => String(row.id) === form.entregador_id.value && row.ativo !== false);
+  const amount = parseMoney(form.taxa_entrega.value);
+  const payment = form.forma_pagamento.value;
+  const status = $("[data-exchange-fee-status]");
+  if (!day || day > localDateValue() || !deliverer || !["Pix", "QR Code Pix", "Dinheiro"].includes(payment) || !Number.isFinite(amount) || amount <= 0) {
+    if (status) status.textContent = "Informe um dia ate hoje, entregador, pagamento e taxa maior que zero.";
+    return;
+  }
+  if (app.cashClosings.some((closing) => closing.data_caixa === day && closing.status === "fechado")) {
+    if (status) status.textContent = "Reabra o fechamento deste dia antes de registrar a taxa.";
+    return;
+  }
+  app.exchangeFeeSaving = true;
+  if (status) status.textContent = "Salvando troca...";
+  renderExchangeFees();
+  try {
+    const userId = await requireUserId();
+    const { data: closing, error: closingError } = await supabaseClient.from(TABLES.cashClosings)
+      .select("status").eq("data_caixa", day).maybeSingle();
+    if (closingError) throw closingError;
+    if (closing?.status === "fechado") throw new Error("Reabra o fechamento deste dia antes de registrar a taxa.");
+    const { data, error } = await supabaseClient.from(TABLES.exchangeFees).insert({
+      data_troca: day,
+      entregador_id: deliverer.id,
+      entregador_nome: deliverer.nome,
+      produto_descricao: form.produto_descricao.value.trim(),
+      forma_pagamento: payment,
+      taxa_entrega: amount,
+      usuario_id: userId,
+    }).select("*").single();
+    if (error) throw error;
+    app.exchangeFees.unshift(data);
+    exchangeFeeForm.reset();
+    form.data_troca.value = localDateValue();
+    showToast("Taxa de troca registrada.", "success");
+    renderExchangeFees();
+  } catch (error) {
+    if (status) status.textContent = error.message || "Nao foi possivel salvar a troca.";
+  } finally {
+    app.exchangeFeeSaving = false;
+    const submit = $("[data-exchange-fee-submit]");
+    if (submit) submit.disabled = Boolean(app.exchangeFeesError);
+  }
+}
+
+async function cancelExchangeFee(id) {
+  const row = app.exchangeFees.find((fee) => String(fee.id) === String(id));
+  if (!row || row.cancelada || app.cashClosings.some((closing) => closing.data_caixa === row.data_troca && closing.status === "fechado")) return;
+  if (!window.confirm("Cancelar esta taxa de troca? O registro ficara no historico.")) return;
+  const { data, error } = await supabaseClient.from(TABLES.exchangeFees)
+    .update({ cancelada: true, cancelada_em: new Date().toISOString() })
+    .eq("id", id).eq("cancelada", false).select("*").single();
+  if (error) return showToast(error.message || "Nao foi possivel cancelar a troca.", "error");
+  Object.assign(row, data);
+  renderExchangeFees();
+  showToast("Taxa de troca cancelada.", "success");
 }
 
 function dashboardRankedProducts(manualSales, confirmedOrders) {
@@ -7594,12 +7742,21 @@ function renderDelivererReport(sales) {
     current.total += saleDelivery(sale);
     groups.set(name, current);
   });
+  const range = analyticsPeriodRange(analyticsPeriodFor("deliverers"));
+  exchangeFeesInRange(range).forEach((fee) => {
+    const name = fee.entregador_nome || personNameById(app.deliverers, fee.entregador_id) || "Sem entregador";
+    const current = groups.get(name) || { label: name, quantity: 0, total: 0, exchanges: 0 };
+    current.quantity += 1;
+    current.exchanges = (current.exchanges || 0) + 1;
+    current.total += toNumber(fee.taxa_entrega);
+    groups.set(name, current);
+  });
   const root = $("[data-report-deliverers]");
   if (!root) return;
   const rows = [...groups.values()].filter((row) => row.total > 0).sort((a, b) => b.total - a.total);
   root.innerHTML = rows.length ? `<div class="finance-compact-list">${rows.map((row) => `
     <article>
-      <div><strong>${escapeHtml(row.label)}</strong><span>${row.quantity} ${row.quantity === 1 ? "entrega" : "entregas"}</span></div>
+      <div><strong>${escapeHtml(row.label)}</strong><span>${row.quantity} ${row.quantity === 1 ? "entrega" : "entregas"}${row.exchanges ? ` | ${row.exchanges} ${row.exchanges === 1 ? "troca" : "trocas"}` : ""}</span></div>
       <div><b>${escapeHtml(currency.format(row.total))}</b><small>Media ${escapeHtml(currency.format(row.quantity ? row.total / row.quantity : 0))}</small></div>
     </article>
   `).join("")}</div>` : `<p class="empty-state">Sem taxas de entrega no periodo.</p>`;
@@ -7719,7 +7876,7 @@ async function deleteTeamMember(type, id) {
   const rows = type === "seller" ? app.sellers : app.deliverers;
   const hasHistory = type === "seller"
     ? app.sales.some((sale) => String(sale.vendedora_id) === String(id))
-    : app.sales.some((sale) => String(sale.entregador_id) === String(id)) || app.deliveryPayouts.some((payout) => String(payout.entregador_id) === String(id));
+    : app.sales.some((sale) => String(sale.entregador_id) === String(id)) || app.deliveryPayouts.some((payout) => String(payout.entregador_id) === String(id)) || app.exchangeFees.some((fee) => String(fee.entregador_id) === String(id));
   if (hasHistory) return setStatus("Nao e possivel excluir: existe historico relacionado. Use inativar.", "error");
   if (!window.confirm("Excluir este cadastro?")) return;
   const { error } = await supabaseClient.from(table).delete().eq("id", id);
@@ -7800,6 +7957,11 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     dinheiroRecebido: 0,
     trocoDevolvido: 0,
     dinheiroLiquido: 0,
+    exchangeCount: 0,
+    exchangeFeeTotal: 0,
+    exchangePix: 0,
+    exchangeQrCodePix: 0,
+    exchangeMoney: 0,
   };
   cashSalesForDate(dateKey).forEach((sale) => {
     totals.totalVendas += saleGrandTotal(sale);
@@ -7858,6 +8020,28 @@ function cashPaymentTotals(dateKey = app.cashDate) {
     } else {
       totals.outros += value;
       totals.outrosCount += 1;
+    }
+  });
+  totals.salesPix = totals.pix;
+  totals.salesQrCodePix = totals.qrCodePix;
+  totals.salesMoney = totals.dinheiro;
+  exchangeFeesForDate(dateKey).forEach((fee) => {
+    const value = toNumber(fee.taxa_entrega);
+    totals.exchangeCount += 1;
+    totals.exchangeFeeTotal += value;
+    if (isPixPayment(fee.forma_pagamento)) {
+      totals.pix += value;
+      totals.pixCount += 1;
+      totals.exchangePix += value;
+    } else if (isQrCodePixPayment(fee.forma_pagamento)) {
+      totals.qrCodePix += value;
+      totals.qrCodePixCount += 1;
+      totals.exchangeQrCodePix += value;
+    } else if (isCashPayment(fee.forma_pagamento)) {
+      totals.dinheiro += value;
+      totals.dinheiroCount += 1;
+      totals.dinheiroRecebido += value;
+      totals.exchangeMoney += value;
     }
   });
   totals.dinheiroLiquido = totals.dinheiroRecebido - totals.trocoDevolvido;
@@ -7927,7 +8111,8 @@ function cashPaymentSaleTime(sale = {}) {
 function cashPaymentDetailMarkup(dateKey, method, { history = false } = {}) {
   const label = CASH_PAYMENT_LABELS[method] || "Pagamento";
   const rows = cashSalesByPayment(dateKey, method);
-  const total = rows.reduce((sum, row) => sum + row.value, 0);
+  const exchanges = exchangeFeesForDate(dateKey).filter((fee) => cashPaymentKey(fee.forma_pagamento) === method);
+  const total = rows.reduce((sum, row) => sum + row.value, 0) + exchanges.reduce((sum, fee) => sum + toNumber(fee.taxa_entrega), 0);
   const dateLabel = new Date(`${dateKey}T12:00:00`).toLocaleDateString("pt-BR");
   const closeAttr = history ? "data-close-cash-history-payment-detail" : "data-close-cash-payment-detail";
 
@@ -7937,12 +8122,12 @@ function cashPaymentDetailMarkup(dateKey, method, { history = false } = {}) {
         <div>
           <span>${history ? "Historico" : "Conferencia"} por forma</span>
           <strong>${escapeHtml(label)}</strong>
-          <small>${escapeHtml(dateLabel)} | ${cashReceivedLabel(rows.length)} | ${currency.format(total)}</small>
+          <small>${escapeHtml(dateLabel)} | ${cashReceivedLabel(rows.length + exchanges.length)} | ${currency.format(total)}</small>
         </div>
         <button type="button" ${closeAttr}>Fechar</button>
       </div>
       <div class="cash-payment-sale-list">
-        ${rows.length ? rows.map((row) => {
+        ${rows.map((row) => {
           const sale = row.sale;
           const client = saleDisplayClient(sale);
           const products = saleHistoryProducts(sale);
@@ -7959,9 +8144,12 @@ function cashPaymentDetailMarkup(dateKey, method, { history = false } = {}) {
               </span>
             </button>
           `;
-        }).join("") : `
-          <p class="empty-state">Nenhuma venda em ${escapeHtml(label)} neste dia.</p>
-        `}
+        }).join("")}
+        ${exchanges.map((fee) => `<article class="cash-payment-sale exchange-payment-row">
+          <span><strong>Troca de produto</strong><small>${escapeHtml(fee.entregador_nome)} | ${escapeHtml(fee.produto_descricao || "Taxa de entrega")}</small></span>
+          <span class="cash-payment-sale-values"><strong>${currency.format(toNumber(fee.taxa_entrega))}</strong><small>Taxa do entregador</small></span>
+        </article>`).join("")}
+        ${!rows.length && !exchanges.length ? `<p class="empty-state">Nenhum recebimento em ${escapeHtml(label)} neste dia.</p>` : ""}
       </div>
     </section>
   `;
@@ -8516,6 +8704,7 @@ function updateCashPreview() {
       <span>Debito: ${currency.format(values.debito)}</span>
       <span>Outros: ${currency.format(values.outros)}</span>
       <span>Total vendido: ${currency.format(values.totalVendas)}</span>
+      <span>Taxas de trocas: ${currency.format(values.exchangeFeeTotal)}</span>
       <span>Troco inicial: ${currency.format(values.trocoInicial)}</span>
       <span>Troco usado: ${currency.format(values.trocoUsado)}</span>
       <span>Troco adicionado: ${currency.format(values.trocoAdicionado)}</span>
@@ -8537,6 +8726,7 @@ function renderCashHistory() {
   const dateKeys = [...new Set([
     ...app.cashClosings.map((closing) => closing.data_caixa).filter(Boolean),
     ...app.sales.map((sale) => saleDateKey(sale)).filter(Boolean),
+    ...app.exchangeFees.map((fee) => fee.data_troca).filter(Boolean),
   ])].sort((a, b) => b.localeCompare(a));
   const yesterday = localDateValue(new Date(Date.now() - 86400000));
   if (!app.cashHistoryDate || !dateKeys.includes(app.cashHistoryDate)) {
@@ -8560,9 +8750,9 @@ function renderCashHistory() {
   const closing = app.cashClosings.find((row) => row.data_caixa === selectedDate);
   const payments = cashPaymentTotals(selectedDate);
   const values = {
-    pix: toNumber(closing?.vendas_pix ?? payments.pix),
-    qrCodePix: toNumber(closing?.vendas_qr_code_pix ?? payments.qrCodePix),
-    dinheiro: toNumber(closing?.vendas_dinheiro ?? payments.dinheiro),
+    pix: closing ? toNumber(closing.vendas_pix ?? payments.salesPix) + payments.exchangePix : payments.pix,
+    qrCodePix: closing ? toNumber(closing.vendas_qr_code_pix ?? payments.salesQrCodePix) + payments.exchangeQrCodePix : payments.qrCodePix,
+    dinheiro: closing ? toNumber(closing.vendas_dinheiro ?? payments.salesMoney) + payments.exchangeMoney : payments.dinheiro,
     debito: toNumber(closing?.vendas_debito ?? payments.debito),
     credito: toNumber(closing?.vendas_credito ?? payments.credito),
     outros: toNumber(closing?.vendas_outros ?? payments.outros),
@@ -8572,14 +8762,14 @@ function renderCashHistory() {
     debitoCount: payments.debitoCount,
     creditoCount: payments.creditoCount,
     outrosCount: payments.outrosCount,
-    total: toNumber(closing?.total_vendas ?? (payments.pix + payments.qrCodePix + payments.dinheiro + payments.debito + payments.credito + payments.outros)),
+    total: toNumber(closing?.total_vendas ?? payments.totalVendas),
     esperado: toNumber(closing?.dinheiro_esperado ?? 0),
     contado: toNumber(closing?.dinheiro_contado ?? 0),
     diferenca: toNumber(closing?.diferenca ?? 0),
     quantidade: toNumber(closing?.quantidade_vendas ?? cashSalesForDate(selectedDate).length),
   };
   if (cashHistoryTitle) cashHistoryTitle.textContent = `Caixa de ${selectedLabel}`;
-  if (cashHistoryTotal) cashHistoryTotal.textContent = currency.format(values.total);
+  if (cashHistoryTotal) cashHistoryTotal.textContent = currency.format(values.total + payments.exchangeFeeTotal);
   cashHistory.innerHTML = `
     <div class="cash-history-day-card">
       <div class="cash-history-day-head">
@@ -8597,6 +8787,7 @@ function renderCashHistory() {
         <article class="${app.cashHistoryPaymentDetail === "debito" ? "selected" : ""}" data-cash-history-payment-card="debito" role="button" tabindex="0"><span>Debito</span><small>${cashReceivedLabel(values.debitoCount)}</small><strong>${currency.format(values.debito)}</strong></article>
         <article class="${app.cashHistoryPaymentDetail === "outros" ? "selected" : ""}" data-cash-history-payment-card="outros" role="button" tabindex="0"><span>Outros</span><small>${cashReceivedLabel(values.outrosCount)}</small><strong>${currency.format(values.outros)}</strong></article>
         <article><span>Vendas</span><strong>${values.quantidade}</strong></article>
+        <article><span>Taxas de trocas</span><small>${payments.exchangeCount} trocas</small><strong>${currency.format(payments.exchangeFeeTotal)}</strong></article>
       </div>
       ${app.cashHistoryPaymentDetail ? cashPaymentDetailMarkup(selectedDate, app.cashHistoryPaymentDetail, { history: true }) : ""}
       <div class="cash-history-total-row">
@@ -8633,6 +8824,8 @@ function renderCashClosing() {
   $("[data-cash-other-count]").textContent = cashReceivedLabel(values.outrosCount);
   $("[data-cash-other]").textContent = currency.format(values.outros);
   $("[data-cash-total]").textContent = currency.format(values.totalVendas);
+  $("[data-cash-exchange-count]").textContent = `${values.exchangeCount} ${values.exchangeCount === 1 ? "troca" : "trocas"}`;
+  $("[data-cash-exchange-fees]").textContent = currency.format(values.exchangeFeeTotal);
   $("[data-cash-electronic]").textContent = currency.format(values.eletronicos);
   $("[data-cash-money-received]").textContent = currency.format(values.dinheiroRecebido);
   $("[data-cash-change-given]").textContent = currency.format(values.trocoDevolvido);
@@ -8672,9 +8865,9 @@ function cashPayload(status = "fechado") {
     troco_inicial: values.trocoInicial,
     troco_usado: values.trocoUsado,
     troco_restante: values.trocoRestante,
-    vendas_pix: values.pix,
-    vendas_qr_code_pix: values.qrCodePix,
-    vendas_dinheiro: values.dinheiro,
+    vendas_pix: values.salesPix,
+    vendas_qr_code_pix: values.salesQrCodePix,
+    vendas_dinheiro: values.salesMoney,
     vendas_debito: values.debito,
     vendas_credito: values.credito,
     vendas_outros: values.outros,
@@ -8900,6 +9093,8 @@ loginForm?.addEventListener("submit", async (event) => {
   await loadAll();
 });
 
+exchangeFeeForm?.addEventListener("submit", saveExchangeFee);
+
 saleForm?.addEventListener("submit", saveSale);
 stockProductForm?.addEventListener("submit", saveStockProduct);
 stockEditForm?.addEventListener("submit", saveStockEdit);
@@ -9009,6 +9204,11 @@ document.addEventListener("click", async (event) => {
   if (tab) {
     switchTab(tab.dataset.tab);
     closeSideMenu();
+  }
+  const cancelFee = event.target.closest("[data-cancel-exchange-fee]");
+  if (cancelFee) {
+    await cancelExchangeFee(cancelFee.dataset.cancelExchangeFee);
+    return;
   }
   const period = event.target.closest("[data-period]");
   if (period) {
@@ -9809,6 +10009,7 @@ function initDefaults() {
   app.cashDate = localDateValue();
   app.routesDate = localDateValue();
   if (cashDateInput) cashDateInput.value = app.cashDate;
+  if (exchangeFeeForm) exchangeFeeForm.elements.data_troca.value = localDateValue();
   if (routesDateInput) routesDateInput.value = app.routesDate;
   setSuggestedDeliveryRoute();
   if (saleForm?.elements.data_venda) saleForm.elements.data_venda.value = localDateValue();

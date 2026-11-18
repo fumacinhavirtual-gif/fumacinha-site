@@ -10355,3 +10355,66 @@ body.modal-open {
     padding: 10px;
   }
 }
+.home-deliveries {
+  margin-top: 20px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 16px;
+}
+
+.home-deliveries-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.home-deliveries-head h3 { margin: 0; font-size: 1rem; }
+.home-deliveries .empty-state { margin: 8px 0 0; }
+.home-delivery-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid #edf0f1;
+}
+.home-delivery-row strong { min-width: 0; overflow-wrap: anywhere; }
+.home-delivery-row span { text-align: right; white-space: nowrap; }
+.home-delivery-row small { display: block; color: #6b7280; font-size: 0.72rem; }
+.home-delivery-row b { color: #198754; white-space: nowrap; }
+
+.exchange-fee-panel { margin-bottom: 16px; }
+.exchange-fee-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.exchange-fee-form label { display: grid; gap: 6px; min-width: 0; font-weight: 700; }
+.exchange-fee-form input,
+.exchange-fee-form select { width: 100%; min-width: 0; box-sizing: border-box; }
+.exchange-fee-form .form-status { grid-column: 1 / -1; margin: 0; }
+.exchange-fee-form .primary-action { justify-self: start; }
+.exchange-fee-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+.exchange-fee-row > div { display: grid; gap: 3px; min-width: 0; }
+.exchange-fee-row span,
+.exchange-fee-row small { color: #6b7280; overflow-wrap: anywhere; }
+.exchange-fee-row b { color: #198754; white-space: nowrap; }
+.exchange-fee-row.cancelled { opacity: 0.55; }
+.exchange-payment-row { cursor: default; }
+
+@media (max-width: 680px) {
+  .home-delivery-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .home-delivery-row span { text-align: right; }
+  .home-delivery-row b { grid-column: 2; text-align: right; }
+  .exchange-fee-form { grid-template-columns: minmax(0, 1fr); }
+  .exchange-fee-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .exchange-fee-row button { grid-column: 1 / -1; justify-self: end; }
+}
